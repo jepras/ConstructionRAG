@@ -1,0 +1,6 @@
+.env
+venv/
+notebooks/figures/
+chroma_db/
+own/
+.cursor/
