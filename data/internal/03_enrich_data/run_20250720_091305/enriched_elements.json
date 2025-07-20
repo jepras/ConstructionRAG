@@ -1,0 +1,56 @@
+[
+  {
+    "element_id": "table_0",
+    "element_type": "table",
+    "enrichment_metadata": {
+      "vlm_model": "claude-3.5-sonnet",
+      "vlm_processed": true,
+      "vlm_processing_timestamp": "2025-07-20T09:13:05.599332",
+      "vlm_processing_error": null,
+      "table_html_caption": "Tabeloversigt - Aktivitetsbaseret Prissammenligning for Byggeprojekter\n\nForm\u00e5l: Detaljeret omkostningssammenligning mellem vanskelige og normale byggeprojekter med specificerede aktivitetsfaser.\n\nStruktur:\n- 4 kolonner: Aktiviteter, Vanskelig sag, Normal sag, Bem\u00e6rkninger\n- 6 hovedaktiviteter plus totallinje\n- Timepriser og aktivitetsbaserede omkostninger\n\nN\u00f8gledata:\n- Totale omkostninger: 72.000 kr. (vanskelig sag) vs. 53.000 kr. (normal sag)\n- Timesatser: 1.000 kr./time for besigtigelse\n- St\u00f8rst prisforskel ved registrering og forberedelse: 24.000 kr. vs. 6.000 kr.\n\nTekniske specifikationer:\n- Standardiserede timepriser: 500-1.000 kr./time\n- Specificerede timeestimater for kerneopgaver\n- Aktivitetsbaseret omkostningsfordeling\n\nKontekst:\nTabellen anvendes i projekteringsfasen til:\n- Budgettering af byggeprojekter\n- Ressourceallokering\n- Prissammenligning mellem forskellige projektkompleksiteter\n- Grundlag for tilbudsgivning og projektplanl\u00e6gning",
+      "table_image_caption": "Her er en detaljeret beskrivelse af tabelindholdet:\n\nTabellen viser en oversigt over aktiviteter med tilh\u00f8rende priser for \"Vanskelig sag\" og \"Normal sag\". Den best\u00e5r af 4 kolonner og 8 r\u00e6kker (inklusiv overskrifter og total).\n\nKolonneoverskrifterne er:\n- Aktiviteter\n- Vanskelig sag\n- Normal sag\n- Bem\u00e6rkninger\n\nAktiviteterne er nummereret fra 1-6:\n1. Salg og kontakt til sag (0 kr. / 25.000 kr.)\n2. Registrering og forberedelse (24.000 kr. / 6.000 kr.)\n3. Besigtigelse af bygning (8.000 kr. / 8.000 kr.)\n4. Opm\u00e5ling og beregning (36.000 kr. / 12.000 kr.)\n5. F\u00e6rdigg\u00f8relse af tilbud (4.000 kr. / 2.000 kr.)\n6. Afslutning eller forts\u00e6ttelse (0 kr. / 0 kr.)\n\nTotalsummen (\"I alt\") er:\n- Vanskelig sag: 72.000 kr.\n- Normal sag: 53.000 kr.\n\nBem\u00e6rkninger i h\u00f8jre kolonne specificerer timepriser:\n- Ved punkt 3: \"* 8 timer af 1.000 kr./time\"\n- Ved punkt 4: \"* 24 timer af 500 kr./time\"\n- Ved punkt 5: \"* 2 timer af 1.000 kr./time\"\n\nTabellen ser ud til at v\u00e6re en prisstruktur for forskellige byggetekniske ydelser, hvor der skelnes mellem normale og vanskelige sager med forskellige timesatser og samlet pris.",
+      "table_image_filepath": "../../data/internal/01_partition_data/run_20250720_080612/tables/table-5-1.jpg",
+      "full_page_image_caption": null,
+      "full_page_image_filepath": null,
+      "page_text_context": null,
+      "caption_word_count": 289,
+      "processing_duration_seconds": null
+    }
+  },
+  {
+    "element_id": "image_page_1",
+    "element_type": "full_page_image",
+    "enrichment_metadata": {
+      "vlm_model": "claude-3.5-sonnet",
+      "vlm_processed": true,
+      "vlm_processing_timestamp": "2025-07-20T09:13:28.923724",
+      "vlm_processing_error": null,
+      "table_html_caption": null,
+      "table_image_caption": null,
+      "table_image_filepath": null,
+      "full_page_image_caption": "Her er en detaljeret beskrivelse af dokumentsiden p\u00e5 dansk:\n\nDOKUMENTSTRUKTUR OG OVERSKRIFTER:\n- Hovedtitel: \"BEDRE BYGGEETIK\"\n- Undertitel: \"Minimeret udbudsmateriale\"\n- Afsnit 1.2: \"Demonstrationsejendommen\"\n- Sidetal: 5\n- Sidefod: \"Et eksempel p\u00e5 at bevare kvalitet og minimere omkostninger\"\n\nBILLEDDOKUMENTATION:\nDokumentet indeholder tre fotografier af ejendommen:\n1. Facade-foto der viser hele bygningens front\n2. Detaljefoto af tagkonstruktion\n3. N\u00e6rbillede af indgangsparti med bl\u00e5 d\u00f8r\n\nADRESSE OG PLACERING:\nBentzonsvej 11, Frederiksberg\nMatrikel nr. 10 ed af Frederiksberg\nBeliggende i Sv\u00f8mmehalskvarteret\n\nTEKNISKE SPECIFIKATIONER:\n- Bygge\u00e5r: 1900\n- Ejendomstype: Andelsforening\n- Antal lejligheder: 10\n- Etager: 5 etager plus loftsetage (4. sal)\n- Opvarmning: Fjernvarme\n- K\u00e6lder: Under hele ejendommen\n\nRENOVERINGSPROJEKTETS OMFANG:\nTag:\n- 45 graders skifertag\n- Tre kviste\n- Fornyelse af tagbekl\u00e6dning, l\u00e6gter og enkelte sp\u00e6r\n- Omfatter ogs\u00e5 tagrender og nedl\u00f8b\n\nFacade:\n- Pudsede facader\n- Renovering af b\u00e5de vej- og g\u00e5rdfacade\n- 53 vindues- og d\u00f8rhuller i hver facade\n- Skal renoveres med oprindelig fremspring og udsmykninger\n\n\u00d8vrige arbejder:\n- Renovering af g\u00e5rd og kloak\n- Indvendig renovering er ikke omfattet\n\nHISTORIK:\n- 2004: Etablering af badev\u00e6relser i alle 10 lejligheder\n- 2005: Ans\u00f8gning om \u00f8konomisk tilskud til udbedring\n- Februar 2006: Modtog positivt svar fra Frederiksberg Kommune med mindre tilskud\n\nDokumentet indeholder reference til to tabeller (1.1 og 1.2) vedr\u00f8rende omkostningsfordeling og n\u00f8gletal for renoveringen, men selve tabellerne er ikke vist p\u00e5 denne side.",
+      "full_page_image_filepath": "../../data/internal/01_partition_data/run_20250720_080612/vlm_pages/test-with-little-variety_page01_complex.png",
+      "page_text_context": "1.2 Demonstrationsejendommen\nBEDRE BYGGEETIK\nMinimeret udbudsmateriale\nBentzonsvej 11, Frederiksberg\nDer er i projektet arbejdet med en konkret demonstrationsejendom. Ejendommen er beliggende p\u00e5 Frederiksberg, Bentzonsvej 11, matr. nr. 10 ed af Frederiksberg. Ejendommen er beliggende i den del af Frederiksberg, som ben\u00e6vnes Sv\u00f8mmehalskvarteret.",
+      "caption_word_count": 225,
+      "processing_duration_seconds": null
+    }
+  },
+  {
+    "element_id": "image_page_4",
+    "element_type": "full_page_image",
+    "enrichment_metadata": {
+      "vlm_model": "claude-3.5-sonnet",
+      "vlm_processed": true,
+      "vlm_processing_timestamp": "2025-07-20T09:13:56.099575",
+      "vlm_processing_error": null,
+      "table_html_caption": null,
+      "table_image_caption": null,
+      "table_image_filepath": null,
+      "full_page_image_caption": "Her er en detaljeret dansk beskrivelse af den tekniske tegning:\n\n**Dokumentinformation:**\n- Tema: 10. UBEBYGGEDE AREALER\n- Emne: 10.3 Principper for regnvandsh\u00e5ndtering\n- Dokumentnummer: BEA_K00_C08_Dispositionsforslag A3 mappe_5.7.2024\n\n**Hovedbeskrivelse:**\nTegningen viser en detaljeret plantegning af en taghave med fokus p\u00e5 regnvandsh\u00e5ndtering. Den best\u00e5r af f\u00f8lgende hovedkomponenter:\n\n**Tekniske Specifikationer:**\n1. Plantearealernes opbygning:\n- Minimum 350mm konstrueret v\u00e6kstmedie (DGNB-krav)\n- Underliggende reservoir\n- Designet til at h\u00e5ndtere normalregn og op til T10 h\u00e6ndelser f\u00f8r m\u00e6tning\n\n**Regnvandsh\u00e5ndtering:**\n- Alt regnvand p\u00e5 taghaven ledes til plantearealerne\n- Regnvand fra h\u00f8jere liggende paptag opsamles og tilkobles vandingssystem\n- Ved ekstreme regnh\u00e6ndelser, hvor vandet ikke kan tilbageholdes p\u00e5 tag, bortledes dette via udspyr til terr\u00e6n\n\n**Layout:**\n- Tegningen viser en irregul\u00e6r taghave-form\n- Indeholder flere cirkul\u00e6re planteomr\u00e5der\n- Integrerede stisystemer mellem plantebede\n- Tilst\u00f8dende bygningsdele er vist i gr\u00e5toner\n- Vandflow er indikeret med bl\u00e5 pile\n\n**Tekniske Detaljer:**\n- Flere tekniske noter og henvisninger i bl\u00e5 tekst p\u00e5 tegningen\n- Nordpil er inkluderet i \u00f8verste h\u00f8jre hj\u00f8rne\n- M\u00e5lestok og dimensioner er angivet\n- Eksisterende bygningsstrukturer og omkringliggende arealer er vist i grundplan\n\nDette er en omfattende teknisk tegning der prim\u00e6rt fokuserer p\u00e5 b\u00e6redygtig regnvandsh\u00e5ndtering i et urbant milj\u00f8 med gr\u00f8nne taghavel\u00f8sninger.",
+      "full_page_image_filepath": "../../data/internal/01_partition_data/run_20250720_080612/vlm_pages/test-with-little-variety_page04_fragmented.png",
+      "page_text_context": "First headline here\nTema: 10. UBEBYGGEDE AREALER Emne: 10.3 Principper for regnvandsh\u00e5ndtering\nPrincipper for regnvandsh\u00e5ndtering p\u00e5 taghave\nTaghaven indrettet med plantearealer opbygget med et kon- strueret v\u00e6kstmedie p\u00e5 minimum 350mm (DGNB-krav) og un- derliggende reservoir. If\u00f8lge producenten vil plantearealerne optage normalregn og frem til en T10 h\u00e6ndelse f\u00f8r m\u00e6tning.\nAlt regnvand p\u00e5 taghave tilstr\u00f8mmer plantearealerne. Regn- vand fra h\u00f8jere liggende paptag opsamles og tilkobles vand- ingssystem i taghaven.",
+      "caption_word_count": 195,
+      "processing_duration_seconds": null
+    }
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "element_id": "table_0",
+    "element_type": "table",
+    "enrichment_metadata": {
+      "vlm_model": "claude-3.5-sonnet",
+      "vlm_processed": true,
+      "vlm_processing_timestamp": "2025-07-20T08:46:23.753058",
+      "vlm_processing_error": null,
+      "table_html_caption": "Table Caption: Construction Project Cost Breakdown and Activity Analysis\n\nThis table presents a comparative cost analysis for construction/consulting activities between complex (\"Vanskelig\") and standard (\"Normal\") cases. The table consists of 5 rows and 4 columns, with headers for Activities (Aktiviteter), Complex Case, Normal Case, and Remarks (Bem\u00e6rkninger).\n\nStructure:\n- 4 columns: Activities, Complex Case, Normal Case, and Remarks\n- 5 main row entries covering sales, registration, inspection, measurements, and totals\n- Currency values in Danish Kroner (kr.)\n\nKey Financial Data:\n- Total costs: 72,000 kr. for complex cases vs 53,000 kr. for normal cases\n- Highest single activity cost: 36,000 kr. for measurements/calculations in complex cases\n- Building inspection costs constant at 8,000 kr. for both case types\n\nTechnical Specifications:\n- Labor rates: 1,000 kr./hour for inspection activities\n- Building inspection standardized at 8 hours\n- Measurement/calculation phase: 24 hours at 500 kr./hour\n- Final proposal preparation: 2 hours at 1,000 kr./hour\n\nThis table appears to be part of a construction or engineering consulting document, likely used for project planning and cost estimation purposes, showing the resource allocation and cost differences between standard and complex projects.",
+      "table_image_caption": "Let me provide a comprehensive description of this table:\n\n1. **Table Structure**:\n- 4 columns: Aktiviteter, Vanskelig sag, Normal sag, Bem\u00e6rkninger\n- 8 rows (6 numbered activities plus header and total)\n- Language appears to be Danish\n\n2. **Complete Text and Data Content**:\nActivities listed (Aktiviteter):\n1. Salg og kontakt til sag\n2. Registrering og forberedelse\n3. Besigtigelse af bygning\n4. Opm\u00e5ling og beregning\n5. F\u00e6rdigg\u00f8relse af tilbud\n6. Afslutning eller forts\u00e6ttelse\nI alt (Total)\n\n3. **Financial Data**:\nVanskelig sag (Difficult case):\n- 0 kr.\n- 24.000 kr.\n- 8.000 kr.\n- 36.000 kr.\n- 4.000 kr.\n- 0 kr.\nTotal: 72.000 kr.\n\nNormal sag (Normal case):\n- 25.000 kr.\n- 6.000 kr.\n- 8.000 kr.\n- 12.000 kr.\n- 2.000 kr.\n- 0 kr.\nTotal: 53.000 kr.\n\n4. **Notes (Bem\u00e6rkninger)**:\n- For \"Besigtigelse af bygning\": *8 timer af 1.000 kr./time\n- For \"Opm\u00e5ling og beregning\": *24 timer af 500 kr./time\n- For \"F\u00e6rdigg\u00f8relse af tilbud\": *2 timer af 1.000 kr./time\n\n5. **Construction Context**:\nThis appears to be a cost breakdown table for construction project assessment, comparing costs between normal and difficult cases. It includes various phases from initial sales contact through to completion, with detailed time and rate calculations for certain activities.",
+      "table_image_filepath": "../../data/internal/01_partition_data/run_20250720_080612/tables/table-5-1.jpg",
+      "full_page_image_caption": null,
+      "full_page_image_filepath": null,
+      "page_text_context": null,
+      "caption_word_count": 389,
+      "processing_duration_seconds": null
+    }
+  },
+  {
+    "element_id": "image_page_1",
+    "element_type": "full_page_image",
+    "enrichment_metadata": {
+      "vlm_model": "claude-3.5-sonnet",
+      "vlm_processed": true,
+      "vlm_processing_timestamp": "2025-07-20T08:46:46.932992",
+      "vlm_processing_error": null,
+      "table_html_caption": null,
+      "table_image_caption": null,
+      "table_image_filepath": null,
+      "full_page_image_caption": "I'll provide a detailed description of this technical document page:\n\nHEADER AND TITLE:\n- Main title: \"BEDRE BYGGEETIK\"\n- Subtitle: \"Minimeret udbudsmateriale\"\n- Section number and title: \"1.2 Demonstrationsejendommen\"\n- Page number: 5 (bottom right)\n- Footer text: \"Et eksempel p\u00e5 at bevare kvalitet og minimere omkostninger\" (in italics)\n\nIMAGES:\nThe document contains three photographs arranged horizontally:\n1. Left: Full facade view of a multi-story residential building\n2. Middle: Close-up of a roof/attic area\n3. Right: Detail of an entrance area with a blue door and damaged plaster\n\nADDRESS:\nBentzonsvej 11, Frederiksberg\n\nDETAILED TEXT CONTENT:\nThe document contains several paragraphs of Danish text describing:\n\n1. Property Location and Details:\n- Located at Frederiksberg, Bentzonsvej 11, cadastral no. 10 ed of Frederiksberg\n- Situated in the Sv\u00f8mmehalskvarteret area\n\n2. Building Specifications:\n- Built in 1900\n- Housing cooperative with 10 apartments\n- 5 floors plus basement\n- District heating system\n- 45-degree slate roof with three dormers\n- 53 windows and door openings on each facade\n\n3. Renovation History:\n- Maintenance work initiated in 2004\n- Applied for economic support in 2005\n- Received approval from Frederiksberg Municipality in February 2006\n\n4. Renovation Scope:\n- Focuses on roof and facade renovation\n- Excludes interior renovation\n- Includes roof covering, gutters, and downspouts\n- Facade renovation on both street and courtyard sides\n- Additional renovation of courtyard and sewage system\n\n5. Cost Information:\n- References to tables 1.1 and 1.2 for renovation costs and key figures (tables not shown on this page)\n\nThe document appears to be part of a larger construction or renovation documentation package, focusing on building ethics and cost-efficient renovation practices.",
+      "full_page_image_filepath": "../../data/internal/01_partition_data/run_20250720_080612/vlm_pages/test-with-little-variety_page01_complex.png",
+      "page_text_context": "1.2 Demonstrationsejendommen\nBEDRE BYGGEETIK\nMinimeret udbudsmateriale\nBentzonsvej 11, Frederiksberg\nDer er i projektet arbejdet med en konkret demonstrationsejendom. Ejendommen er beliggende p\u00e5 Frederiksberg, Bentzonsvej 11, matr. nr. 10 ed af Frederiksberg. Ejendommen er beliggende i den del af Frederiksberg, som ben\u00e6vnes Sv\u00f8mmehalskvarteret.",
+      "caption_word_count": 272,
+      "processing_duration_seconds": null
+    }
+  },
+  {
+    "element_id": "image_page_4",
+    "element_type": "full_page_image",
+    "enrichment_metadata": {
+      "vlm_model": "claude-3.5-sonnet",
+      "vlm_processed": true,
+      "vlm_processing_timestamp": "2025-07-20T08:47:00.474835",
+      "vlm_processing_error": null,
+      "table_html_caption": null,
+      "table_image_caption": null,
+      "table_image_filepath": null,
+      "full_page_image_caption": "This is a detailed technical site plan showing rainwater management principles for a rooftop garden (taghave). Let me break down the key elements:\n\nDOCUMENT INFORMATION:\n- Title: \"10. UBEBYGGEDE AREALER\"\n- Subtitle: \"10.3 Principper for regnvandsh\u00e5ndtering\"\n- Drawing Number: BEA_K00_C08_Dispositionsforslag A3 mappe_5.7.2024\n\nMAIN TEXT CONTENT:\nThe document explains that the rooftop garden is designed with:\n- Plant areas built with a constructed growth medium minimum 350mm thick (DGNB requirement)\n- Underlying water reservoir\n- System capable of handling normal rain up to T10 events before saturation\n- All rainwater on the roof garden flows to planted areas\n- Rainwater from higher-lying roofs is collected and connected to the garden's irrigation system\n\nTECHNICAL DRAWING DETAILS:\n1. Site Plan Layout:\n- Shows a detailed rooftop garden layout\n- Includes planted areas represented in green\n- Water management features shown in blue\n- Building outlines and adjacent structures\n- Circulation paths and hardscape elements\n\n2. Technical Annotations:\n- Blue arrows indicating water flow directions\n- Multiple circular tree/planting symbols\n- Detailed notes regarding water management systems\n- Reference points for drainage connections\n\n3. Spatial Organization:\n- Linear arrangement of planted areas along building edge\n- Integration of water management features throughout the garden\n- Clear delineation of different surface treatments\n- Relationship to surrounding buildings and structures\n\n4. Construction Elements:\n- Detailed planting zones\n- Water retention areas\n- Drainage systems\n- Building interface points\n\nThe drawing presents a comprehensive technical solution for sustainable rainwater management integrated into a rooftop garden design, with careful attention to water flow, storage, and utilization for plant irrigation.",
+      "full_page_image_filepath": "../../data/internal/01_partition_data/run_20250720_080612/vlm_pages/test-with-little-variety_page04_fragmented.png",
+      "page_text_context": "First headline here\nTema: 10. UBEBYGGEDE AREALER Emne: 10.3 Principper for regnvandsh\u00e5ndtering\nPrincipper for regnvandsh\u00e5ndtering p\u00e5 taghave\nTaghaven indrettet med plantearealer opbygget med et kon- strueret v\u00e6kstmedie p\u00e5 minimum 350mm (DGNB-krav) og un- derliggende reservoir. If\u00f8lge producenten vil plantearealerne optage normalregn og frem til en T10 h\u00e6ndelse f\u00f8r m\u00e6tning.\nAlt regnvand p\u00e5 taghave tilstr\u00f8mmer plantearealerne. Regn- vand fra h\u00f8jere liggende paptag opsamles og tilkobles vand- ingssystem i taghaven.",
+      "caption_word_count": 261,
+      "processing_duration_seconds": null
+    }
+  }
+]

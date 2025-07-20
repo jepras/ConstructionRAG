@@ -1,0 +1,36 @@
+.env
+venv/
+notebooks/figures/
+chroma_db/
+own/
+.cursor/
+
+# Image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.svg
+*.webp
+*.ico
+*.raw
+*.heic
+*.heif
+
+# Document files
+*.pdf
+
+# Data files
+*.csv
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
