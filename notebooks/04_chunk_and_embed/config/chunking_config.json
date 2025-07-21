@@ -1,0 +1,48 @@
+{
+  "chunking_strategy": "adaptive",
+  "base_chunk_size": 1000,
+  "base_chunk_overlap": 200,
+  
+  "adaptive_chunk_sizes": {
+    "simple": 1500,
+    "medium": 1000,
+    "complex": 600,
+    "table": 800,
+    "image_page": 1200
+  },
+  
+  "adaptive_chunk_overlaps": {
+    "simple": 100,
+    "medium": 200,
+    "complex": 300,
+    "table": 150,
+    "image_page": 250
+  },
+  
+  "embedding_config": {
+    "model": "text-embedding-ada-002",
+    "dimensions": 1536,
+    "batch_size": 100
+  },
+  
+  "vector_db_config": {
+    "db_path": "../../chroma_db",
+    "collection_name": "construction_docs",
+    "collection_description": "Construction documents with rich metadata",
+    "similarity_metric": "cosine"
+  },
+  
+  "processing_config": {
+    "max_text_context_length": 1500,
+    "max_page_text_elements": 5,
+    "preserve_section_boundaries": true,
+    "include_vlm_captions": true
+  },
+  
+  "output_config": {
+    "save_sample_chunks": true,
+    "sample_chunk_count": 10,
+    "include_analysis": true,
+    "include_vector_db_log": true
+  }
+} 
