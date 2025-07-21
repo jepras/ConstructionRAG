@@ -4,7 +4,7 @@ notebooks/figures/
 chroma_db/
 .cursor/
 /own/
-
+/data/internal/
 # Image files
 *.jpg
 *.jpeg

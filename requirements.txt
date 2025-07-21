@@ -1,0 +1,10 @@
+python-dotenv
+unstructured[pdf]
+langchain
+langchain-openai
+chromadb
+openai
+pydantic
+pdf2image
+PyMuPDF
+Pillow 

@@ -210,7 +210,6 @@ for file_path in all_extracted_files:
         try:
             file_path.unlink()
             figures_removed += 1
-            print(f"  ❌ Removed: {file_path.name}")
         except Exception as e:
             print(f"  ⚠️  Could not remove {file_path.name}: {e}")
     elif filename.startswith("table-"):
