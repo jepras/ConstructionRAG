@@ -33,10 +33,7 @@ from typing import Literal
 
 # --- Data Source Configuration ---
 META_DATA_RUN_TO_LOAD = (
-    "run_20250721_085153"  # Change this to load different meta_data runs
-)
-PARTITION_RUN_TO_LOAD = (
-    "run_20250721_084833"  # Original partition run used by meta_data
+    "02_run_20250721_100823"  # Change this to load different meta_data runs
 )
 
 # --- Language Configuration ---
@@ -610,10 +607,10 @@ def enrich_image_elements_from_meta(
 # ==============================================================================
 
 
-def save_enriched_elements(enriched_elements, output_path):
+def save_enriched_elements(enriched_elements, json_output_path, pickle_output_path):
     """Save enriched elements with VLM captions"""
 
-    print(f"💾 Saving enriched elements to: {output_path}")
+    print(f"💾 Saving enriched elements...")
 
     # Convert Pydantic models to dicts for JSON serialization
     serializable_elements = []
@@ -626,20 +623,16 @@ def save_enriched_elements(enriched_elements, output_path):
         }
         serializable_elements.append(serializable_element)
 
-    # Handle both string and Path objects
-    if isinstance(output_path, Path):
-        pickle_path = output_path.with_suffix(".pkl")
-    else:
-        pickle_path = output_path.replace(".json", ".pkl")
-
-    with open(pickle_path, "wb") as f:
+    # Save pickle file (primary data transfer)
+    with open(pickle_output_path, "wb") as f:
         pickle.dump(enriched_elements, f)
 
-    with open(output_path, "w") as f:
+    # Save JSON file (human-readable metadata)
+    with open(json_output_path, "w") as f:
         json.dump(serializable_elements, f, indent=2)
 
-    print(f"✅ Saved complete data to: {pickle_path}")
-    print(f"✅ Saved metadata to: {output_path}")
+    print(f"✅ Saved complete data to: {pickle_output_path}")
+    print(f"✅ Saved metadata to: {json_output_path}")
 
 
 def show_enrichment_summary(enriched_elements):
@@ -714,7 +707,7 @@ def test_data_access():
     print("=" * 55)
 
     # Construct test file path using configuration
-    test_file = Path(META_DATA_DIR) / META_DATA_RUN_TO_LOAD / "enriched_elements.pkl"
+    test_file = Path(META_DATA_DIR) / META_DATA_RUN_TO_LOAD / "meta_data_output.pkl"
 
     print(f"📂 Looking for: {test_file}")
     print(f"📁 From meta_data run: {META_DATA_RUN_TO_LOAD}")
@@ -779,7 +772,7 @@ if __name__ == "__main__":
     # Configuration - Create timestamped output directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_base_path = Path(OUTPUT_BASE_DIR)
-    CURRENT_RUN_DIR = output_base_path / f"run_{timestamp}"
+    CURRENT_RUN_DIR = output_base_path / f"03_run_{timestamp}"
 
     # Create directories
     output_base_path.mkdir(parents=True, exist_ok=True)
@@ -787,8 +780,9 @@ if __name__ == "__main__":
 
     # Construct paths from meta_data run configuration
     META_DATA_RUN_DIR = Path(META_DATA_DIR) / META_DATA_RUN_TO_LOAD
-    INPUT_PICKLE_PATH = META_DATA_RUN_DIR / "enriched_elements.pkl"
-    OUTPUT_PATH = CURRENT_RUN_DIR / "enriched_elements.json"
+    INPUT_PICKLE_PATH = META_DATA_RUN_DIR / "meta_data_output.pkl"
+    OUTPUT_PATH = CURRENT_RUN_DIR / "enrich_data_output.json"
+    PICKLE_OUTPUT_PATH = CURRENT_RUN_DIR / "enrich_data_output.pkl"
 
     print(f"📁 Output directory: {CURRENT_RUN_DIR}")
     print(f"📁 Input from meta_data run: {META_DATA_RUN_TO_LOAD}")
@@ -834,20 +828,20 @@ if __name__ == "__main__":
         show_enrichment_summary(all_enriched_elements)
 
         # Save enriched elements
-        save_enriched_elements(all_enriched_elements, OUTPUT_PATH)
+        save_enriched_elements(all_enriched_elements, OUTPUT_PATH, PICKLE_OUTPUT_PATH)
 
         print(f"\n🎉 VLM enrichment pipeline complete!")
         print(f"📁 Output Files Created:")
         print(f"   📂 Run directory: {CURRENT_RUN_DIR}")
         print(
-            f"   📄 Enriched elements (pickle): {CURRENT_RUN_DIR / 'enriched_elements.pkl'}"
+            f"   📄 Enrich data output (pickle): {CURRENT_RUN_DIR / 'enrich_data_output.pkl'}"
         )
         print(
-            f"   📄 Enriched elements (JSON): {CURRENT_RUN_DIR / 'enriched_elements.json'}"
+            f"   📄 Enrich data output (JSON): {CURRENT_RUN_DIR / 'enrich_data_output.json'}"
         )
         print(f"   🕒 Timestamp: {timestamp}")
         print(
-            f"\n📁 Next: Use '{CURRENT_RUN_DIR / 'enriched_elements.pkl'}' in your chunking/RAG pipeline"
+            f"\n📁 Next: Use '{CURRENT_RUN_DIR / 'enrich_data_output.pkl'}' in your chunking/RAG pipeline"
         )
 
     else:

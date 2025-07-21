@@ -18,7 +18,7 @@ from typing import Literal
 # CONFIGURATION - SPECIFY WHICH PARTITION RUN TO LOAD
 # ==============================================================================
 PARTITION_RUN_TO_LOAD = (
-    "run_20250721_084833"  # Change this to load different partition runs
+    "01_run_20250721_100701"  # Change this to load different partition runs
 )
 
 # ==============================================================================
@@ -507,10 +507,10 @@ def add_structural_awareness_enhanced(raw_elements, extracted_pages, page_analys
 # ==============================================================================
 
 
-def save_enriched_elements(enriched_elements, output_path):
+def save_enriched_elements(enriched_elements, json_output_path, pickle_output_path):
     """Save enriched elements for the chunking notebook"""
 
-    print(f"💾 Saving enriched elements to: {output_path}")
+    print(f"💾 Saving enriched elements...")
 
     # Convert Pydantic models to dicts for JSON serialization
     serializable_elements = []
@@ -523,20 +523,16 @@ def save_enriched_elements(enriched_elements, output_path):
         }
         serializable_elements.append(serializable_element)
 
-    # Handle both string and Path objects
-    if isinstance(output_path, Path):
-        pickle_path = output_path.with_suffix(".pkl")
-    else:
-        pickle_path = output_path.replace(".json", ".pkl")
-
-    with open(pickle_path, "wb") as f:
+    # Save pickle file (primary data transfer)
+    with open(pickle_output_path, "wb") as f:
         pickle.dump(enriched_elements, f)
 
-    with open(output_path, "w") as f:
+    # Save JSON file (human-readable metadata)
+    with open(json_output_path, "w") as f:
         json.dump(serializable_elements, f, indent=2)
 
-    print(f"✅ Saved complete data to: {pickle_path}")
-    print(f"✅ Saved metadata to: {output_path}")
+    print(f"✅ Saved complete data to: {pickle_output_path}")
+    print(f"✅ Saved metadata to: {json_output_path}")
 
 
 def _show_enhanced_summary(enriched_elements):
@@ -642,7 +638,7 @@ def test_data_access():
 
     # Construct test file path using configuration
     PARTITION_DATA_DIR = Path("../../data/internal/01_partition_data")
-    test_file = PARTITION_DATA_DIR / PARTITION_RUN_TO_LOAD / "processed_elements.pkl"
+    test_file = PARTITION_DATA_DIR / PARTITION_RUN_TO_LOAD / "partition_data_output.pkl"
 
     print(f"📂 Looking for: {test_file}")
     print(f"📁 From partition run: {PARTITION_RUN_TO_LOAD}")
@@ -869,7 +865,7 @@ if __name__ == "__main__":
     # Configuration - Create timestamped output directory like partition_pdf.py
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     OUTPUT_BASE_DIR = Path("../../data/internal/02_meta_data")
-    CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"run_{timestamp}"
+    CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"02_run_{timestamp}"
 
     # Create directories
     OUTPUT_BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -878,9 +874,10 @@ if __name__ == "__main__":
     # Construct input path from partition run configuration
     PARTITION_DATA_DIR = Path("../../data/internal/01_partition_data")
     INPUT_PICKLE_PATH = (
-        PARTITION_DATA_DIR / PARTITION_RUN_TO_LOAD / "processed_elements.pkl"
+        PARTITION_DATA_DIR / PARTITION_RUN_TO_LOAD / "partition_data_output.pkl"
     )
-    OUTPUT_PATH = CURRENT_RUN_DIR / "enriched_elements.json"
+    OUTPUT_PATH = CURRENT_RUN_DIR / "meta_data_output.json"
+    PICKLE_OUTPUT_PATH = CURRENT_RUN_DIR / "meta_data_output.pkl"
 
     print(f"📁 Output directory: {CURRENT_RUN_DIR}")
     print(f"📁 Input from partition run: {PARTITION_RUN_TO_LOAD}")
@@ -924,7 +921,7 @@ if __name__ == "__main__":
         _show_enhanced_summary(enriched_elements)
 
         # Save enriched elements
-        save_enriched_elements(enriched_elements, OUTPUT_PATH)
+        save_enriched_elements(enriched_elements, OUTPUT_PATH, PICKLE_OUTPUT_PATH)
 
         # After save_enriched_elements(enriched_elements, OUTPUT_PATH)
         print(f"\n" + "=" * 60)
@@ -954,15 +951,15 @@ if __name__ == "__main__":
         print(f"📁 Output Files Created:")
         print(f"   📂 Run directory: {CURRENT_RUN_DIR}")
         print(
-            f"   📄 Enriched elements (pickle): {CURRENT_RUN_DIR / 'enriched_elements.pkl'}"
+            f"   📄 Meta data output (pickle): {CURRENT_RUN_DIR / 'meta_data_output.pkl'}"
         )
         print(
-            f"   📄 Enriched elements (JSON): {CURRENT_RUN_DIR / 'enriched_elements.json'}"
+            f"   📄 Meta data output (JSON): {CURRENT_RUN_DIR / 'meta_data_output.json'}"
         )
         print(f"   📊 Sample analysis CSV: {CURRENT_RUN_DIR / 'sample_analysis.csv'}")
         print(f"   🕒 Timestamp: {timestamp}")
         print(
-            f"\n📁 Next: Use '{CURRENT_RUN_DIR / 'enriched_elements.pkl'}' in your chunking notebook"
+            f"\n📁 Next: Use '{CURRENT_RUN_DIR / 'meta_data_output.pkl'}' in your enrich_data notebook"
         )
 
     else:

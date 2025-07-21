@@ -138,10 +138,11 @@ OCR_LANGUAGES = ["dan"]
 # Create timestamped output directory
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_BASE_DIR = Path("../../data/internal/01_partition_data")
-CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"run_{timestamp}"
+CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"01_run_{timestamp}"
 VLM_PAGES_DIR = CURRENT_RUN_DIR / "vlm_pages"
 TABLES_DIR = CURRENT_RUN_DIR / "tables"
-PICKLE_OUTPUT_PATH = CURRENT_RUN_DIR / "processed_elements.pkl"
+PICKLE_OUTPUT_PATH = CURRENT_RUN_DIR / "partition_data_output.pkl"
+JSON_OUTPUT_PATH = CURRENT_RUN_DIR / "partition_data_output.json"
 
 # Create directories
 OUTPUT_BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -320,6 +321,7 @@ else:
 
 # --- Save Results ---
 import pickle
+import json
 
 data_to_save = {
     "raw_elements": raw_pdf_elements,
@@ -328,10 +330,50 @@ data_to_save = {
     "filepath": filepath,
 }
 
+# Save pickle file (primary data transfer)
 with open(PICKLE_OUTPUT_PATH, "wb") as f:
     pickle.dump(data_to_save, f)
 
-print(f"✅ Saved processed elements to: {PICKLE_OUTPUT_PATH}")
+print(f"✅ Saved partition data to: {PICKLE_OUTPUT_PATH}")
+
+
+# Save JSON file (human-readable metadata)
+def save_partition_data_json(data_to_save, output_path):
+    """Save partition data as human-readable JSON"""
+    json_data = {
+        "metadata": {
+            "pipeline_stage": "partition",
+            "timestamp": datetime.now().isoformat(),
+            "source_file": os.path.basename(data_to_save["filepath"]),
+            "total_elements": len(data_to_save["raw_elements"]),
+            "extracted_pages": len(data_to_save["extracted_pages"]),
+            "analyzed_pages": len(data_to_save["page_analysis"]),
+        },
+        "elements_summary": [
+            {
+                "index": i,
+                "category": getattr(el, "category", "Unknown"),
+                "text_preview": (
+                    getattr(el, "text", "")[:200] + "..."
+                    if len(getattr(el, "text", "")) > 200
+                    else getattr(el, "text", "")
+                ),
+                "page_number": getattr(
+                    getattr(el, "metadata", {}), "page_number", "Unknown"
+                ),
+            }
+            for i, el in enumerate(data_to_save["raw_elements"])
+        ],
+        "extracted_pages": data_to_save["extracted_pages"],
+        "page_analysis": data_to_save["page_analysis"],
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(json_data, f, indent=2)
+
+
+save_partition_data_json(data_to_save, JSON_OUTPUT_PATH)
+print(f"✅ Saved partition metadata to: {JSON_OUTPUT_PATH}")
 
 print(f"\n📊 Processing Summary:")
 print(f"  Total pages: {len(page_analysis)}")
@@ -347,7 +389,8 @@ print(f"\n📁 Output Files Created:")
 print(f"   📂 Run directory: {CURRENT_RUN_DIR}")
 print(f"   📂 VLM pages: {VLM_PAGES_DIR}")
 print(f"   📂 Tables: {TABLES_DIR}")
-print(f"   📄 Processed elements: {PICKLE_OUTPUT_PATH}")
+print(f"   📄 Partition data (pickle): {PICKLE_OUTPUT_PATH}")
+print(f"   📄 Partition metadata (JSON): {JSON_OUTPUT_PATH}")
 if extracted_pages:
     print(f"   🖼️  Extracted page images:")
     for page_num, info in extracted_pages.items():
@@ -363,3 +406,4 @@ else:
     print(f"   📊 No tables extracted")
 
 print(f"   🕒 Timestamp: {timestamp}")
+print(f"\n📁 Next: Use '{PICKLE_OUTPUT_PATH}' in your meta_data notebook")
