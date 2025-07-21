@@ -2,8 +2,8 @@
 venv/
 notebooks/figures/
 chroma_db/
-own/
 .cursor/
+/own/
 
 # Image files
 *.jpg
