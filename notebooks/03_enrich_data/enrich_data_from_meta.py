@@ -616,11 +616,21 @@ def save_enriched_elements(enriched_elements, json_output_path, pickle_output_pa
     serializable_elements = []
     for element in enriched_elements:
         serializable_element = {
-            "element_id": element["element_id"],
+            "element_id": element.get("element_id") or element.get("id"),
             "element_type": element["element_type"],
-            "enrichment_metadata": element["enrichment_metadata"].model_dump(),
-            # Note: original_element is not JSON serializable, so we'll use pickle
         }
+        if "enrichment_metadata" in element:
+            serializable_element["enrichment_metadata"] = (
+                element["enrichment_metadata"].model_dump()
+                if hasattr(element["enrichment_metadata"], "model_dump")
+                else element["enrichment_metadata"]
+            )
+        if "structural_metadata" in element:
+            serializable_element["structural_metadata"] = (
+                element["structural_metadata"].model_dump()
+                if hasattr(element["structural_metadata"], "model_dump")
+                else element["structural_metadata"]
+            )
         serializable_elements.append(serializable_element)
 
     # Save pickle file (primary data transfer)
@@ -654,6 +664,8 @@ def show_enrichment_summary(enriched_elements):
     page_captions = 0
 
     for element in enriched_elements:
+        if "enrichment_metadata" not in element:
+            continue  # Skip non-enriched elements (e.g., text)
         meta = element["enrichment_metadata"]
         element_type = element["element_type"]
 
@@ -809,6 +821,7 @@ if __name__ == "__main__":
         print("=" * 40)
 
         enriched_tables = enrich_table_elements_from_meta(enriched_elements, captioner)
+        enriched_table_ids = set(e["element_id"] for e in enriched_tables)
 
         # Step 2: Enrich image elements
         print(f"\n" + "=" * 40)
@@ -816,9 +829,27 @@ if __name__ == "__main__":
         print("=" * 40)
 
         enriched_images = enrich_image_elements_from_meta(enriched_elements, captioner)
+        enriched_image_ids = set(e["element_id"] for e in enriched_images)
 
-        # Combine all enriched elements
-        all_enriched_elements = enriched_tables + enriched_images
+        # Combine all enriched elements, preserving all original elements
+        all_enriched_elements = []
+        for el in enriched_elements:
+            el_id = el.get("element_id") or el.get("id")
+            # Replace with enriched table if available
+            if el_id in enriched_table_ids:
+                enriched = next(e for e in enriched_tables if e["element_id"] == el_id)
+                all_enriched_elements.append(enriched)
+            # Replace with enriched image if available
+            elif el_id in enriched_image_ids:
+                enriched = next(e for e in enriched_images if e["element_id"] == el_id)
+                all_enriched_elements.append(enriched)
+            else:
+                # Pass through unchanged (text, etc.)
+                # Standardize key to 'element_id' for consistency
+                passthrough = dict(el)
+                if "id" in passthrough and "element_id" not in passthrough:
+                    passthrough["element_id"] = passthrough["id"]
+                all_enriched_elements.append(passthrough)
 
         print(f"\n" + "=" * 40)
         print("💾 SAVING ENRICHED ELEMENTS")

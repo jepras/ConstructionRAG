@@ -1,0 +1,15 @@
+{
+  "experiments": {
+    "adaptive": {
+      "chunk_sizes": {
+        "simple": 1500,
+        "medium": 1000,
+        "complex": 600
+      }
+    },
+    "recursive": {
+      "chunk_size": 1000,
+      "chunk_overlap": 200
+    }
+  }
+} 
