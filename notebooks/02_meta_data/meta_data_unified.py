@@ -55,6 +55,7 @@ class StructuralMetadata(BaseModel):
     processing_strategy: str = "unified_fast_vision"
     element_id: Optional[str] = None  # Original element ID from unified processing
     image_filepath: Optional[str] = None  # For extracted images
+    html_text: Optional[str] = None  # HTML representation for tables
 
 
 # ==============================================================================
@@ -177,6 +178,23 @@ class UnifiedElementAnalyzer:
             print(f"📄 Page change: {self.current_page} → {page_num}")
             self.current_page = page_num
 
+        # Extract HTML text from table if available
+        html_text = None
+        if hasattr(table_element, "html"):
+            html_text = getattr(table_element, "html", "")
+            if html_text:
+                print(
+                    f"    📋 Found HTML text for table {element_id} (length: {len(html_text)})"
+                )
+        elif hasattr(table_element, "metadata") and hasattr(
+            table_element.metadata, "html"
+        ):
+            html_text = getattr(table_element.metadata, "html", "")
+            if html_text:
+                print(
+                    f"    📋 Found HTML text for table {element_id} in metadata (length: {len(html_text)})"
+                )
+
         # Initialize metadata
         struct_meta = StructuralMetadata(
             source_filename=metadata_dict.get("filename", "Unknown"),
@@ -185,6 +203,7 @@ class UnifiedElementAnalyzer:
             element_category=category,
             element_id=element_id,
             processing_strategy="unified_fast_vision",
+            html_text=html_text,
         )
 
         # Phase 1: High-impact, easy analysis
@@ -200,7 +219,9 @@ class UnifiedElementAnalyzer:
 
         return struct_meta
 
-    def analyze_extracted_image(self, page_info: dict) -> StructuralMetadata:
+    def analyze_extracted_image(
+        self, page_info: dict, element_id: str
+    ) -> StructuralMetadata:
         """Analyze an extracted page image from unified processing"""
 
         page_num = page_info.get("page_number", 1)  # Extract from page_info
@@ -219,7 +240,7 @@ class UnifiedElementAnalyzer:
             page_number=page_num,
             content_type="full_page_with_images",
             element_category="ExtractedPage",
-            element_id=f"page_{page_num}",
+            element_id=element_id,
             processing_strategy="unified_fast_vision",
             image_filepath=filepath,
         )
@@ -437,6 +458,7 @@ def add_structural_awareness_unified(unified_data):
 
     analyzer = UnifiedElementAnalyzer()
     enriched_elements = []
+    current_id = 1
 
     # Process text elements
     text_elements = unified_data.get("text_elements", [])
@@ -451,12 +473,13 @@ def add_structural_awareness_unified(unified_data):
 
             enriched_elements.append(
                 {
-                    "id": text_element["id"],
+                    "id": str(current_id),
                     "original_element": text_element,
                     "structural_metadata": structural_meta,
                     "element_type": "text",
                 }
             )
+            current_id += 1
 
         except Exception as e:
             print(f"  ❌ Error processing text element {text_element['id']}: {e}")
@@ -465,9 +488,9 @@ def add_structural_awareness_unified(unified_data):
     table_elements = unified_data.get("table_elements", [])
     print(f"📊 Processing {len(table_elements)} table elements...")
 
-    for i, table_element in enumerate(table_elements):
+    for table_element in table_elements:
         try:
-            element_id = f"table_element_{i}"
+            element_id = str(current_id)
             structural_meta = analyzer.analyze_table_element(table_element, element_id)
 
             enriched_elements.append(
@@ -478,18 +501,22 @@ def add_structural_awareness_unified(unified_data):
                     "element_type": "table",
                 }
             )
+            current_id += 1
 
         except Exception as e:
-            print(f"  ❌ Error processing table element {i}: {e}")
+            print(f"  ❌ Error processing table element: {e}")
 
     # Process extracted pages (full page images)
     extracted_pages = unified_data.get("extracted_pages", {})
     print(f"🖼️  Processing {len(extracted_pages)} extracted pages...")
 
-    for page_num, page_info in extracted_pages.items():
+    # Sort pages by page number for consistent numbering
+    sorted_pages = sorted(extracted_pages.items(), key=lambda x: x[0])
+
+    for page_num, page_info in sorted_pages:
         try:
-            element_id = f"extracted_page_{page_num}"
-            structural_meta = analyzer.analyze_extracted_image(page_info)
+            element_id = str(current_id)
+            structural_meta = analyzer.analyze_extracted_image(page_info, element_id)
 
             enriched_elements.append(
                 {
@@ -499,6 +526,7 @@ def add_structural_awareness_unified(unified_data):
                     "element_type": "full_page_with_images",
                 }
             )
+            current_id += 1
 
         except Exception as e:
             print(f"  ❌ Error processing page {page_num}: {e}")
@@ -537,6 +565,7 @@ def save_enriched_elements(enriched_elements, json_output_path, pickle_output_pa
             # For table elements, get text from the unstructured element
             original_element = element["original_element"]
             text_content = getattr(original_element, "text", "")
+            # HTML text is already included in structural_metadata.html_text
         elif element["element_type"] == "full_page_with_images":
             # For image pages, no text content
             text_content = "[IMAGE PAGE]"

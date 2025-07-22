@@ -32,9 +32,7 @@ from typing import Literal
 # ==============================================================================
 
 # --- Data Source Configuration ---
-META_DATA_RUN_TO_LOAD = (
-    "02_run_20250721_100823"  # Change this to load different meta_data runs
-)
+META_DATA_RUN_TO_LOAD = "unified_meta_run_20250722_114120"  # Change this to load different unified meta_data runs
 
 # --- Language Configuration ---
 CAPTION_LANGUAGE = (
@@ -65,7 +63,7 @@ class StructuralMetadata(BaseModel):
     # Core metadata
     source_filename: str
     page_number: int
-    content_type: Literal["text", "table", "full_page_with_images"]
+    content_type: Literal["text", "table", "full_page_with_images", "extracted_image"]
 
     # Phase 1: High-impact, easy fields
     page_context: str = "unknown"  # "text_only_page", "page_with_images", "image_page"
@@ -84,6 +82,11 @@ class StructuralMetadata(BaseModel):
     section_title_pattern: Optional[str] = (
         None  # From numbered patterns like "1.2 Something"
     )
+
+    # New fields for unified approach
+    processing_strategy: str = "unified_fast_vision"
+    element_id: Optional[str] = None  # Original element ID from unified processing
+    image_filepath: Optional[str] = None  # For extracted images
 
 
 class VLMEnrichmentMetadata(BaseModel):
@@ -367,7 +370,7 @@ def enrich_table_elements_from_meta(
 
         # Get metadata from enriched element
         struct_meta = table_element["structural_metadata"]
-        element_id = table_element["id"]
+        element_id = table_element.get("element_id") or table_element.get("id")
 
         element_context = {
             "page_number": struct_meta.page_number,
@@ -387,20 +390,31 @@ def enrich_table_elements_from_meta(
             # Get the original element from enriched data
             original_element = table_element["original_element"]
 
-            # Get metadata from original element (same approach as enrich_data.py)
-            metadata_dict = getattr(original_element, "metadata", {})
-            if hasattr(metadata_dict, "to_dict"):
-                metadata_dict = metadata_dict.to_dict()
+            # Handle unified data structure (original_element is a dict)
+            if isinstance(original_element, dict):
+                # Unified format: original_element is a dict with metadata
+                metadata_dict = original_element.get("metadata", {})
+                if hasattr(metadata_dict, "to_dict"):
+                    metadata_dict = metadata_dict.to_dict()
 
-            # Caption 1: HTML representation (access from metadata)
-            table_html = None
-
-            # Get HTML from metadata
-            if "text_as_html" in metadata_dict:
-                table_html = metadata_dict["text_as_html"]
+                # Get HTML from metadata
+                if "text_as_html" in metadata_dict:
+                    table_html = metadata_dict["text_as_html"]
+                else:
+                    # Fallback to regular text
+                    table_html = original_element.get("text", "")
             else:
-                # Fallback to regular text
-                table_html = getattr(original_element, "text", "")
+                # Legacy format: original_element is an unstructured object
+                metadata_dict = getattr(original_element, "metadata", {})
+                if hasattr(metadata_dict, "to_dict"):
+                    metadata_dict = metadata_dict.to_dict()
+
+                # Get HTML from metadata
+                if "text_as_html" in metadata_dict:
+                    table_html = metadata_dict["text_as_html"]
+                else:
+                    # Fallback to regular text
+                    table_html = getattr(original_element, "text", "")
 
             if table_html and table_html.strip():
                 print(
@@ -476,10 +490,14 @@ def get_page_text_context_from_meta(page_num: int, enriched_elements) -> str:
 
         if element_page == page_num and struct_meta.content_type == "text":
             # Get text from original element if available
-            if "original_element" in element and hasattr(
-                element["original_element"], "text"
-            ):
-                text = getattr(element["original_element"], "text", "").strip()
+            if "original_element" in element:
+                original_element = element["original_element"]
+                if isinstance(original_element, dict):
+                    # Unified format: get text from dict
+                    text = original_element.get("text", "").strip()
+                else:
+                    # Legacy format: get text from unstructured object
+                    text = getattr(original_element, "text", "").strip()
                 if text:
                     page_texts.append(text)
 
@@ -510,7 +528,7 @@ def enrich_image_elements_from_meta(
         print(f"\n🖼️ Processing image page {i+1}/{len(image_elements)}...")
 
         struct_meta = image_element["structural_metadata"]
-        element_id = image_element["id"]
+        element_id = image_element.get("element_id") or image_element.get("id")
         page_num = struct_meta.page_number
 
         print(
@@ -522,8 +540,12 @@ def enrich_image_elements_from_meta(
 
         print(f"    🔍 Original element type: {type(original_element)}")
 
+        # Check structural metadata first for image_filepath (unified approach)
+        if struct_meta.image_filepath:
+            image_path = struct_meta.image_filepath
+            print(f"    🖼️ Found image_filepath in structural metadata: {image_path}")
         # For image elements, original_element is a dict with filepath
-        if isinstance(original_element, dict):
+        elif isinstance(original_element, dict):
             image_path = original_element.get("filepath")
             print(f"    📋 Dictionary keys: {list(original_element.keys())}")
             print(f"    🖼️ Found filepath: {image_path}")
@@ -719,7 +741,9 @@ def test_data_access():
     print("=" * 55)
 
     # Construct test file path using configuration
-    test_file = Path(META_DATA_DIR) / META_DATA_RUN_TO_LOAD / "meta_data_output.pkl"
+    test_file = (
+        Path(META_DATA_DIR) / META_DATA_RUN_TO_LOAD / "unified_meta_data_output.pkl"
+    )
 
     print(f"📂 Looking for: {test_file}")
     print(f"📁 From meta_data run: {META_DATA_RUN_TO_LOAD}")
@@ -730,8 +754,9 @@ def test_data_access():
         print(f"💡 Available meta_data runs:")
         meta_data_path = Path(META_DATA_DIR)
         if meta_data_path.exists():
-            for run_dir in meta_data_path.glob("run_*"):
-                print(f"   - {run_dir.name}")
+            for run_dir in meta_data_path.glob("*"):
+                if run_dir.is_dir():
+                    print(f"   - {run_dir.name}")
         return False
 
     try:
@@ -746,10 +771,19 @@ def test_data_access():
             sample_element = data[0]
             print(f"📋 Sample element structure:")
             print(f"  ID: {sample_element.get('id', 'N/A')}")
+            print(f"  Element ID: {sample_element.get('element_id', 'N/A')}")
             print(f"  Type: {sample_element.get('element_type', 'N/A')}")
             print(
                 f"  Has structural_metadata: {'structural_metadata' in sample_element}"
             )
+
+            # Check for unified-specific fields
+            if "structural_metadata" in sample_element:
+                struct_meta = sample_element["structural_metadata"]
+                print(
+                    f"  Processing strategy: {getattr(struct_meta, 'processing_strategy', 'N/A')}"
+                )
+                print(f"  Content type: {getattr(struct_meta, 'content_type', 'N/A')}")
 
         print(f"\n🎉 Data access test PASSED!")
         print(f"📱 Ready to proceed with VLM enrichment...")
@@ -792,7 +826,7 @@ if __name__ == "__main__":
 
     # Construct paths from meta_data run configuration
     META_DATA_RUN_DIR = Path(META_DATA_DIR) / META_DATA_RUN_TO_LOAD
-    INPUT_PICKLE_PATH = META_DATA_RUN_DIR / "meta_data_output.pkl"
+    INPUT_PICKLE_PATH = META_DATA_RUN_DIR / "unified_meta_data_output.pkl"
     OUTPUT_PATH = CURRENT_RUN_DIR / "enrich_data_output.json"
     PICKLE_OUTPUT_PATH = CURRENT_RUN_DIR / "enrich_data_output.pkl"
 
@@ -801,7 +835,7 @@ if __name__ == "__main__":
     print(f"📁 Loading from: {INPUT_PICKLE_PATH}")
     print(f"📁 Enriched elements will be saved to: {OUTPUT_PATH}")
 
-    print("🤖 VLM ENRICHMENT PIPELINE - META DATA VERSION")
+    print("🤖 VLM ENRICHMENT PIPELINE - UNIFIED META DATA VERSION")
     print("=" * 60)
 
     # Load enriched elements from meta_data
@@ -877,4 +911,6 @@ if __name__ == "__main__":
 
     else:
         print("❌ Cannot proceed without enriched elements")
-        print("💡 First run the meta_data notebook to generate 'enriched_elements.pkl'")
+        print(
+            "💡 First run the meta_data_unified notebook to generate 'unified_meta_data_output.pkl'"
+        )
