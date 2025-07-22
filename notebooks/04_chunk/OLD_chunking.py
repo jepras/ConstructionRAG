@@ -95,7 +95,7 @@ with open(CONFIG_PATH, "r") as f:
 # ==============================================================================
 
 # --- Base directories (relative to project root) ---
-DATA_BASE_DIR = "../../data/internal"
+DATA_BASE_DIR = "data/internal"
 ENRICH_DATA_DIR = f"{DATA_BASE_DIR}/03_enrich_data"
 OUTPUT_BASE_DIR = f"{DATA_BASE_DIR}/04_chunking"
 
@@ -229,7 +229,44 @@ def extract_structural_metadata(el: dict) -> dict:
 
 # --- Helper to extract text content from element ---
 def extract_text_content(el: dict) -> str:
-    """Extract text content from element, always using original text for tables/images, never VLM captions."""
+    """Extract text content from element, prioritizing VLM captions for tables/images."""
+
+    # Check if this element has VLM enrichment metadata
+    enrichment_meta = el.get("enrichment_metadata")
+    if enrichment_meta:
+        # For tables, use VLM captions if available
+        if el.get("element_type") == "table":
+            # Prefer image caption over HTML caption for tables
+            if (
+                hasattr(enrichment_meta, "table_image_caption")
+                and enrichment_meta.table_image_caption
+            ):
+                return enrichment_meta.table_image_caption
+            elif (
+                hasattr(enrichment_meta, "table_html_caption")
+                and enrichment_meta.table_html_caption
+            ):
+                return enrichment_meta.table_html_caption
+            elif hasattr(enrichment_meta, "model_dump"):
+                meta_dict = enrichment_meta.model_dump()
+                if meta_dict.get("table_image_caption"):
+                    return meta_dict["table_image_caption"]
+                elif meta_dict.get("table_html_caption"):
+                    return meta_dict["table_html_caption"]
+
+        # For full-page images, use VLM caption
+        elif el.get("element_type") == "full_page_image":
+            if (
+                hasattr(enrichment_meta, "full_page_image_caption")
+                and enrichment_meta.full_page_image_caption
+            ):
+                return enrichment_meta.full_page_image_caption
+            elif hasattr(enrichment_meta, "model_dump"):
+                meta_dict = enrichment_meta.model_dump()
+                if meta_dict.get("full_page_image_caption"):
+                    return meta_dict["full_page_image_caption"]
+
+    # Fallback to original text extraction logic
     # Try direct text field
     if "text" in el:
         return el["text"]
@@ -266,6 +303,218 @@ def extract_text_content(el: dict) -> str:
         return "[IMAGE PAGE]"
 
     return ""
+
+
+# ==============================================================================
+# INTELLIGENT CHUNKING FUNCTION
+# New approach: Filter noise, group related elements, compose context-rich content
+# ==============================================================================
+
+
+def create_final_chunks(elements: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Transform coarse-grained partitioned elements into final, clean, context-rich chunks.
+
+    Steps:
+    1. Filter out noise elements (headers, footers, page breaks, short uncategorized text)
+    2. Group consecutive list items with their narrative introduction
+    3. Compose final content with section titles and proper formatting
+    """
+
+    # Step 1: Filter Noise Elements
+    print(f"[DEBUG] Starting with {len(elements)} elements")
+
+    filtered_elements = []
+    for el in elements:
+        # Extract metadata and category
+        meta = extract_structural_metadata(el)
+        category = meta.get("element_category", "unknown")
+
+        # Exclude headers, footers, page breaks
+        if category in ["Header", "Footer", "PageBreak"]:
+            continue
+
+        # Exclude short uncategorized text (OCR noise)
+        if category == "UncategorizedText":
+            text_content = extract_text_content(el)
+            if len(text_content) < 20:
+                continue
+
+        # Exclude Title elements (content will be inherited by other chunks)
+        if category == "Title":
+            continue
+
+        filtered_elements.append(el)
+
+    print(f"[DEBUG] After filtering: {len(filtered_elements)} elements")
+
+    # Step 2: Group Consecutive List Items
+    grouped_elements = []
+    i = 0
+
+    while i < len(filtered_elements):
+        current_el = filtered_elements[i]
+        meta = extract_structural_metadata(current_el)
+        category = meta.get("element_category", "unknown")
+
+        # Check if this is a NarrativeText followed by ListItems
+        if category == "NarrativeText" and i + 1 < len(filtered_elements):
+            next_el = filtered_elements[i + 1]
+            next_meta = extract_structural_metadata(next_el)
+            next_category = next_meta.get("element_category", "unknown")
+
+            if next_category == "ListItem":
+                # Start collecting list items
+                list_items = [current_el]  # Include the narrative introduction
+                j = i + 1
+
+                # Collect all consecutive ListItems
+                while j < len(filtered_elements):
+                    j_el = filtered_elements[j]
+                    j_meta = extract_structural_metadata(j_el)
+                    j_category = j_meta.get("element_category", "unknown")
+
+                    if j_category == "ListItem":
+                        list_items.append(j_el)
+                        j += 1
+                    else:
+                        break
+
+                # Create a combined "List" element with narrative introduction
+                combined_text = []
+
+                # First, add the narrative introduction
+                narrative_text = extract_text_content(
+                    list_items[0]
+                )  # First item is the narrative
+                if narrative_text:
+                    combined_text.append(narrative_text)
+
+                # Then add all list items
+                for item in list_items[1:]:  # Skip first item (narrative)
+                    text_content = extract_text_content(item)
+                    if text_content:
+                        combined_text.append(text_content)
+
+                print(
+                    f"[DEBUG] Combined list: {len(list_items)} items (1 narrative + {len(list_items)-1} list items)"
+                )
+                print(f"[DEBUG] Narrative intro: {narrative_text[:100]}...")
+
+                # Create new meta-element with category "List"
+                combined_element = {
+                    "element_id": f"combined_list_{i}",
+                    "element_type": "text",
+                    "structural_metadata": {
+                        "source_filename": meta.get("source_filename"),
+                        "page_number": meta.get("page_number"),
+                        "content_type": "text",
+                        "element_category": "List",
+                        "section_title_inherited": meta.get("section_title_inherited"),
+                        "text_complexity": meta.get("text_complexity", "medium"),
+                        "content_length": len("\n".join(combined_text)),
+                        "has_numbers": meta.get("has_numbers", False),
+                        "has_tables_on_page": meta.get("has_tables_on_page", False),
+                        "has_images_on_page": meta.get("has_images_on_page", False),
+                        "section_title_category": meta.get("section_title_category"),
+                        "section_title_pattern": meta.get("section_title_pattern"),
+                        "processing_strategy": meta.get("processing_strategy"),
+                        "image_filepath": meta.get("image_filepath"),
+                        "page_context": meta.get("page_context", "unknown"),
+                        # Store the combined text in html_text field for extraction
+                        "html_text": "\n".join(combined_text),
+                    },
+                }
+
+                grouped_elements.append(combined_element)
+                i = j  # Skip to after the list items
+                continue
+
+        # If not part of a list group, add as-is
+        grouped_elements.append(current_el)
+        i += 1
+
+    print(f"[DEBUG] After grouping: {len(grouped_elements)} elements")
+
+    # Step 3: Compose Final Chunks
+    final_chunks = []
+
+    for el in grouped_elements:
+        meta = extract_structural_metadata(el)
+        category = meta.get("element_category", "unknown")
+        text_content = extract_text_content(el)
+        section_title = meta.get("section_title_inherited", "Unknown Section")
+
+        # Debug: Check if this is a combined list element
+        if el.get("element_id", "").startswith("combined_list_"):
+            print(
+                f"[DEBUG] Combined list element: category={category}, meta_keys={list(meta.keys())}"
+            )
+
+        # Skip elements without meaningful content
+        if not text_content or text_content.strip() == "":
+            continue
+
+            # Compose content based on category and element type
+        element_type = el.get("element_type", "text")
+
+        if category == "List":
+            # Combined list with narrative introduction
+            content = f"Section: {section_title}\n\n{text_content}"
+        elif category == "NarrativeText":
+            content = f"Section: {section_title}\n\n{text_content}"
+        elif element_type == "table":
+            content = (
+                f"Context: {section_title}\n\nType: Table\n\nSummary: {text_content}"
+            )
+        elif element_type == "full_page_image":
+            content = (
+                f"Context: {section_title}\n\nType: Image\n\nSummary: {text_content}"
+            )
+        elif category == "ListItem":
+            # Handle list items that weren't grouped (should be rare)
+            content = f"Section: {section_title}\n\n{text_content}"
+        elif category == "UncategorizedText":
+            # Handle uncategorized text that might be table references
+            if any(
+                keyword in text_content.lower()
+                for keyword in ["tabel", "table", "figur", "figure"]
+            ):
+                content = f"Context: {section_title}\n\nType: Reference\n\nContent: {text_content}"
+            else:
+                content = f"Section: {section_title}\n\n{text_content}"
+        else:
+            # For other elements, use their text as-is
+            content = text_content
+
+        # Create final chunk object
+        chunk = {
+            "chunk_id": str(uuid.uuid4()),
+            "content": content,
+            "metadata": {
+                "source_filename": meta.get("source_filename"),
+                "page_number": meta.get("page_number"),
+                "element_category": meta.get(
+                    "element_category", "unknown"
+                ),  # Always use meta category
+                "section_title_inherited": section_title,
+                "text_complexity": meta.get("text_complexity", "medium"),
+                "content_length": len(text_content),
+                "has_numbers": meta.get("has_numbers", False),
+                "has_tables_on_page": meta.get("has_tables_on_page", False),
+                "has_images_on_page": meta.get("has_images_on_page", False),
+                "section_title_category": meta.get("section_title_category"),
+                "section_title_pattern": meta.get("section_title_pattern"),
+                "processing_strategy": meta.get("processing_strategy"),
+                "image_filepath": meta.get("image_filepath"),
+                "page_context": meta.get("page_context", "unknown"),
+            },
+        }
+
+        final_chunks.append(chunk)
+
+    print(f"[DEBUG] Final chunks created: {len(final_chunks)}")
+    return final_chunks
 
 
 # --- Chunking strategies ---
@@ -378,8 +627,8 @@ def analyze_chunks(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
     type_dist = {}
     complexity_dist = {}
     for c in chunks:
-        # Use the same metadata extraction logic as the rest of the code
-        meta = extract_structural_metadata(c["metadata"])
+        # For final chunks, metadata is already a flat dictionary
+        meta = c["metadata"]
         cat = meta.get("element_category", "unknown")
         complexity = meta.get("text_complexity", "unknown")
         type_dist[cat] = type_dist.get(cat, 0) + 1
@@ -459,8 +708,8 @@ def print_chunk_preview(chunks: List[Dict[str, Any]], strategy_name: str, n: int
         print(
             f"  Content: {repr(chunk['content'][:120])}{'...' if len(chunk['content']) > 120 else ''}"
         )
-        # Use the same metadata extraction logic as the rest of the code
-        meta = extract_structural_metadata(chunk["metadata"])
+        # For final chunks, metadata is already a flat dictionary
+        meta = chunk["metadata"]
         print(f"  Element category: {meta.get('element_category', 'N/A')}")
         print(f"  Page: {meta.get('page_number', 'N/A')}")
         print(f"  Section: {meta.get('section_title_inherited', 'N/A')}")
@@ -758,36 +1007,80 @@ def main():
     if not elements:
         print("[WARNING] No elements loaded from input. Exiting.")
         return
+
+    # NEW: Use intelligent chunking approach
+    print("\n=== USING INTELLIGENT CHUNKING APPROACH ===")
+    final_chunks = create_final_chunks(elements)
+
+    # Save the intelligent chunks
+    save_pickle(final_chunks, CURRENT_RUN_DIR / "final_chunks_intelligent.pkl")
+    save_json(final_chunks, CURRENT_RUN_DIR / "final_chunks_intelligent.json")
+
+    # Create analysis for intelligent chunks
+    intelligent_analysis = analyze_chunks(final_chunks)
+    save_json(
+        intelligent_analysis, CURRENT_RUN_DIR / "intelligent_chunking_analysis.json"
+    )
+
+    # Create quality validation for intelligent chunks
+    intelligent_quality = {
+        "boundary_validation": validate_chunk_boundaries(final_chunks),
+        "metadata_validation": validate_metadata_preservation(final_chunks),
+        "strategy_validation": validate_chunking_strategy(final_chunks, "intelligent"),
+    }
+    save_json(
+        intelligent_quality, CURRENT_RUN_DIR / "intelligent_chunking_quality.json"
+    )
+
+    # Create smart samples for intelligent chunks
+    smart_samples_intelligent = create_smart_samples(final_chunks, 5)
+    save_json(
+        smart_samples_intelligent, CURRENT_RUN_DIR / "sample_chunks_intelligent.json"
+    )
+
+    # LEGACY: Also run the old chunking approaches for comparison
+    print("\n=== RUNNING LEGACY CHUNKING APPROACHES FOR COMPARISON ===")
     chunked = chunk_elements(elements, config)
-    # Save chunked outputs (main: .pkl, also .json for readability)
+
+    # Save legacy chunked outputs
     save_pickle(chunked["adaptive"], CURRENT_RUN_DIR / "chunked_elements_adaptive.pkl")
     save_pickle(
         chunked["recursive"], CURRENT_RUN_DIR / "chunked_elements_recursive.pkl"
     )
     save_json(chunked["adaptive"], CURRENT_RUN_DIR / "chunked_elements_adaptive.json")
     save_json(chunked["recursive"], CURRENT_RUN_DIR / "chunked_elements_recursive.json")
-    # Save analysis
-    # Enhanced comparison analysis (includes all analysis data)
+
+    # Save legacy analysis
     comparison_analysis = compare_strategies(chunked["adaptive"], chunked["recursive"])
     save_json(comparison_analysis, CURRENT_RUN_DIR / "strategy_comparison.json")
 
-    # Quality validation
+    # Legacy quality validation
     quality_report = generate_quality_report(chunked["adaptive"], chunked["recursive"])
     save_json(quality_report, CURRENT_RUN_DIR / "chunking_quality_report.json")
-    # Save samples
+
+    # Legacy samples
     smart_samples_adaptive = create_smart_samples(chunked["adaptive"], 5)
     smart_samples_recursive = create_smart_samples(chunked["recursive"], 5)
     save_json(smart_samples_adaptive, CURRENT_RUN_DIR / "sample_chunks_adaptive.json")
     save_json(smart_samples_recursive, CURRENT_RUN_DIR / "sample_chunks_recursive.json")
+
     # --- Debug/console output ---
-    print("\n================ CHUNKING SUMMARY ================")
+    print("\n================ INTELLIGENT CHUNKING SUMMARY ================")
+    print_analysis_summary(intelligent_analysis, "intelligent")
+    print_chunk_preview(final_chunks, "intelligent", n=3)
+
+    print("\n================ LEGACY CHUNKING SUMMARY ================")
     for strategy in ["adaptive", "recursive"]:
         if not chunked[strategy]:
             print(f"[WARNING] No chunks produced for {strategy} strategy.")
             continue
         print_analysis_summary(analyze_chunks(chunked[strategy]), strategy)
         print_chunk_preview(chunked[strategy], strategy, n=2)
+
     print("\nChunking complete. Outputs written to", CURRENT_RUN_DIR)
+    print(f"Intelligent chunks: {len(final_chunks)}")
+    print(f"Legacy adaptive chunks: {len(chunked['adaptive'])}")
+    print(f"Legacy recursive chunks: {len(chunked['recursive'])}")
 
 
 if __name__ == "__main__":
