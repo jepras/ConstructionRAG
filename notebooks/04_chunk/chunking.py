@@ -77,7 +77,8 @@ class VLMEnrichmentMetadata(BaseModel):
 # CONFIGURATION - SPECIFY WHICH ENRICH DATA RUN TO LOAD
 # ==============================================================================
 ENRICH_DATA_RUN_TO_LOAD = (
-    "03_run_20250721_115255"  # Change this to load different enrich_data runs
+    "03_run_20250722_115913"  # Change this to load different enrich_data runs
+    # Update this to match your latest enrich_data_from_meta.py run
 )
 
 # ==============================================================================
@@ -180,7 +181,7 @@ def extract_structural_metadata(el: dict) -> dict:
         elif hasattr(meta, "dict"):
             meta = meta.dict()
         return meta
-    # 2. Nested in original_element
+    # 2. Nested in original_element (NEW: handle enriched elements from enrich_data_from_meta.py)
     orig = el.get("original_element")
     if orig:
         # If it's a dict with structural_metadata
@@ -199,7 +200,7 @@ def extract_structural_metadata(el: dict) -> dict:
             elif hasattr(meta, "dict"):
                 meta = meta.dict()
             return meta
-    # 3. Fallback: try top-level keys
+    # 3. Fallback: try top-level keys (including new unified fields)
     return {
         k: el.get(k)
         for k in [
@@ -216,6 +217,11 @@ def extract_structural_metadata(el: dict) -> dict:
             "section_title_category",
             "section_title_inherited",
             "section_title_pattern",
+            # NEW: Unified approach fields
+            "processing_strategy",
+            "element_id",
+            "image_filepath",
+            "html_text",
         ]
         if k in el
     }
@@ -223,7 +229,7 @@ def extract_structural_metadata(el: dict) -> dict:
 
 # --- Helper to extract text content from element ---
 def extract_text_content(el: dict) -> str:
-    """Extract text content from element, handling various nested structures"""
+    """Extract text content from element, always using original text for tables/images, never VLM captions."""
     # Try direct text field
     if "text" in el:
         return el["text"]
@@ -238,18 +244,26 @@ def extract_text_content(el: dict) -> str:
         if hasattr(orig, "text"):
             return getattr(orig, "text", "")
 
-    # Try enrichment_metadata for captions
-    enrichment = el.get("enrichment_metadata")
-    if enrichment:
-        # For tables, use HTML caption
-        if hasattr(enrichment, "table_html_caption") and enrichment.table_html_caption:
-            return enrichment.table_html_caption
-        # For images, use full page caption
-        if (
-            hasattr(enrichment, "full_page_image_caption")
-            and enrichment.full_page_image_caption
-        ):
-            return enrichment.full_page_image_caption
+    # Try structural_metadata for HTML text (for tables from unified approach)
+    struct_meta = el.get("structural_metadata")
+    if struct_meta:
+        if hasattr(struct_meta, "html_text") and struct_meta.html_text:
+            return struct_meta.html_text
+        elif hasattr(struct_meta, "model_dump"):
+            struct_dict = struct_meta.model_dump()
+            if struct_dict.get("html_text"):
+                return struct_dict["html_text"]
+
+    # For images, if no text, return a placeholder
+    meta = el.get("structural_metadata")
+    if meta and (
+        getattr(meta, "content_type", None) == "full_page_with_images"
+        or (
+            hasattr(meta, "model_dump")
+            and meta.model_dump().get("content_type") == "full_page_with_images"
+        )
+    ):
+        return "[IMAGE PAGE]"
 
     return ""
 
@@ -281,27 +295,37 @@ def chunk_elements(
 ) -> Dict[str, List[Dict[str, Any]]]:
     grouped_elements = group_lists_with_context(elements)
     print(f"[DEBUG] Grouping produced {len(grouped_elements)} elements")
-    # Remove verbose debug output - just show summary
     results = {"adaptive": [], "recursive": []}
     for el in grouped_elements:
         meta = extract_structural_metadata(el)
         cat = meta.get("element_category")
-        if cat in ["Table", "Image", "ImageTable"]:
-            # Keep as single chunk
+        content_type = meta.get("content_type", "text")
+        element_type = el.get("element_type", "text")
+
+        # Determine if this should be kept as single chunk
+        is_single_chunk = (
+            cat in ["Table", "Image", "ImageTable"]
+            or content_type in ["table", "full_page_with_images"]
+            or element_type in ["table", "full_page_image"]
+        )
+
+        if is_single_chunk:
+            # For tables/images, use only original text (not VLM captions)
+            chunk_content = extract_text_content(el)
             chunk = {
                 "chunk_id": str(uuid.uuid4()),
-                "content": extract_text_content(el),
+                "content": chunk_content,
                 "metadata": el,
                 "chunking_info": {
                     "strategy": "single",
-                    "chunk_size": len(extract_text_content(el)),
+                    "chunk_size": len(chunk_content),
                     "chunk_index": 0,
                     "total_chunks": 1,
                 },
             }
             results["adaptive"].append(chunk)
             results["recursive"].append(chunk.copy())
-        elif cat == "NarrativeText" or cat == "ListItem":
+        elif cat == "NarrativeText" or cat == "ListItem" or content_type == "text":
             text = extract_text_content(el)
             complexity = meta.get("text_complexity", "medium")
             # Adaptive
