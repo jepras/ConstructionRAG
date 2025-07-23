@@ -158,24 +158,24 @@ EMBEDDING_DIMENSION = 1024  # Voyage multilingual-2
 - `storage_validation_report.json` - Overall validation summary
 - `retrieval_quality_report.json` - Detailed Danish semantic search analysis
 
-### **07_query - Language-Agnostic Query Processing**
+### **07_query - Danish Construction Query Processing**
 
-#### **LLM-Based Semantic Query Expansion**
+#### **Danish-Focused Semantic Query Expansion**
 ```python
 def expand_query_semantically(original_query: str) -> List[str]:
-    """Generate semantic variations using GPT without hardcoded terms"""
+    """Generate Danish semantic variations using GPT for construction queries"""
     
     prompt = f"""
-    Given this construction/tender query: "{original_query}"
+    Given this Danish construction/tender query: "{original_query}"
     
-    Generate 4 semantically similar queries that could find the same information.
+    Generate 4 semantically similar queries IN DANISH that could find the same information.
     Consider:
-    - Alternative technical terminology
-    - Different phrasing styles (formal/informal)  
-    - Related concepts that might contain the answer
-    - Broader and narrower interpretations
+    - Alternative Danish technical terminology
+    - Different phrasing styles (formal/informal Danish)  
+    - Related Danish construction concepts that might contain the answer
+    - Broader and narrower interpretations in Danish
     
-    Return only the alternative queries, one per line.
+    Return only the Danish alternative queries, one per line.
     """
     
     response = openai.chat.completions.create(
@@ -187,26 +187,26 @@ def expand_query_semantically(original_query: str) -> List[str]:
     return [q.strip() for q in response.choices[0].message.content.strip().split('\n') if q.strip()]
 ```
 
-#### **Metadata-Driven Query Routing**
+#### **Danish Content-Based Query Routing**
 ```python
 def route_query_by_content_type(query: str) -> Dict[str, Any]:
-    """Route queries based on semantic content, not language"""
+    """Route Danish queries based on semantic content with optional categorization"""
     
     type_prompt = f"""
-    Classify this query into one category:
-    - quantities (amounts, numbers, measurements, dimensions)
-    - requirements (specifications, standards, compliance, regulations)
-    - procedures (processes, steps, methods, instructions)
-    - materials (substances, components, products, equipment)
-    - timeline (deadlines, schedules, durations, phases)
+    Classify this Danish construction query into one category:
+    - quantities (mængder, numre, målinger, dimensioner)
+    - requirements (specifikationer, standarder, krav, regler)
+    - procedures (processer, trin, metoder, instruktioner)
+    - materials (materialer, komponenter, produkter, udstyr)
+    - timeline (deadlines, tidsplaner, varighed, faser)
     
     Query: "{query}"
-    Return only the category name.
+    Return only the category name in English.
     """
     
     category = get_category_from_llm(type_prompt)
     
-    # Content-based metadata filtering (language-agnostic)
+    # Content-based metadata filtering for Danish construction content
     routing_config = {
         "quantities": {
             "metadata_filter": {"has_numbers": True},
@@ -238,21 +238,21 @@ def route_query_by_content_type(query: str) -> Dict[str, Any]:
     return routing_config.get(category, routing_config["requirements"])
 ```
 
-#### **Hypothetical Document Embeddings (HyDE)**
+#### **Danish Hypothetical Document Embeddings (HyDE)**
 ```python
 def generate_hypothetical_document(query: str) -> str:
-    """Generate hypothetical answer document for better embedding matching"""
+    """Generate Danish hypothetical answer document for better embedding matching"""
     
     hyde_prompt = f"""
-    Given this construction query: "{query}"
+    Given this Danish construction query: "{query}"
     
-    Write a detailed, technical paragraph that would likely contain the answer.
-    Write as if you're from an official construction document or building code.
-    Include specific details, measurements, and technical language that would appear in real documents.
+    Write a detailed, technical paragraph IN DANISH that would likely contain the answer.
+    Write as if you're from an official Danish construction document or building code.
+    Include specific details, measurements, and technical language that would appear in real Danish construction documents.
     
     Query: {query}
     
-    Hypothetical document excerpt:
+    Hypothetical Danish document excerpt:
     """
     
     response = openai.chat.completions.create(
@@ -264,7 +264,7 @@ def generate_hypothetical_document(query: str) -> str:
     return response.choices[0].message.content.strip()
 
 def create_hyde_embeddings(query: str, hypothetical_doc: str) -> Dict[str, Any]:
-    """Create embeddings for both query and hypothetical document"""
+    """Create embeddings for both Danish query and hypothetical document"""
     
     # Embed both the original query and hypothetical document
     voyage_client = VoyageClient(api_key=os.getenv("VOYAGE_API_KEY"))
@@ -282,12 +282,112 @@ def create_hyde_embeddings(query: str, hypothetical_doc: str) -> Dict[str, Any]:
 ```python
 class ProcessedQuery(BaseModel):
     original_query: str
-    expanded_queries: List[str]                    # LLM-generated variations
+    expanded_queries: List[str]                    # Danish LLM-generated variations
     content_category: str                          # quantities/requirements/etc
     routing_config: Dict[str, Any]                 # metadata filters and weights
-    hypothetical_document: Optional[str] = None    # HyDE document
+    hypothetical_document: Optional[str] = None    # Danish HyDE document
     hyde_embedding: Optional[List[float]] = None   # HyDE embedding
     processing_time_ms: float
+```
+
+#### **Query Performance Testing Framework**
+
+**Danish Construction Query Testing**
+- **Test Queries**: Use validated Danish queries from `store_and_validate.py`:
+  - "regnvand" (rainwater)
+  - "omkostninger for opmåling og beregning" (costs for surveying and calculation)  
+  - "projekt information" (project information)
+
+**Testing Strategy**
+```python
+def test_query_variations(original_query: str, collection: chromadb.Collection) -> Dict[str, Any]:
+    """Test all Danish query variations with and without content categorization"""
+    
+    # Generate all variations
+    variations = {
+        "original": original_query,
+        "semantic_expansion": expand_query_semantically(original_query),
+        "hyde_document": generate_hypothetical_document(original_query),
+        "formal_variation": generate_formal_variation(original_query),
+        "informal_variation": generate_informal_variation(original_query)
+    }
+    
+    results = {}
+    
+    for variation_name, variation_query in variations.items():
+        # Test WITH categorization
+        with_cat_results = search_with_categorization(variation_query, collection)
+        # Test WITHOUT categorization  
+        without_cat_results = search_without_categorization(variation_query, collection)
+        
+        results[variation_name] = {
+            "with_categorization": analyze_search_results(with_cat_results),
+            "without_categorization": analyze_search_results(without_cat_results)
+        }
+    
+    return results
+```
+
+**At-a-Glance Text Visualization**
+```
+=== DANISH QUERY PERFORMANCE ANALYSIS ===
+
+Original Query: "regnvand"
+
+📊 Variation 1: Semantic Expansion - "stormwater afledning systemer"
+   WITH categorization (materials filter):
+   Top 3 Results:    Similarity: -0.245, -0.289, -0.312
+   ┌─ Rank 1 (-0.245): "Regnvand skal håndteres i henhold til gældende..."
+   ├─ Rank 2 (-0.289): "Dræning af overfladevand kræver godkendelse..."  
+   └─ Rank 3 (-0.312): "Installation af regnvandsopsamling skal..."
+   
+   Bottom 3 Results: Similarity: -0.678, -0.701, -0.743
+   ┌─ Rank 18 (-0.678): "Betonarbejde udføres efter DS/EN 206..."
+   ├─ Rank 19 (-0.701): "Tidsfrister for projektgennemgang..."
+   └─ Rank 20 (-0.743): "Administrativ håndtering af dokumenter..."
+   
+   Range: 0.498 | Avg Top 3: -0.282
+
+   WITHOUT categorization:
+   Top 3 Results:    Similarity: -0.267, -0.301, -0.334  
+   ┌─ Rank 1 (-0.267): "Bygningers regnvandshåndtering skal..."
+   ├─ Rank 2 (-0.301): "Krav til afledning af tagvand..."
+   └─ Rank 3 (-0.334): "Regnvandsbrønde placeres efter..."
+   
+   Bottom 3 Results: Similarity: -0.656, -0.689, -0.712
+   Range: 0.445 | Avg Top 3: -0.301
+
+📊 Variation 2: HyDE Document - "Tekniske specifikationer for regnvandshåndtering..."
+   [Similar format]
+
+📊 Variation 3: Formal Variation - "regnvandshåndtering krav og bestemmelser"
+   [Similar format]
+
+🏆 WINNER: Semantic Expansion WITH categorization
+   Best similarity: -0.245 (vs -0.267 without categorization)
+   📈 Categorization improvement: +0.022 similarity
+   📋 Category detected: materials
+   🎯 Metadata filter applied: has_tables_on_page=True
+
+💡 INSIGHTS:
+   - Content categorization improved performance by +0.022 avg similarity
+   - Semantic expansion outperformed original query by +0.089
+   - HyDE technique showed mixed results for this construction query
+   - Danish technical terminology recognition working well
+```
+
+**Performance Summary Report**
+```python
+class QueryVariationReport(BaseModel):
+    original_query: str
+    best_variation: str
+    best_similarity_score: float
+    categorization_impact: float           # Positive = helped, Negative = hindered
+    top_content_snippets: List[str]        # Content previews from best results
+    bottom_content_snippets: List[str]     # Content previews from worst results
+    variation_rankings: Dict[str, float]   # All variations ranked by performance
+    content_category_detected: str
+    recommendations: List[str]
 ```
 
 ### **08_retrieve - Hybrid Search Implementation**
