@@ -47,7 +47,8 @@ SPECIFIC_EMBEDDING_RUN = (
 
 # --- ChromaDB Configuration ---
 CHROMA_PERSIST_DIRECTORY = "../../chroma_db"
-COLLECTION_NAME = "construction_documents"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+COLLECTION_NAME = f"construction_documents_{timestamp}"  # Timestamped collection name
 EMBEDDING_DIMENSION = 1024  # Voyage multilingual-2 default
 
 # --- Path Configuration ---

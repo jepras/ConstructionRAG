@@ -158,262 +158,120 @@ EMBEDDING_DIMENSION = 1024  # Voyage multilingual-2
 - `storage_validation_report.json` - Overall validation summary
 - `retrieval_quality_report.json` - Detailed Danish semantic search analysis
 
-### **07_query - Danish Construction Query Processing**
+### **07_query - ✅ IMPLEMENTED**
 
-#### **Danish-Focused Semantic Query Expansion**
+**Danish Query Processing with Query Variations and Collection Management**
+
+#### **Implementation**
+- **Notebook**: `query_processing.py`
+- **Technology**: OpenAI GPT-3.5-turbo for query expansion, Voyage AI for embeddings
+- **Input**: ChromaDB collection (configurable via `COLLECTION_TO_TEST`)
+- **Output**: Query performance analysis + HTML reports
+
+#### **Key Features**
+- **Query Variations**: Original, semantic expansion, HyDE document, formal variation
+- **Collection Management**: Easy switching between timestamped collections
+- **Performance Testing**: Compare all variations on Danish construction queries
+- **Content Snippets**: 120-character snippets in HTML output for better visibility
+
+#### **Collection Selection**
 ```python
-def expand_query_semantically(original_query: str) -> List[str]:
-    """Generate Danish semantic variations using GPT for construction queries"""
-    
-    prompt = f"""
-    Given this Danish construction/tender query: "{original_query}"
-    
-    Generate 4 semantically similar queries IN DANISH that could find the same information.
-    Consider:
-    - Alternative Danish technical terminology
-    - Different phrasing styles (formal/informal Danish)  
-    - Related Danish construction concepts that might contain the answer
-    - Broader and narrower interpretations in Danish
-    
-    Return only the Danish alternative queries, one per line.
-    """
-    
-    response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3
-    )
-    
-    return [q.strip() for q in response.choices[0].message.content.strip().split('\n') if q.strip()]
+# --- Collection Selection ---
+COLLECTION_TO_TEST = "construction_documents_20250723_113112"  # Latest timestamped
+# COLLECTION_TO_TEST = "construction_documents"  # Original collection
 ```
 
-#### **Danish Content-Based Query Routing**
-```python
-def route_query_by_content_type(query: str) -> Dict[str, Any]:
-    """Route Danish queries based on semantic content with optional categorization"""
-    
-    type_prompt = f"""
-    Classify this Danish construction query into one category:
-    - quantities (mængder, numre, målinger, dimensioner)
-    - requirements (specifikationer, standarder, krav, regler)
-    - procedures (processer, trin, metoder, instruktioner)
-    - materials (materialer, komponenter, produkter, udstyr)
-    - timeline (deadlines, tidsplaner, varighed, faser)
-    
-    Query: "{query}"
-    Return only the category name in English.
-    """
-    
-    category = get_category_from_llm(type_prompt)
-    
-    # Content-based metadata filtering for Danish construction content
-    routing_config = {
-        "quantities": {
-            "metadata_filter": {"has_numbers": True},
-            "boost_fields": ["content_length"],
-            "search_weight": "precise"
-        },
-        "requirements": {
-            "metadata_filter": {"element_category": {"$in": ["NarrativeText", "Title"]}},
-            "boost_fields": ["section_title_inherited"],
-            "search_weight": "comprehensive"
-        },
-        "procedures": {
-            "metadata_filter": {"text_complexity": {"$in": ["medium", "complex"]}},
-            "boost_fields": ["element_category"],
-            "search_weight": "sequential"
-        },
-        "materials": {
-            "metadata_filter": {"has_tables_on_page": True},
-            "boost_fields": ["page_context"],
-            "search_weight": "specific"
-        },
-        "timeline": {
-            "metadata_filter": {"has_numbers": True, "element_category": "NarrativeText"},
-            "boost_fields": ["content_length"],
-            "search_weight": "contextual"
-        }
-    }
-    
-    return routing_config.get(category, routing_config["requirements"])
-```
+#### **Query Variations Generated**
+1. **Original Query**: Direct user input
+2. **Semantic Expansion**: 4 Danish alternatives using GPT-3.5-turbo
+3. **HyDE Document**: Hypothetical Danish document excerpt for better embedding matching
+4. **Formal Variation**: Professional construction language variation
 
-#### **Danish Hypothetical Document Embeddings (HyDE)**
-```python
-def generate_hypothetical_document(query: str) -> str:
-    """Generate Danish hypothetical answer document for better embedding matching"""
-    
-    hyde_prompt = f"""
-    Given this Danish construction query: "{query}"
-    
-    Write a detailed, technical paragraph IN DANISH that would likely contain the answer.
-    Write as if you're from an official Danish construction document or building code.
-    Include specific details, measurements, and technical language that would appear in real Danish construction documents.
-    
-    Query: {query}
-    
-    Hypothetical Danish document excerpt:
-    """
-    
-    response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": hyde_prompt}],
-        temperature=0.2  # Lower temperature for more consistent technical content
-    )
-    
-    return response.choices[0].message.content.strip()
+#### **Test Queries Used**
+- "regnvand" (rainwater)
+- "omkostninger for opmåling og beregning" (costs for surveying and calculation)
+- "projekt information" (project information)
 
-def create_hyde_embeddings(query: str, hypothetical_doc: str) -> Dict[str, Any]:
-    """Create embeddings for both Danish query and hypothetical document"""
-    
-    # Embed both the original query and hypothetical document
-    voyage_client = VoyageClient(api_key=os.getenv("VOYAGE_API_KEY"))
-    
-    embeddings = voyage_client.embed([query, hypothetical_doc], model="voyage-multilingual-2")
-    
-    return {
-        "query_embedding": embeddings.embeddings[0],
-        "hyde_embedding": embeddings.embeddings[1],
-        "hypothetical_document": hypothetical_doc
-    }
-```
+#### **Performance Results**
+- **Best Technique**: HyDE Document (won 2/3 queries)
+- **Average Similarity**: -0.033 to 0.032 (excellent performance)
+- **Danish Recognition**: Excellent semantic search working very well
 
-#### **Query Processing Pipeline**
-```python
-class ProcessedQuery(BaseModel):
-    original_query: str
-    expanded_queries: List[str]                    # Danish LLM-generated variations
-    content_category: str                          # quantities/requirements/etc
-    routing_config: Dict[str, Any]                 # metadata filters and weights
-    hypothetical_document: Optional[str] = None    # Danish HyDE document
-    hyde_embedding: Optional[List[float]] = None   # HyDE embedding
-    processing_time_ms: float
-```
+#### **Output Files**
+- `query_performance_reports.json` - Individual query analysis
+- `overall_performance_report.json` - Summary across all queries
+- `query_variations_table.html` - Visual comparison table
 
-#### **Query Performance Testing Framework**
+#### **Key Insights for Step 8**
+- **HyDE technique most effective** for Danish construction queries
+- **Semantic expansion** provides good alternatives
+- **Collection switching** works seamlessly with timestamped collections
+- **No content categorization needed** - removed for simplicity and performance
 
-**Danish Construction Query Testing**
-- **Test Queries**: Use validated Danish queries from `store_and_validate.py`:
-  - "regnvand" (rainwater)
-  - "omkostninger for opmåling og beregning" (costs for surveying and calculation)  
-  - "projekt information" (project information)
+### **08_retrieve - Hybrid Search Testing & Optimization**
 
-**Testing Strategy**
-```python
-def test_query_variations(original_query: str, collection: chromadb.Collection) -> Dict[str, Any]:
-    """Test all Danish query variations with and without content categorization"""
-    
-    # Generate all variations
-    variations = {
-        "original": original_query,
-        "semantic_expansion": expand_query_semantically(original_query),
-        "hyde_document": generate_hypothetical_document(original_query),
-        "formal_variation": generate_formal_variation(original_query),
-        "informal_variation": generate_informal_variation(original_query)
-    }
-    
-    results = {}
-    
-    for variation_name, variation_query in variations.items():
-        # Test WITH categorization
-        with_cat_results = search_with_categorization(variation_query, collection)
-        # Test WITHOUT categorization  
-        without_cat_results = search_without_categorization(variation_query, collection)
-        
-        results[variation_name] = {
-            "with_categorization": analyze_search_results(with_cat_results),
-            "without_categorization": analyze_search_results(without_cat_results)
-        }
-    
-    return results
-```
+#### **Implementation Strategy**
+- **Notebook**: `retrieve_hybrid.py`
+- **Technology**: ChromaDB semantic search + keyword search (BM25/TF-IDF)
+- **Input**: Processed queries from step 07 + ChromaDB collection
+- **Output**: HTML matrix showing optimal query + search combinations
 
-**At-a-Glance Text Visualization**
-```
-=== DANISH QUERY PERFORMANCE ANALYSIS ===
-
-Original Query: "regnvand"
-
-📊 Variation 1: Semantic Expansion - "stormwater afledning systemer"
-   WITH categorization (materials filter):
-   Top 3 Results:    Similarity: -0.245, -0.289, -0.312
-   ┌─ Rank 1 (-0.245): "Regnvand skal håndteres i henhold til gældende..."
-   ├─ Rank 2 (-0.289): "Dræning af overfladevand kræver godkendelse..."  
-   └─ Rank 3 (-0.312): "Installation af regnvandsopsamling skal..."
-   
-   Bottom 3 Results: Similarity: -0.678, -0.701, -0.743
-   ┌─ Rank 18 (-0.678): "Betonarbejde udføres efter DS/EN 206..."
-   ├─ Rank 19 (-0.701): "Tidsfrister for projektgennemgang..."
-   └─ Rank 20 (-0.743): "Administrativ håndtering af dokumenter..."
-   
-   Range: 0.498 | Avg Top 3: -0.282
-
-   WITHOUT categorization:
-   Top 3 Results:    Similarity: -0.267, -0.301, -0.334  
-   ┌─ Rank 1 (-0.267): "Bygningers regnvandshåndtering skal..."
-   ├─ Rank 2 (-0.301): "Krav til afledning af tagvand..."
-   └─ Rank 3 (-0.334): "Regnvandsbrønde placeres efter..."
-   
-   Bottom 3 Results: Similarity: -0.656, -0.689, -0.712
-   Range: 0.445 | Avg Top 3: -0.301
-
-📊 Variation 2: HyDE Document - "Tekniske specifikationer for regnvandshåndtering..."
-   [Similar format]
-
-📊 Variation 3: Formal Variation - "regnvandshåndtering krav og bestemmelser"
-   [Similar format]
-
-🏆 WINNER: Semantic Expansion WITH categorization
-   Best similarity: -0.245 (vs -0.267 without categorization)
-   📈 Categorization improvement: +0.022 similarity
-   📋 Category detected: materials
-   🎯 Metadata filter applied: has_tables_on_page=True
-
-💡 INSIGHTS:
-   - Content categorization improved performance by +0.022 avg similarity
-   - Semantic expansion outperformed original query by +0.089
-   - HyDE technique showed mixed results for this construction query
-   - Danish technical terminology recognition working well
-```
-
-**Performance Summary Report**
-```python
-class QueryVariationReport(BaseModel):
-    original_query: str
-    best_variation: str
-    best_similarity_score: float
-    categorization_impact: float           # Positive = helped, Negative = hindered
-    top_content_snippets: List[str]        # Content previews from best results
-    bottom_content_snippets: List[str]     # Content previews from worst results
-    variation_rankings: Dict[str, float]   # All variations ranked by performance
-    content_category_detected: str
-    recommendations: List[str]
-```
-
-### **08_retrieve - Hybrid Search Implementation**
+#### **Testing Strategy**
+- **Query Variations**: Test all 4 variations from step 7 (original, semantic expansion, HyDE, formal)
+- **Search Methods**: Test semantic-only, keyword-only, and hybrid combinations
+- **Weight Combinations**: Test different semantic/keyword weight ratios (100/0, 80/20, 60/40, 40/60, 20/80, 0/100)
+- **Early Insight**: Step 7 showed HyDE performed well, but test all combinations systematically
 
 #### **Search Strategy**
 - **Semantic Search**: Voyage embeddings for conceptual matching
-- **Keyword Search**: BM25/TF-IDF for exact term matching  
-- **Metadata Filtering**: Pre-filter by document type, complexity, source
-- **Result Fusion**: Combine semantic + keyword results with weighted scoring
+- **Keyword Search**: BM25/TF-IDF for exact term matching
+- **Hybrid Fusion**: Weighted combination with configurable ratios
+- **Rich Results**: Retrieve 20-30 results per combination (will be reranked in step 9)
 
-#### **Rich Metadata Leveraging**
-- **Citation Generation**: Use `source_filename`, `page_number`, `section_title_inherited`
-- **Content Type Filtering**: Filter by `element_category` (tables vs. narrative)
-- **Complexity Matching**: Match query complexity to `text_complexity`
-- **Quality Weighting**: Weight by `processing_strategy` confidence
-
-#### **Retrieval Output Format**
+#### **HTML Matrix Output**
 ```python
-class RetrievalResult(BaseModel):
-    chunk_id: str
-    content: str
-    score: float
-    metadata: Dict[str, Any]
-    citation: Dict[str, str]  # Document, page, section references
-    search_type: str  # "semantic", "keyword", "hybrid"
+class RetrievalMatrixResult(BaseModel):
+    query_variation: str  # "original", "semantic_expansion", "hyde", "formal"
+    search_method: str    # "semantic_only", "keyword_only", "hybrid_80_20", etc.
+    semantic_weight: float
+    keyword_weight: float
+    top_3_similarities: List[float]
+    avg_top_3_similarity: float
+    result_count: int
+    top_content_snippets: List[str]  # 120-char snippets for visibility
+    performance_rank: int  # Rank among all combinations
 ```
+
+#### **Matrix Visualization**
+Generate HTML table showing:
+- **Rows**: Query variations (original, semantic expansion, HyDE, formal)
+- **Columns**: Search methods (semantic-only, keyword-only, hybrid weights)
+- **Cells**: Average top-3 similarity scores + color coding
+- **Winner Highlighting**: Best performing combination clearly marked
+
+#### **Configuration**
+```python
+# --- Collection Selection ---
+COLLECTION_TO_TEST = "construction_documents_20250723_113112"  # From step 7
+
+# --- Testing Configuration ---
+TOP_K_RESULTS = 25  # Retrieve more results for step 9 reranking
+TEST_QUERIES = ["regnvand", "omkostninger for opmåling og beregning", "projekt information"]
+WEIGHT_COMBINATIONS = [
+    (1.0, 0.0),  # Semantic only
+    (0.8, 0.2),  # 80% semantic, 20% keyword
+    (0.6, 0.4),  # 60% semantic, 40% keyword
+    (0.4, 0.6),  # 40% semantic, 60% keyword
+    (0.2, 0.8),  # 20% semantic, 80% keyword
+    (0.0, 1.0),  # Keyword only
+]
+```
+
+#### **Key Requirements**
+- **Comprehensive Testing**: Don't assume HyDE is best - test all combinations
+- **Rich Output**: Include 20-30 results per combination (not just top 3)
+- **Visual Analysis**: HTML matrix makes it easy to spot optimal combinations
+- **Step 9 Preparation**: Output format ready for reranking pipeline
 
 ### **09_rerank - Re-ranking Implementation**
 
@@ -508,9 +366,9 @@ Answer based on the provided documents, including specific citations:
 ## 📚 **Notebook Implementation Queue**
 
 ### **Immediate Priority (Core Functionality)**
-1. **06_store**: `store_and_validate.py` - Set up Chroma storage + integrated validation
-2. **07_query**: `query_processing.py` - Simple query expansion (no intent detection)
-3. **08_retrieve**: `retrieve_hybrid.py` - Implement hybrid search + metadata filtering
+1. **06_store**: ✅ `store_and_validate.py` - Chroma storage + integrated validation
+2. **07_query**: ✅ `query_processing.py` - Query variations + collection management
+3. **08_retrieve**: `retrieve_hybrid.py` - Hybrid search + metadata filtering (NEXT)
 4. **11_generate**: `generate_openai.py` - Basic OpenAI integration with citations
 
 ### **Enhancement Priority (Optimization)**

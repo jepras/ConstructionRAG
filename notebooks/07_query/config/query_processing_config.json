@@ -1,0 +1,77 @@
+{
+  "openai_config": {
+    "model": "gpt-3.5-turbo",
+    "temperature": 0.3,
+    "max_tokens": 500
+  },
+  "voyage_config": {
+    "model": "voyage-multilingual-2",
+    "embedding_dimension": 1024
+  },
+  "test_queries": [
+    "regnvand",
+    "omkostninger for opmåling og beregning", 
+    "projekt information"
+  ],
+  "query_variations": {
+    "semantic_expansion": {
+      "count": 4,
+      "temperature": 0.3
+    },
+    "hyde_document": {
+      "temperature": 0.2,
+      "max_tokens": 300
+    },
+    "formal_variation": {
+      "temperature": 0.2
+    }
+  },
+  "content_categories": {
+    "quantities": {
+      "danish_terms": "mængder, numre, målinger, dimensioner",
+      "metadata_filter": {"has_numbers": true},
+      "boost_fields": ["content_length"],
+      "search_weight": "precise"
+    },
+    "requirements": {
+      "danish_terms": "specifikationer, standarder, krav, regler",
+      "metadata_filter": {"element_category": {"$in": ["NarrativeText", "Title"]}},
+      "boost_fields": ["section_title_inherited"],
+      "search_weight": "comprehensive"
+    },
+    "procedures": {
+      "danish_terms": "processer, trin, metoder, instruktioner",
+      "metadata_filter": {"text_complexity": {"$in": ["medium", "complex"]}},
+      "boost_fields": ["element_category"],
+      "search_weight": "sequential"
+    },
+    "materials": {
+      "danish_terms": "materialer, komponenter, produkter, udstyr",
+      "metadata_filter": {"has_tables_on_page": true},
+      "boost_fields": ["page_context"],
+      "search_weight": "specific"
+    },
+    "timeline": {
+      "danish_terms": "deadlines, tidsplaner, varighed, faser",
+      "metadata_filter": {"has_numbers": true, "element_category": "NarrativeText"},
+      "boost_fields": ["content_length"],
+      "search_weight": "contextual"
+    }
+  },
+  "performance_testing": {
+    "search_results_count": 20,
+    "top_results_display": 3,
+    "bottom_results_display": 3,
+    "content_snippet_length": 80,
+    "similarity_thresholds": {
+      "excellent": -0.3,
+      "good": -0.4,
+      "acceptable": -0.5,
+      "poor": -0.6
+    }
+  },
+  "chroma_config": {
+    "persist_directory": "../../chroma_db",
+    "collection_name": "construction_documents"
+  }
+} 

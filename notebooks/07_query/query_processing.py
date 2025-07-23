@@ -30,6 +30,12 @@ load_dotenv()
 # 1. CONFIGURATION
 # ==============================================================================
 
+# --- Collection Selection ---
+# Specify which collection to test against (change this to test different collections)
+# COLLECTION_TO_TEST = "construction_documents_20250723_113112"  # Latest timestamped collection
+COLLECTION_TO_TEST = "construction_documents"  # Or use original collection
+# COLLECTION_TO_TEST = "construction_documents_20250723_111356"  # Or use another timestamped collection
+
 # --- API Configuration ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
@@ -294,7 +300,27 @@ def create_query_embedding(query: str) -> Optional[List[float]]:
 def initialize_chroma_collection() -> chromadb.Collection:
     """Initialize ChromaDB collection for testing"""
     client = chromadb.PersistentClient(path=CHROMA_CONFIG["persist_directory"])
-    collection = client.get_collection(name=CHROMA_CONFIG["collection_name"])
+
+    # Use the specified collection instead of the config default
+    try:
+        collection = client.get_collection(name=COLLECTION_TO_TEST)
+        print(f"✅ Connected to collection: '{COLLECTION_TO_TEST}'")
+    except Exception as e:
+        print(f"❌ Collection '{COLLECTION_TO_TEST}' not found: {e}")
+        print(f"💡 Available collections:")
+
+        # List available collections
+        try:
+            collections = client.list_collections()
+            for col in collections:
+                print(f"   - {col.name} ({col.count()} documents)")
+        except:
+            print(f"   Unable to list collections")
+
+        raise ValueError(
+            f"Collection '{COLLECTION_TO_TEST}' not found. Please check the COLLECTION_TO_TEST variable."
+        )
+
     return collection
 
 
@@ -843,10 +869,11 @@ def main():
     try:
         # Step 1: Initialize ChromaDB connection
         print("\n🔗 Step 1: Connecting to ChromaDB...")
+        print(f"🎯 Testing collection: '{COLLECTION_TO_TEST}'")
         collection = initialize_chroma_collection()
         document_count = collection.count()
         print(
-            f"✅ Connected to collection '{CHROMA_CONFIG['collection_name']}' with {document_count} documents"
+            f"✅ Connected to collection '{COLLECTION_TO_TEST}' with {document_count} documents"
         )
 
         # Step 2: Test each Danish query
