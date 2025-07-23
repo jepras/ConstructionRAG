@@ -40,6 +40,11 @@ VOYAGE_MODEL = "voyage-multilingual-2"
 # --- Input Data Configuration ---
 EMBEDDING_BASE_DIR = "../../data/internal/05_embedding"
 
+# --- Manual Run Selection (leave empty to use latest) ---
+SPECIFIC_EMBEDDING_RUN = (
+    ""  # e.g., "05_voyage_run_20250723_074238" or "05_run_20250723_075021"
+)
+
 # --- ChromaDB Configuration ---
 CHROMA_PERSIST_DIRECTORY = "../../chroma_db"
 COLLECTION_NAME = "construction_documents"
@@ -78,6 +83,10 @@ print(f"📁 ChromaDB directory: {CHROMA_PERSIST_DIRECTORY}")
 print(f"📦 Collection name: {COLLECTION_NAME}")
 print(f"📁 Output directory: {CURRENT_RUN_DIR}")
 print(f"⚙️  Batch size: {BATCH_SIZE}")
+if SPECIFIC_EMBEDDING_RUN:
+    print(f"🎯 Using specific embedding run: {SPECIFIC_EMBEDDING_RUN}")
+else:
+    print(f"🕐 Using latest embedding run (auto-detect)")
 
 # ==============================================================================
 # 2. DATA MODELS
@@ -166,14 +175,27 @@ class RetrievalQualityReport(BaseModel):
 # ==============================================================================
 
 
-def find_latest_embedding_run() -> Path:
-    """Find the most recent embedding run directory"""
+def get_embedding_run() -> Path:
+    """Get embedding run directory - either specified manually or latest available"""
     embedding_dir = Path(EMBEDDING_BASE_DIR)
 
     if not embedding_dir.exists():
         raise FileNotFoundError(f"Embedding directory not found: {embedding_dir}")
 
-    # Find all run directories
+    # Check if specific run is manually specified
+    if SPECIFIC_EMBEDDING_RUN:
+        specific_run_path = embedding_dir / SPECIFIC_EMBEDDING_RUN
+        if specific_run_path.exists() and specific_run_path.is_dir():
+            print(
+                f"📂 Using manually specified embedding run: {SPECIFIC_EMBEDDING_RUN}"
+            )
+            return specific_run_path
+        else:
+            raise FileNotFoundError(
+                f"Specified embedding run not found: {specific_run_path}"
+            )
+
+    # Otherwise, find the most recent run
     run_dirs = [d for d in embedding_dir.iterdir() if d.is_dir() and "run_" in d.name]
 
     if not run_dirs:
@@ -181,7 +203,7 @@ def find_latest_embedding_run() -> Path:
 
     # Sort by timestamp in directory name and get the latest
     latest_run = sorted(run_dirs, key=lambda x: x.name)[-1]
-    print(f"📂 Using embedding run: {latest_run.name}")
+    print(f"📂 Using latest embedding run: {latest_run.name}")
 
     return latest_run
 
@@ -882,10 +904,10 @@ def main():
     print("=" * 60)
 
     try:
-        # Step 1: Find and load embedded chunks
-        print("\n📂 Step 1: Loading embedded chunks from latest run...")
-        latest_embedding_run = find_latest_embedding_run()
-        embedded_chunks = load_embedded_chunks(latest_embedding_run)
+        # Step 1: Get and load embedded chunks
+        print("\n📂 Step 1: Loading embedded chunks...")
+        embedding_run = get_embedding_run()
+        embedded_chunks = load_embedded_chunks(embedding_run)
 
         # Step 2: Validate embedded chunks structure
         print("\n✅ Step 2: Validating embedded chunks structure...")
