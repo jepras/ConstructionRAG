@@ -35,7 +35,7 @@ OCR_LANGUAGES = ["dan"]  # Danish language support
 # Create timestamped output directory
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_BASE_DIR = Path("../../data/internal/01_partition_data")
-CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"unified_v2_run_{timestamp}"
+CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"01_run_{timestamp}"
 TABLES_DIR = CURRENT_RUN_DIR / "tables"
 IMAGES_DIR = CURRENT_RUN_DIR / "images"
 PICKLE_OUTPUT_PATH = CURRENT_RUN_DIR / "unified_v2_partition_output.pkl"

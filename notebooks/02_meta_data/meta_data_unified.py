@@ -18,7 +18,9 @@ from typing import Literal
 # ==============================================================================
 # CONFIGURATION - SPECIFY WHICH UNIFIED PARTITION RUN TO LOAD
 # ==============================================================================
-UNIFIED_PARTITION_RUN_TO_LOAD = "unified_v2_run_20250722_113203"  # Change this to load different unified partition runs
+UNIFIED_PARTITION_RUN_TO_LOAD = (
+    "01_run_20250722_113203"  # Change this to load different unified partition runs
+)
 
 # ==============================================================================
 # 1. ENHANCED METADATA MODELS (Same as original)
@@ -711,7 +713,7 @@ def test_unified_data_access():
         )
         print(f"💡 Available unified partition runs:")
         if PARTITION_DATA_DIR.exists():
-            for run_dir in PARTITION_DATA_DIR.glob("unified_v2_run_*"):
+            for run_dir in PARTITION_DATA_DIR.glob("01_run_*"):
                 print(f"   - {run_dir.name}")
         return False
 
@@ -765,7 +767,7 @@ if __name__ == "__main__":
     # Configuration - Create timestamped output directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     OUTPUT_BASE_DIR = Path("../../data/internal/02_meta_data")
-    CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"unified_meta_run_{timestamp}"
+    CURRENT_RUN_DIR = OUTPUT_BASE_DIR / f"02_run_{timestamp}"
 
     # Create directories
     OUTPUT_BASE_DIR.mkdir(parents=True, exist_ok=True)

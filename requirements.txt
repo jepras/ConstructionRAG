@@ -1,10 +1,28 @@
-python-dotenv
+# Core dependencies
+python-dotenv>=0.19.0
+numpy>=1.21.0,<2
+requests>=2.25.0
+
+# Document processing
 unstructured[pdf]
+pdf2image
+PyMuPDF
+Pillow
+
+# AI/ML libraries
 langchain
 langchain-openai
 chromadb
 openai
 pydantic
-pdf2image
-PyMuPDF
-Pillow 
+sentence-transformers
+peft
+llm2vec
+transformers
+torch
+
+# Embedding APIs
+voyageai>=0.1.0
+
+# Optional: for better JSON handling
+ujson>=5.0.0 
