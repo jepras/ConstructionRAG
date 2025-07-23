@@ -726,6 +726,25 @@ def test_query_combinations(
             # Analyze results
             analysis = analyze_search_results(results)
 
+            # Save individual search results
+            search_response = {
+                "query": query_variation,
+                "method": search_method,
+                "semantic_weight": semantic_weight,
+                "keyword_weight": keyword_weight,
+                "results": [result.model_dump() for result in results],
+                "analysis": analysis,
+                "response_time_ms": response_time,
+                "memory_usage_mb": memory_usage,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+            # Create query identifier from original query
+            query_identifier = original_query[:30].replace(" ", "_")
+            saved_filepath = save_search_results(
+                search_response, str(CURRENT_RUN_DIR), query_identifier
+            )
+
             # Create matrix result
             matrix_result = RetrievalMatrixResult(
                 query_variation=variation_type,
@@ -1145,6 +1164,26 @@ def create_overall_retrieval_report(
     )
 
 
+def save_search_results(
+    search_response: Dict, run_folder: str, query_identifier: str = None
+) -> str:
+    """Save individual search results to run folder."""
+    if query_identifier is None:
+        # Extract from the query text itself
+        query_identifier = search_response["query"][:30].replace(" ", "_")
+
+    filename = f"{search_response['method']}_{query_identifier}.json"
+    filepath = os.path.join(run_folder, "search_results", filename)
+
+    # Create search_results directory if it doesn't exist
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(search_response, f, indent=2, ensure_ascii=False)
+
+    return filepath
+
+
 def save_reports(
     query_reports: Dict[str, QueryRetrievalReport],
     overall_report: OverallRetrievalReport,
@@ -1176,6 +1215,7 @@ def save_reports(
     print(f"📊 Query retrieval reports saved to: {query_reports_path}")
     print(f"📊 Overall retrieval report saved to: {overall_report_path}")
     print(f"📊 Performance benchmarks saved to: {benchmarks_path}")
+    print(f"📊 Individual search results saved to: {CURRENT_RUN_DIR}/search_results/")
 
 
 def print_overall_summary(overall_report: OverallRetrievalReport):

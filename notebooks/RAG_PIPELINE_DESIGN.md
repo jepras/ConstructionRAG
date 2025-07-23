@@ -378,15 +378,127 @@ Answer based on the provided documents, including specific citations:
 
 ### **11_generate - LLM Response Generation**
 
+#### **Implementation Strategy**
+- **Notebook**: `generate_openai.py`
+- **Technology**: Direct OpenAI API with custom citation parsing
+- **Input**: Search results from step 08 (semantic, keyword, or hybrid_80_20)
+- **Output**: Structured responses with citations + confidence indicators
+
+#### **Configuration Structure**
+```python
+# ==============================================================================
+# 1. CONFIGURATION
+# ==============================================================================
+
+# --- Input Data Configuration ---
+RETRIEVE_BASE_DIR = "../../data/internal/08_retrieve"
+
+# --- Manual Run Selection (leave empty to use latest) ---
+SPECIFIC_RETRIEVE_RUN = ""  # e.g., "08_run_20241201_143022"
+
+# --- API Configuration ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY environment variable is required")
+
+# --- Model Configuration ---
+OPENAI_MODEL = "gpt-4"  # or "gpt-3.5-turbo"
+TEMPERATURE = 0.1  # Low for factual accuracy
+MAX_TOKENS = 2000
+
+# --- Path Configuration ---
+OUTPUT_BASE_DIR = "../../data/internal/11_generate"
+
+# --- Create timestamped output directory ---
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+CURRENT_RUN_DIR = Path(OUTPUT_BASE_DIR) / f"11_run_{timestamp}"
+CURRENT_RUN_DIR.mkdir(parents=True, exist_ok=True)
+
+# --- Load Generation Configuration ---
+config_path = Path(__file__).parent / "config" / "generation_config.json"
+with open(config_path, "r", encoding="utf-8") as f:
+    config = json.load(f)
+```
+
+#### **Search Method Integration**
+```python
+# Simple search interface for consuming step 08 results
+def simple_search(
+    query: str,
+    method: Literal["semantic", "keyword", "hybrid_80_20"],
+    collection_name: str = None,
+    query_run: str = None,
+    top_k: int = 10
+) -> Dict:
+    """Simple search interface with three clear options."""
+    
+def load_search_results_from_run(
+    run_folder: str,
+    method: str = "hybrid_80_20",
+    query_identifier: str = None
+) -> Dict:
+    """Load search results from specific run folder."""
+    
+def find_latest_search_run() -> str:
+    """Find the most recent search run folder."""
+```
+
 #### **Model Configuration**
 - **Primary Model**: OpenAI GPT-4 or GPT-3.5-turbo
 - **Response Format**: Structured with citations
 - **Temperature**: Low (0.1-0.3) for factual accuracy
+- **Context Window**: Respect OpenAI limits (4K/8K/32K based on model)
 
 #### **Response Enhancement**
-- **Citation Integration**: Automatic source referencing
-- **Confidence Indicators**: Mark uncertain information
+- **Citation Integration**: Automatic source referencing with page numbers
+- **Confidence Indicators**: Mark uncertain information with confidence scores
 - **Follow-up Suggestions**: Related queries for deeper exploration
+- **Source Attribution**: Include document references and metadata
+
+#### **Input/Output Structure**
+```
+data/internal/11_generate/
+├── 11_run_20241201_143022/
+│   ├── generated_responses/
+│   │   ├── semantic_omkostninger_response.json
+│   │   ├── keyword_omkostninger_response.json
+│   │   └── hybrid_80_20_omkostninger_response.json
+│   ├── context_assemblies/
+│   │   └── context_summaries.json
+│   ├── generation_logs/
+│   │   └── generation_metrics.json
+│   └── run_log.json
+└── 11_run_20241201_150045/
+    └── ...
+```
+
+#### **Data Models**
+```python
+class GenerationRequest(BaseModel):
+    query: str
+    search_method: str
+    search_results: List[Dict[str, Any]]
+    context_window: int
+    max_tokens: int
+
+class GeneratedResponse(BaseModel):
+    query: str
+    method_used: str
+    response_text: str
+    citations: List[Dict[str, Any]]
+    confidence_score: float
+    follow_up_suggestions: List[str]
+    generation_time_ms: float
+    tokens_used: int
+    search_metadata: Dict[str, Any]
+
+class GenerationMetrics(BaseModel):
+    total_queries: int
+    average_response_time_ms: float
+    average_confidence_score: float
+    citation_accuracy: float
+    model_performance: Dict[str, Any]
+```
 
 ### **12_evaluate - Evaluation Framework**
 
