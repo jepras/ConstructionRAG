@@ -208,30 +208,48 @@ COLLECTION_TO_TEST = "construction_documents_20250723_113112"  # Latest timestam
 - **Collection switching** works seamlessly with timestamped collections
 - **No content categorization needed** - removed for simplicity and performance
 
-### **08_retrieve - Hybrid Search Testing & Optimization**
+### **08_retrieve - ✅ IMPLEMENTED**
 
-#### **Implementation Strategy**
+**Comprehensive Hybrid Search Testing with Dynamic Color Coding and Score Normalization**
+
+#### **Implementation**
 - **Notebook**: `retrieve_hybrid.py`
-- **Technology**: ChromaDB semantic search + keyword search (BM25/TF-IDF)
-- **Input**: Processed queries from step 07 + ChromaDB collection
-- **Output**: HTML matrix showing optimal query + search combinations
+- **Technology**: Direct ChromaDB semantic + LangChain BM25 keyword with custom fusion
+- **Input**: Processed queries from step 07 + ChromaDB collection (auto-detected latest)
+- **Output**: HTML matrix with dynamic color coding + comprehensive benchmarking + JSON reports
 
-#### **Testing Strategy**
-- **Query Variations**: Test all 4 variations from step 7 (original, semantic expansion, HyDE, formal)
-- **Search Methods**: Test semantic-only, keyword-only, and hybrid combinations
-- **Weight Combinations**: Test different semantic/keyword weight ratios (100/0, 80/20, 60/40, 40/60, 20/80, 0/100)
-- **Early Insight**: Step 7 showed HyDE performed well, but test all combinations systematically
+#### **Key Features Implemented**
+- **Hybrid Fusion Methods**: Weighted fusion with min-max normalization + RRF fusion option
+- **Dynamic Color Coding**: Adapts to each query's score range (excellent/good/acceptable/poor)
+- **Score Normalization**: Fixed RRF k=60 issue (was producing ~0.016 scores)
+- **Performance Benchmarking**: Response time, memory usage, throughput metrics
+- **Rich HTML Output**: Color-coded matrix with percentile rankings and collapsible details
 
 #### **Search Strategy**
-- **Semantic Search**: Voyage embeddings for conceptual matching
-- **Keyword Search**: BM25/TF-IDF for exact term matching
-- **Hybrid Fusion**: Weighted combination with configurable ratios
-- **Rich Results**: Retrieve 20-30 results per combination (will be reranked in step 9)
+- **Semantic Search**: Direct ChromaDB with Voyage embeddings for conceptual matching
+- **Keyword Search**: LangChain BM25 with real BM25 score extraction (not fallback rankings)
+- **Hybrid Fusion**: Custom weighted combination with min-max normalization
+- **Rich Results**: Retrieve 25 results per combination with full metadata preservation
+- **Technology Stack**: Direct implementation for precise control over fusion logic
 
-#### **HTML Matrix Output**
+#### **Collection & Query Source Selection**
+```python
+# --- Auto-Detection Strategy ---
+COLLECTION_SELECTION = {
+    "auto_detect_latest": True,  # Use latest timestamped collection
+    "manual_collection": "",     # Override: "construction_documents_20250723_113112"
+}
+
+QUERY_SOURCE = {
+    "auto_detect_latest": True,  # Use latest 07_query run
+    "manual_run": "",           # Override: "07_run_20250723_113911"
+}
+```
+
+#### **Data Models**
 ```python
 class RetrievalMatrixResult(BaseModel):
-    query_variation: str  # "original", "semantic_expansion", "hyde", "formal"
+    query_variation: str  # "original", "semantic_expansion", "hyde_document", "formal_variation"
     search_method: str    # "semantic_only", "keyword_only", "hybrid_80_20", etc.
     semantic_weight: float
     keyword_weight: float
@@ -240,23 +258,33 @@ class RetrievalMatrixResult(BaseModel):
     result_count: int
     top_content_snippets: List[str]  # 120-char snippets for visibility
     performance_rank: int  # Rank among all combinations
+    response_time_ms: float  # Performance metric
+    memory_usage_mb: float   # Performance metric
+
+class PerformanceBenchmark(BaseModel):
+    query_variation: str
+    search_method: str
+    response_time_ms: float
+    memory_usage_mb: float
+    avg_similarity: float
+    similarity_range: float
+    throughput_qps: float
+    result_count: int
 ```
 
-#### **Matrix Visualization**
-Generate HTML table showing:
-- **Rows**: Query variations (original, semantic expansion, HyDE, formal)
+#### **HTML Matrix Visualization**
+- **Rows**: Query variations (original, semantic expansion, HyDE document, formal variation)
 - **Columns**: Search methods (semantic-only, keyword-only, hybrid weights)
-- **Cells**: Average top-3 similarity scores + color coding
-- **Winner Highlighting**: Best performing combination clearly marked
+- **Cells**: Average top-3 similarity scores + dynamic color coding + percentile rankings
+- **Color Legend**: 🟢 Excellent (Top 20%), 🟡 Good (Top 40%), 🟠 Acceptable (Top 70%), 🔴 Poor (Bottom 30%)
+- **Best Combination**: Highlighted with green border and shadow
+- **Detail Level**: Top 3 results per cell with collapsible detail sections
+- **Total**: 24 combinations (4 variations × 6 search methods) with comprehensive data
 
 #### **Configuration**
 ```python
-# --- Collection Selection ---
-COLLECTION_TO_TEST = "construction_documents_20250723_113112"  # From step 7
-
 # --- Testing Configuration ---
-TOP_K_RESULTS = 25  # Retrieve more results for step 9 reranking
-TEST_QUERIES = ["regnvand", "omkostninger for opmåling og beregning", "projekt information"]
+TOP_K_RESULTS = 25  # Retrieve 25 results for step 9 reranking
 WEIGHT_COMBINATIONS = [
     (1.0, 0.0),  # Semantic only
     (0.8, 0.2),  # 80% semantic, 20% keyword
@@ -265,13 +293,36 @@ WEIGHT_COMBINATIONS = [
     (0.2, 0.8),  # 20% semantic, 80% keyword
     (0.0, 1.0),  # Keyword only
 ]
+
+# --- Normalization Configuration ---
+NORMALIZATION_CONFIG = {
+    "use_min_max_normalization": True,
+    "use_rrf_fusion": False,  # Use weighted fusion instead
+    "rrf_k": 10,  # Reduced from 60 for meaningful scores
+    "normalize_rrf_scores": True,  # Normalize RRF scores after calculation
+}
 ```
 
-#### **Key Requirements**
-- **Comprehensive Testing**: Don't assume HyDE is best - test all combinations
-- **Rich Output**: Include 20-30 results per combination (not just top 3)
-- **Visual Analysis**: HTML matrix makes it easy to spot optimal combinations
-- **Step 9 Preparation**: Output format ready for reranking pipeline
+#### **Key Learnings & Results**
+- **Query Type Patterns**: Technical terms favor keyword search, conceptual phrases favor semantic search
+- **Score Normalization**: Fixed RRF k=60 issue that was producing ~0.016 scores for all hybrid results
+- **Dynamic Color Coding**: Adapts to each query's score range for meaningful visualization
+- **Performance**: Average response time ~240ms, excellent Danish semantic search performance
+- **Best Combinations**: Varied by query type (original_keyword_only, formal_variation_semantic_only, hyde_document_semantic_only)
+
+#### **Output Files**
+- `query_retrieval_reports.json` - Individual query analysis with all combinations
+- `overall_retrieval_report.json` - Summary across all queries with insights
+- `performance_benchmarks.json` - Detailed performance metrics
+- `retrieval_matrix.html` - Visual matrix with color coding and drill-down capabilities
+
+#### **Production Readiness**
+✅ **Ready for Production**: Comprehensive testing with meaningful score differentiation  
+✅ **Performance**: Sub-500ms response times with excellent Danish semantic search  
+✅ **Quality**: Clear ranking differentiation (0.464-0.908 similarity range)  
+✅ **Visualization**: Professional HTML output with dynamic color coding  
+✅ **Metadata Preservation**: Full metadata for citation and future fine-tuning  
+✅ **Step 9 Preparation**: Output format ready for reranking pipeline
 
 ### **09_rerank - Re-ranking Implementation**
 
@@ -432,10 +483,10 @@ DIRECT_IMPLEMENTATION = [
 
 #### **08_retrieve - Hybrid Search (LangChain)**
 - **Framework**: `langchain.retrievers` - EnsembleRetriever for hybrid search
-- **Vector Search**: `langchain_chroma` - Chroma integration
+- **Vector Search**: `langchain_chroma` - Chroma integration with Voyage embeddings
 - **Keyword Search**: `langchain_community.retrievers.BM25Retriever`
-- **Result Fusion**: Built-in ensemble weighting
-- **Why LangChain**: Proven hybrid retrieval patterns, excellent observability
+- **Result Fusion**: Built-in ensemble weighting with configurable ratios
+- **Why LangChain**: Proven hybrid retrieval patterns, excellent observability, consistent technology stack
 
 #### **09_rerank - Result Optimization (Direct Implementation)**
 - **Cross-Encoders**: `sentence-transformers` - Direct model access
