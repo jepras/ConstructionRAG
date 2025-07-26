@@ -11,23 +11,24 @@ pydantic-settings==2.1.0
 supabase==2.3.0
 psycopg2-binary==2.9.9
 
-# AI/ML
-openai==1.30.5
-langchain==0.0.350
-langchain-openai==0.0.2
-langsmith==0.0.69
+# AI/ML (will be added when implementing pipeline)
+# openai==1.30.5
+# langchain==0.0.350
+# langchain-openai==0.0.2
+# langsmith==0.0.69
 
-# PDF processing
-pypdf==3.17.4
-pdfplumber==0.10.3
+# PDF processing (will be added when implementing pipeline)
+# pypdf==3.17.4
+# pdfplumber==0.10.3
 
-# Text processing
-nltk==3.8.1
-spacy==3.7.2
+# Text processing (will be added when implementing pipeline)
+# nltk==3.8.1
+# spacy==3.7.2
 
-# Vector embeddings
-sentence-transformers==2.2.2
-numpy==1.26.2
+# Vector embeddings (will be added when implementing pipeline)
+# sentence-transformers==2.2.2
+# numpy==1.26.2
+# torch==2.7.1+cpu
 
 # Utilities
 python-dotenv==1.0.0
