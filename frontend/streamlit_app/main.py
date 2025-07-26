@@ -42,6 +42,17 @@ st.markdown(
 def main():
     """Main application"""
 
+    # Debug logging for environment variables
+    import logging
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    logger.info("🚀 Starting ConstructionRAG Streamlit app...")
+    logger.info(f"🌍 Environment: {os.getenv('ENVIRONMENT', 'development')}")
+    logger.info(f"🔗 Backend URL: {os.getenv('BACKEND_API_URL', 'Not configured')}")
+    logger.info(f"📁 Working directory: {os.getcwd()}")
+
     # Header
     st.markdown(
         '<h1 class="main-header">🏗️ ConstructionRAG</h1>', unsafe_allow_html=True
@@ -97,11 +108,46 @@ def check_backend_status():
     """Check if backend is accessible"""
     try:
         import requests
+        import logging
+
+        # Set up logging
+        logging.basicConfig(level=logging.INFO)
+        logger = logging.getLogger(__name__)
 
         backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8000")
-        response = requests.get(f"{backend_url}/health", timeout=5)
-        return response.status_code == 200
-    except:
+        logger.info(f"🔍 Checking backend status...")
+        logger.info(f"📡 Backend URL: {backend_url}")
+
+        # Log the full health check URL
+        health_url = f"{backend_url}/health"
+        logger.info(f"🏥 Health check URL: {health_url}")
+
+        # Make the request with detailed logging
+        logger.info(f"📤 Sending GET request to {health_url}")
+        response = requests.get(health_url, timeout=10)
+
+        logger.info(f"📥 Response status: {response.status_code}")
+        logger.info(f"📥 Response headers: {dict(response.headers)}")
+        logger.info(f"📥 Response content: {response.text[:200]}...")
+
+        if response.status_code == 200:
+            logger.info(f"✅ Backend is healthy!")
+            return True
+        else:
+            logger.error(f"❌ Backend returned status {response.status_code}")
+            return False
+
+    except requests.exceptions.Timeout as e:
+        logger.error(f"⏰ Timeout error: {e}")
+        return False
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"🔌 Connection error: {e}")
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"🌐 Request error: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"💥 Unexpected error: {e}")
         return False
 
 
