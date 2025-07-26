@@ -1,0 +1,8 @@
+{
+  "chunk_size": 1000,
+  "chunk_overlap": 200,
+  "strategy": "semantic",
+  "separators": ["\n\n", "\n", " ", ""],
+  "min_chunk_size": 100,
+  "max_chunk_size": 2000
+} 

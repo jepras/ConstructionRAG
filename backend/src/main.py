@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 
 # Import configuration
-from config.settings import get_settings
+from src.config.settings import get_settings
 
 # Create FastAPI app
 app = FastAPI(
