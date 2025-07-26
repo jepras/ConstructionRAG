@@ -15,11 +15,11 @@ langchain-openai
 chromadb
 openai
 pydantic
-sentence-transformers
+# sentence-transformers
 peft
 llm2vec
 transformers
-torch
+#torch
 
 # Embedding APIs
 voyageai>=0.1.0
