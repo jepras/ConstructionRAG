@@ -54,7 +54,8 @@ This document outlines the step-by-step implementation plan for converting the c
 - [ ] Configure Streamlit Cloud environment variables
 
 **Environment Variables Setup:**
-- [ ] Create .env.example for local development
+- [ ] Create backend/.env.example for local development
+- [ ] Create frontend/.env.example for local development
 - [ ] Configure Railway environment variables (production)
 - [ ] Configure Streamlit Cloud environment variables (production)
 - [ ] Document all required environment variables
@@ -379,8 +380,8 @@ This document outlines the step-by-step implementation plan for converting the c
 
 ## Environment Variables Management
 
-### Local Development (.env)
-```
+### Local Development - Backend (backend/.env)
+```bash
 # Database
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -394,6 +395,19 @@ LANGCHAIN_API_KEY=your_langsmith_api_key
 # Application
 ENVIRONMENT=development
 LOG_LEVEL=DEBUG
+```
+
+### Local Development - Frontend (frontend/.env)
+```bash
+# Backend connection
+BACKEND_API_URL=http://backend:8000
+
+# Public authentication (frontend only needs public keys)
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Application
+ENVIRONMENT=development
 ```
 
 ### Railway Production (Environment Variables)
@@ -453,15 +467,15 @@ version: '3.8'
 
 services:
   backend:
-    build: .
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
     env_file:
-      - .env
+      - backend/.env
     volumes:
-      - .:/app
+      - ./backend:/app
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -469,7 +483,9 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - BACKEND_API_URL=http://backend:8000
+      - ENVIRONMENT=development
+    env_file:
+      - frontend/.env
     depends_on:
       - backend
 ```
