@@ -1,6 +1,10 @@
 import streamlit as st
 import os
+import sys
 from datetime import datetime
+
+# Add the current directory to Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Page configuration
 st.set_page_config(
@@ -74,6 +78,7 @@ def main():
             "Choose a page",
             [
                 "Home",
+                "Authentication",
                 "Upload Documents",
                 "Project Overview",
                 "Query Interface",
@@ -82,6 +87,7 @@ def main():
             key="page_selector",
             index=[
                 "Home",
+                "Authentication",
                 "Upload Documents",
                 "Project Overview",
                 "Query Interface",
@@ -94,6 +100,13 @@ def main():
 
         st.markdown("---")
         st.markdown("### Status")
+
+        # Authentication status
+        from components import show_auth_status
+
+        show_auth_status()
+
+        st.markdown("---")
 
         # Backend connection status
         backend_status = check_backend_status()
@@ -110,6 +123,10 @@ def main():
     # Main content based on page selection
     if page == "Home":
         show_home_page()
+    elif page == "Authentication":
+        from components import show_auth_page
+
+        show_auth_page()
     elif page == "Upload Documents":
         show_upload_page()
     elif page == "Project Overview":

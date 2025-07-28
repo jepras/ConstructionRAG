@@ -54,9 +54,13 @@ async def api_health():
     }
 
 
-# Include API routers (will be added later)
-# from api import auth, documents, queries, pipeline
-# app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+# Include API routers
+from src.api import auth_router
+
+app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
+
+# Additional routers (will be added later)
+# from api import documents, queries, pipeline
 # app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 # app.include_router(queries.router, prefix="/api/queries", tags=["Queries"])
 # app.include_router(pipeline.router, prefix="/api/pipeline", tags=["Pipeline"])
