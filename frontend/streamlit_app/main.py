@@ -65,6 +65,11 @@ def main():
     # Sidebar
     with st.sidebar:
         st.title("Navigation")
+
+        # Initialize session state for page selection
+        if "current_page" not in st.session_state:
+            st.session_state.current_page = "Home"
+
         page = st.selectbox(
             "Choose a page",
             [
@@ -74,7 +79,18 @@ def main():
                 "Query Interface",
                 "Settings",
             ],
+            key="page_selector",
+            index=[
+                "Home",
+                "Upload Documents",
+                "Project Overview",
+                "Query Interface",
+                "Settings",
+            ].index(st.session_state.current_page),
         )
+
+        # Update session state when page changes
+        st.session_state.current_page = page
 
         st.markdown("---")
         st.markdown("### Status")
@@ -185,7 +201,8 @@ def show_home_page():
         )
 
         if st.button("🚀 Get Started", type="primary"):
-            st.switch_page("pages/01_upload.py")
+            st.session_state.current_page = "Upload Documents"
+            st.rerun()
 
 
 def show_upload_page():
