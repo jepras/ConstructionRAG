@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
@@ -35,11 +35,11 @@ class AuthResponse(BaseModel):
 
     success: bool
     message: str
-    access_token: str = None
-    refresh_token: str = None
-    user_id: str = None
-    email: str = None
-    expires_at: str = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    user_id: Optional[str] = None
+    email: Optional[str] = None
+    expires_at: Optional[str] = None
 
 
 @router.post("/signup", response_model=AuthResponse, tags=["Authentication"])
@@ -54,7 +54,7 @@ async def sign_up(request: SignUpRequest):
         logger.error(f"Sign up error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            detail=f"Sign up failed: {str(e)}",
         )
 
 
