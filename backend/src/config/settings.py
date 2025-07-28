@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic import field_validator
+from typing import Optional, List, Union
 import os
 
 
@@ -20,6 +21,8 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     voyage_api_key: Optional[str] = None
     langchain_api_key: Optional[str] = None
+    langchain_tracing_v2: Optional[str] = None
+    langchain_project: Optional[str] = None
 
     # Application
     app_name: str = "ConstructionRAG"
@@ -29,18 +32,32 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-    # CORS
-    cors_origins: list = ["*"]
+    # CORS - handle both string and list formats
+    cors_origins: Union[str, List[str]] = ["*"]
 
     # File upload
     max_file_size: int = 100 * 1024 * 1024  # 100MB
-    allowed_file_types: list = [".pdf"]
+    allowed_file_types: Union[str, List[str]] = [".pdf"]
 
     # Pipeline configuration
     chunk_size: int = 1000
     chunk_overlap: int = 200
     embedding_model: str = "voyage-large-2"
     embedding_dimensions: int = 1536
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+
+    @field_validator("allowed_file_types", mode="before")
+    @classmethod
+    def parse_allowed_file_types(cls, v):
+        if isinstance(v, str):
+            return [ft.strip() for ft in v.split(",")]
+        return v
 
     class Config:
         env_file = ".env"
