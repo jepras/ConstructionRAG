@@ -136,8 +136,8 @@ This document outlines the step-by-step implementation plan for converting the c
 - [ ] Verify configuration loading works in Docker environment
 
 ### 2.2 Pipeline Steps Migration
-- [ ] Create pipeline module structure within FastAPI application
-- [ ] Migrate partition step (notebook 01) to pipeline/partition.py
+- [x] Create pipeline module structure within FastAPI application ✅
+- [x] Migrate partition step (notebook 01) to pipeline/partition.py ✅
 - [ ] Migrate metadata extraction step (notebook 02) to pipeline/metadata.py
 - [ ] Migrate data enrichment step (notebook 03) to pipeline/enrichment.py
 - [ ] Migrate chunking step (notebook 04) to pipeline/chunking.py
@@ -179,6 +179,12 @@ This document outlines the step-by-step implementation plan for converting the c
 - [ ] Verify file validation functions properly
 - [ ] Verify Supabase Storage integration works
 - [ ] Verify file cleanup policies work as expected
+
+#### Phase 2.2.2: Add Database Integration (Preserve Architecture) ✅
+- [x] Add database storage for partition results ✅
+- [x] Add database loading for metadata step ✅
+- [ ] Add API endpoints for triggering steps
+- [x] Test real production flow: PDF → Database → Process → Database ✅
 
 ---
 

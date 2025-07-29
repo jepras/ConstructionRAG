@@ -47,6 +47,11 @@ class StepResult(BaseModel):
         description="First 3-5 examples of generated content for debugging",
     )
 
+    # Real data for downstream processing
+    data: Optional[Dict[str, Any]] = Field(
+        None, description="Complete data structure for downstream steps"
+    )
+
     # Error information
     error_message: Optional[str] = Field(None, description="Error message if failed")
     error_details: Optional[Dict[str, Any]] = Field(

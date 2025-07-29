@@ -12,6 +12,9 @@ from ..shared.progress_tracker import ProgressTracker
 from ..shared.config_manager import ConfigManager
 from ..shared.models import DocumentInput, PipelineError
 from ...models import StepResult
+from ...services.pipeline_service import PipelineService
+from .steps.partition import PartitionStep
+from .steps.metadata import MetadataStep
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +28,13 @@ class IndexingOrchestrator:
         storage=None,
         config_manager: ConfigManager = None,
         progress_tracker: ProgressTracker = None,
+        pipeline_service: PipelineService = None,
     ):
         self.db = db
         self.storage = storage
         self.config_manager = config_manager or ConfigManager(db)
         self.progress_tracker = progress_tracker
+        self.pipeline_service = pipeline_service or PipelineService()
 
         # Initialize steps with injected dependencies
         # These will be properly initialized when config is loaded
@@ -48,14 +53,24 @@ class IndexingOrchestrator:
             # Load configuration
             config = await self.config_manager.get_indexing_config(user_id)
 
-            # Initialize steps (placeholders for now)
+            # Initialize real partition step
+            partition_config = config.steps.get("partition", {})
+            self.partition_step = PartitionStep(
+                config=partition_config,
+                storage_client=self.storage,
+                progress_tracker=self.progress_tracker,
+            )
+
+            # Initialize real metadata step
+            metadata_config = config.steps.get("metadata", {})
+            self.metadata_step = MetadataStep(
+                config=metadata_config,
+                storage_client=self.storage,
+                progress_tracker=self.progress_tracker,
+            )
+
+            # Initialize other steps (placeholders for now)
             # In the full implementation, these would be actual step classes
-            self.partition_step = self._create_placeholder_step(
-                "partition", config.steps.get("partition", {})
-            )
-            self.metadata_step = self._create_placeholder_step(
-                "metadata", config.steps.get("metadata", {})
-            )
             self.enrichment_step = self._create_placeholder_step(
                 "enrichment", config.steps.get("enrichment", {})
             )
@@ -125,17 +140,27 @@ class IndexingOrchestrator:
 
     async def process_document_async(self, document_input: DocumentInput) -> bool:
         """Process a single document through all indexing steps sequentially"""
+        indexing_run = None
         try:
             # Initialize steps if not already done
             if not self.steps:
                 await self.initialize_steps(document_input.user_id)
 
+            # Create indexing run in database
+            indexing_run = await self.pipeline_service.create_indexing_run(
+                document_id=document_input.document_id, user_id=document_input.user_id
+            )
+
+            # Update status to running
+            await self.pipeline_service.update_indexing_run_status(
+                indexing_run_id=indexing_run.id, status="running"
+            )
+
             # Create progress tracker for this run
-            run_id = UUID(int=0)  # Placeholder - would be actual run ID
-            progress_tracker = ProgressTracker(run_id, self.db)
+            progress_tracker = ProgressTracker(indexing_run.id, self.db)
 
             logger.info(
-                f"Starting indexing pipeline for document {document_input.document_id}"
+                f"Starting indexing pipeline for document {document_input.document_id} (run: {indexing_run.id})"
             )
 
             # Sequential step execution for single document
@@ -145,12 +170,21 @@ class IndexingOrchestrator:
                 step_executor = StepExecutor(step, progress_tracker)
                 result = await step_executor.execute_with_tracking(current_data)
 
+                # Store step result in database
+                await self.pipeline_service.store_step_result(
+                    indexing_run_id=indexing_run.id,
+                    step_name=step.get_step_name(),
+                    step_result=result,
+                )
+
                 if result.status == "failed":
                     logger.error(
                         f"Step {step.get_step_name()} failed: {result.error_message}"
                     )
-                    await progress_tracker.mark_pipeline_failed_async(
-                        result.error_message
+                    await self.pipeline_service.update_indexing_run_status(
+                        indexing_run_id=indexing_run.id,
+                        status="failed",
+                        error_message=result.error_message,
                     )
                     return False
 
@@ -158,8 +192,13 @@ class IndexingOrchestrator:
                 current_data = result
                 logger.info(f"Completed step {step.get_step_name()}")
 
+            # Mark indexing run as completed
+            await self.pipeline_service.update_indexing_run_status(
+                indexing_run_id=indexing_run.id, status="completed"
+            )
+
             logger.info(
-                f"Successfully completed indexing pipeline for document {document_input.document_id}"
+                f"Successfully completed indexing pipeline for document {document_input.document_id} (run: {indexing_run.id})"
             )
             return True
 
@@ -167,8 +206,12 @@ class IndexingOrchestrator:
             logger.error(
                 f"Indexing pipeline failed for document {document_input.document_id}: {e}"
             )
-            if self.progress_tracker:
-                await self.progress_tracker.mark_pipeline_failed_async(str(e))
+            if indexing_run:
+                await self.pipeline_service.update_indexing_run_status(
+                    indexing_run_id=indexing_run.id,
+                    status="failed",
+                    error_message=str(e),
+                )
             return False
 
     async def process_multiple_documents_async(
