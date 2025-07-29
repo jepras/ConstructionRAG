@@ -50,3 +50,9 @@ class AuthenticationError(ConstructionRAGException):
     """Raised when there's an authentication error"""
 
     pass
+
+
+class StorageError(Exception):
+    """Exception raised for errors in the storage service."""
+
+    pass

@@ -7,14 +7,14 @@ from uuid import UUID
 from datetime import datetime
 import logging
 
-from src.config.database import get_supabase_client
-from src.models.pipeline import (
+from config.database import get_supabase_client
+from models.pipeline import (
     StepResult,
     IndexingRun,
     IndexingRunCreate,
     IndexingRunUpdate,
 )
-from src.utils.exceptions import DatabaseError
+from utils.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 

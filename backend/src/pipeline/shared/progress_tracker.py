@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any, Optional
 from uuid import UUID
 from datetime import datetime
-from ...models import StepResult
+from models import StepResult
 
 # Configure logging
 logger = logging.getLogger(__name__)

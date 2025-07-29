@@ -4,9 +4,11 @@ import os
 import json
 import asyncio
 import tempfile
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from uuid import UUID
 import logging
 
 # Core libraries
@@ -15,8 +17,9 @@ import fitz  # PyMuPDF
 from pdf2image import convert_from_path
 
 from ...shared.base_step import PipelineStep
-from ....models import StepResult
+from models import StepResult
 from ...shared.models import DocumentInput, PipelineError
+from services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,7 @@ class PartitionStep(PipelineStep):
     ):
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
+        self.storage_service = StorageService()
 
         # Extract configuration
         self.ocr_strategy = config.get("ocr_strategy", "auto")
@@ -62,7 +66,7 @@ class PartitionStep(PipelineStep):
 
             # Execute partitioning pipeline
             partition_result = await self._partition_document_async(
-                input_data.file_path
+                input_data.file_path, input_data.document_id
             )
 
             # Calculate duration
@@ -72,13 +76,18 @@ class PartitionStep(PipelineStep):
             summary_stats = {
                 "text_elements": len(partition_result.get("text_elements", [])),
                 "table_elements": len(partition_result.get("table_elements", [])),
-                "raw_elements": len(partition_result.get("raw_elements", [])),
+                "image_elements": len(partition_result.get("image_elements", [])),
                 "extracted_pages": len(partition_result.get("extracted_pages", [])),
                 "table_locations": len(partition_result.get("table_locations", [])),
-                "image_locations": len(partition_result.get("image_locations", [])),
                 "pages_analyzed": len(partition_result.get("page_analysis", {})),
                 "processing_strategy": partition_result.get("metadata", {}).get(
                     "processing_strategy", "unknown"
+                ),
+                "original_raw_count": partition_result.get("metadata", {}).get(
+                    "original_raw_count", 0
+                ),
+                "original_image_count": partition_result.get("metadata", {}).get(
+                    "original_image_count", 0
                 ),
             }
 
@@ -121,11 +130,10 @@ class PartitionStep(PipelineStep):
                 data={
                     "text_elements": partition_result.get("text_elements", []),
                     "table_elements": partition_result.get("table_elements", []),
-                    "raw_elements": partition_result.get("raw_elements", []),
+                    "image_elements": partition_result.get("image_elements", []),
                     "extracted_pages": partition_result.get("extracted_pages", {}),
                     "page_analysis": partition_result.get("page_analysis", {}),
                     "table_locations": partition_result.get("table_locations", []),
-                    "image_locations": partition_result.get("image_locations", []),
                     "metadata": partition_result.get("metadata", {}),
                 },
                 started_at=start_time,
@@ -181,7 +189,9 @@ class PartitionStep(PipelineStep):
         except:
             return 60  # Default 1 minute
 
-    async def _partition_document_async(self, filepath: str) -> Dict[str, Any]:
+    async def _partition_document_async(
+        self, filepath: str, document_id: UUID
+    ) -> Dict[str, Any]:
         """Execute the unified partitioning pipeline asynchronously"""
 
         # Run the CPU-intensive partitioning in a thread pool
@@ -190,7 +200,18 @@ class PartitionStep(PipelineStep):
             None, self._partition_document_sync, filepath
         )
 
-        return result
+        # Post-process with async image uploads
+        cleaned_result = await self._post_process_results_async(
+            text_elements=result["text_elements"],
+            raw_elements=result["raw_elements"],
+            enhanced_tables=result["enhanced_tables"],
+            extracted_pages=result["extracted_pages"],
+            stage1_results=result["stage1_results"],
+            filepath=filepath,
+            document_id=document_id,
+        )
+
+        return cleaned_result
 
     def _partition_document_sync(self, filepath: str) -> Dict[str, Any]:
         """Synchronous partitioning implementation (runs in thread pool)"""
@@ -220,48 +241,226 @@ class PartitionStep(PipelineStep):
                 filepath, stage1_results["page_analysis"]
             )
 
-        # Clean up data for serialization
-        def clean_for_pickle(obj):
-            """Remove non-serializable objects"""
-            if isinstance(obj, dict):
-                cleaned = {}
-                for key, value in obj.items():
-                    if key in ["image_data", "table_data"]:  # Skip PyMuPDF objects
-                        continue
-                    cleaned[key] = clean_for_pickle(value)
-                return cleaned
-            elif isinstance(obj, list):
-                return [clean_for_pickle(item) for item in obj]
-            else:
-                return obj
-
-        # Combine all results
-        combined_data = {
+        # Return all raw results for async post-processing
+        return {
             "text_elements": text_elements,
-            "table_elements": enhanced_tables,
             "raw_elements": raw_elements,
+            "enhanced_tables": enhanced_tables,
             "extracted_pages": extracted_pages,
-            "table_locations": clean_for_pickle(stage1_results["table_locations"]),
-            "image_locations": clean_for_pickle(stage1_results["image_locations"]),
-            "page_analysis": stage1_results["page_analysis"],
-            "metadata": {
-                "processing_strategy": "unified_v2_pymupdf_fast",
-                "timestamp": datetime.now().isoformat(),
-                "source_file": os.path.basename(filepath),
-                "text_count": len(text_elements),
-                "raw_count": len(raw_elements),
-                "table_count": len(stage1_results["table_locations"]),
-                "image_count": len(stage1_results["image_locations"]),
-                "enhanced_tables": len(enhanced_tables),
-                "extracted_pages": len(extracted_pages),
-                "pages_analyzed": len(stage1_results["page_analysis"]),
-            },
+            "stage1_results": stage1_results,
+        }
+
+    async def _post_process_results_async(
+        self,
+        text_elements,
+        raw_elements,
+        enhanced_tables,
+        extracted_pages,
+        stage1_results,
+        filepath,
+        document_id,
+    ):
+        """Post-process and clean partition results with async image uploads"""
+
+        logger.info("Post-processing partition results...")
+
+        # 1. Filter and clean text elements
+        filtered_text_elements = self._filter_text_elements(text_elements)
+
+        # 2. Clean table locations (remove bbox and other unnecessary fields)
+        cleaned_table_locations = self._clean_table_locations(
+            stage1_results["table_locations"]
+        )
+
+        # 3. Clean page analysis (remove unnecessary fields)
+        cleaned_page_analysis = self._clean_page_analysis(
+            stage1_results["page_analysis"]
+        )
+
+        # 4. Upload extracted page images to Supabase Storage and create image elements
+        image_elements = []
+        uploaded_pages = {}
+
+        if extracted_pages:
+            logger.info(
+                f"Uploading {len(extracted_pages)} extracted page images to Supabase Storage..."
+            )
+
+            for page_num, page_info in extracted_pages.items():
+                try:
+                    # Upload image to Supabase Storage
+                    upload_result = (
+                        await self.storage_service.upload_extracted_page_image(
+                            image_path=page_info["filepath"],
+                            document_id=document_id,
+                            page_num=page_num,
+                            complexity=page_info["complexity"],
+                        )
+                    )
+
+                    # Create image element for VLM processing
+                    image_element = {
+                        "id": f"image_page{page_num}",
+                        "category": "Image",
+                        "page": page_num,
+                        "text": "",  # Will be filled by VLM caption
+                        "metadata": {
+                            "url": upload_result["url"],
+                            "storage_path": upload_result["storage_path"],
+                            "filename": upload_result["filename"],
+                            "complexity": upload_result["complexity"],
+                            "width": page_info["width"],
+                            "height": page_info["height"],
+                            "dpi": page_info["dpi"],
+                            "original_image_count": page_info["original_image_count"],
+                            "original_table_count": page_info["original_table_count"],
+                            "image_type": "extracted_page",
+                        },
+                    }
+
+                    image_elements.append(image_element)
+                    uploaded_pages[page_num] = upload_result
+
+                    logger.info(f"Uploaded page {page_num}: {upload_result['url']}")
+
+                except Exception as e:
+                    logger.error(f"Failed to upload page {page_num}: {e}")
+                    # Keep local file info as fallback
+                    uploaded_pages[page_num] = page_info
+
+        # 5. Prepare metadata
+        metadata = {
+            "processing_strategy": "unified_v2_pymupdf_fast",
+            "timestamp": datetime.now().isoformat(),
+            "source_file": os.path.basename(filepath),
+            "text_count": len(filtered_text_elements),
+            "table_count": len(cleaned_table_locations),
+            "enhanced_tables": len(enhanced_tables),
+            "extracted_pages": len(extracted_pages),
+            "image_elements": len(image_elements),
+            "pages_analyzed": len(cleaned_page_analysis),
+            "original_raw_count": len(raw_elements),  # Keep for reference
+            "original_image_count": len(
+                stage1_results["image_locations"]
+            ),  # Keep for reference
+        }
+
+        # 6. Combine cleaned results
+        cleaned_data = {
+            "text_elements": filtered_text_elements,
+            "table_elements": enhanced_tables,
+            "image_elements": image_elements,  # New: image elements for VLM
+            "extracted_pages": uploaded_pages,  # Updated: with Supabase URLs
+            "table_locations": cleaned_table_locations,
+            "page_analysis": cleaned_page_analysis,
+            "metadata": metadata,
         }
 
         logger.info(
-            f"Partitioning completed: {len(text_elements)} text elements, {len(enhanced_tables)} tables"
+            f"Post-processing complete: {len(filtered_text_elements)} text elements, {len(image_elements)} image elements"
         )
-        return combined_data
+        return cleaned_data
+
+    def _filter_text_elements(self, text_elements):
+        """Filter text elements to remove tiny fragments and improve quality"""
+        filtered_elements = []
+
+        for element in text_elements:
+            text = element.get("text", "").strip()
+
+            # Skip elements that are too small or meaningless
+            if len(text) < 10:
+                # Only keep small elements if they're meaningful (numbers, labels, etc.)
+                if not self._is_meaningful_small_element(text):
+                    continue
+
+            # Skip pure punctuation or whitespace
+            if (
+                text
+                and text.strip()
+                and not text.strip().isalnum()
+                and len(text.strip()) < 5
+            ):
+                continue
+
+            # Clean up the element
+            cleaned_element = {
+                "id": element.get("id"),
+                "category": element.get("category"),
+                "page": element.get("page"),
+                "text": text,
+                "metadata": self._clean_metadata(element.get("metadata", {})),
+            }
+
+            filtered_elements.append(cleaned_element)
+
+        return filtered_elements
+
+    def _is_meaningful_small_element(self, text):
+        """Check if a small text element is meaningful enough to keep"""
+        text = text.strip()
+
+        # Keep numbers and common labels
+        if text.isdigit() or text.replace(",", "").replace(".", "").isdigit():
+            return True
+
+        # Keep common abbreviations and labels
+        meaningful_patterns = [
+            r"^[A-Z]{1,3}$",  # Short acronyms
+            r"^[0-9]+[A-Z]$",  # Number + letter combinations
+            r"^[A-Z][0-9]+$",  # Letter + number combinations
+            r"^[IVX]+$",  # Roman numerals
+        ]
+
+        import re
+
+        for pattern in meaningful_patterns:
+            if re.match(pattern, text):
+                return True
+
+        return False
+
+    def _clean_metadata(self, metadata):
+        """Clean metadata by removing unnecessary fields"""
+        cleaned = {}
+
+        # Keep only essential metadata fields
+        essential_fields = ["page_number", "filename"]
+
+        for field in essential_fields:
+            if field in metadata:
+                cleaned[field] = metadata[field]
+
+        return cleaned
+
+    def _clean_table_locations(self, table_locations):
+        """Clean table locations by removing unnecessary fields"""
+        cleaned_locations = []
+
+        for location in table_locations:
+            cleaned_location = {
+                "id": location.get("id"),
+                "page": location.get("page"),
+                "complexity": location.get("complexity"),
+            }
+            cleaned_locations.append(cleaned_location)
+
+        return cleaned_locations
+
+    def _clean_page_analysis(self, page_analysis):
+        """Clean page analysis by removing unnecessary fields"""
+        cleaned_analysis = {}
+
+        for page_num, analysis in page_analysis.items():
+            cleaned_analysis[page_num] = {
+                "image_count": analysis.get("image_count"),
+                "table_count": analysis.get("table_count"),
+                "complexity": analysis.get("complexity"),
+                "needs_extraction": analysis.get("needs_extraction"),
+                "is_fragmented": analysis.get("is_fragmented"),
+            }
+
+        return cleaned_analysis
 
     def __del__(self):
         """Cleanup temporary directories"""
@@ -483,13 +682,51 @@ class UnifiedPartitionerV2:
             pdf_infer_table_structure=True,
         )
 
-        # Filter to keep only table elements
+        # Filter to keep only table elements and enhance with metadata
         enhanced_tables = []
-        for element in table_elements:
+        for i, element in enumerate(table_elements):
             if getattr(element, "category", "") == "Table":
-                enhanced_tables.append(element)
+                # Create enhanced table element with metadata
+                table_id = f"table_{i+1}"
 
-        logger.info(f"Enhanced {len(enhanced_tables)} tables with vision processing")
+                # Extract table metadata
+                metadata_dict = getattr(element, "metadata", {})
+                if hasattr(metadata_dict, "to_dict"):
+                    metadata_dict = metadata_dict.to_dict()
+
+                page_num = metadata_dict.get("page_number", 1)
+
+                # Get table HTML if available
+                table_html = getattr(element, "html", "")
+                if not table_html:
+                    # Try to get table as HTML from text
+                    table_text = getattr(element, "text", "")
+                    if table_text:
+                        # Simple HTML conversion for table text
+                        table_html = f"<table><tr><td>{table_text.replace(chr(10), '</td></tr><tr><td>')}</td></tr></table>"
+
+                enhanced_table = {
+                    "id": table_id,
+                    "category": "Table",
+                    "page": page_num,
+                    "text": getattr(element, "text", ""),
+                    "html": table_html,
+                    "metadata": {
+                        "page_number": page_num,
+                        "table_id": table_id,
+                        "has_html": bool(table_html),
+                        "row_count": (
+                            len(table_html.split("<tr>")) - 1 if table_html else 0
+                        ),
+                        "extraction_method": "hi_res_vision",
+                    },
+                }
+
+                enhanced_tables.append(enhanced_table)
+
+        logger.info(
+            f"Enhanced {len(enhanced_tables)} tables with vision processing and metadata"
+        )
         return enhanced_tables
 
     def stage4_full_page_extraction(self, filepath, page_analysis):

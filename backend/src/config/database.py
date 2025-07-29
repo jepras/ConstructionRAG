@@ -1,6 +1,6 @@
 from supabase import create_client, Client
 from typing import Optional
-from src.config.settings import get_settings
+from config.settings import get_settings
 
 # Global Supabase client
 _supabase_client: Optional[Client] = None

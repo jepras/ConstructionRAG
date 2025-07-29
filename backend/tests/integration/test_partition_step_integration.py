@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test actual partition step with database integration using admin client
+Integration test for partition step with database integration using admin client
 """
 
 import asyncio
@@ -10,12 +10,12 @@ from uuid import UUID
 from pathlib import Path
 
 # Add the src directory to the path so we can import our modules
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from config.database import get_supabase_admin_client
-from src.models.pipeline import IndexingRun, StepResult
-from src.pipeline.shared.models import DocumentInput
-from src.pipeline.indexing.steps.partition import PartitionStep
+from models.pipeline import IndexingRun, StepResult
+from pipeline.shared.models import DocumentInput
+from pipeline.indexing.steps.partition import PartitionStep
 
 
 class AdminPipelineService:

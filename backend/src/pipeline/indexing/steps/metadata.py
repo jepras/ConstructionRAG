@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from ...shared.base_step import PipelineStep
-from ....models import StepResult
+from models import StepResult
 from ...shared.models import DocumentInput, PipelineError
 
 logger = logging.getLogger(__name__)

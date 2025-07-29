@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel
 import time
 import asyncio
-from ...models import StepResult
+from models import StepResult
 from .models import DocumentInput, PipelineError
 
 

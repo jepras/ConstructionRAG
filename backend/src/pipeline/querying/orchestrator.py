@@ -10,7 +10,7 @@ from ..shared.base_step import PipelineStep, StepExecutor
 from ..shared.progress_tracker import QueryProgressTracker
 from ..shared.config_manager import ConfigManager
 from ..shared.models import PipelineError
-from ...models import StepResult
+from models import StepResult
 
 logger = logging.getLogger(__name__)
 
