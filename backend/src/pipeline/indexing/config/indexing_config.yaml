@@ -1,0 +1,39 @@
+steps:
+  partition:
+    ocr_strategy: "auto"
+    extract_tables: true
+    extract_images: true
+    max_image_size_mb: 10
+    
+  metadata:
+    extract_page_structure: true
+    detect_sections: true
+    preserve_formatting: true
+    
+  enrichment:
+    add_context_headers: true
+    merge_related_elements: true
+    min_content_length: 50
+    
+  chunking:
+    chunk_size: 1000
+    overlap: 200
+    strategy: "semantic"
+    separators: ["\n\n", "\n", " ", ""]
+    min_chunk_size: 100
+    max_chunk_size: 2000
+    
+  embedding:
+    model: "voyage-large-2"
+    dimensions: 1536
+    batch_size: 100
+    
+  storage:
+    collection_prefix: "construction_docs"
+    validation_sample_size: 50
+    
+orchestration:
+  max_concurrent_documents: 5
+  step_timeout_minutes: 30
+  retry_attempts: 3
+  fail_fast: true 

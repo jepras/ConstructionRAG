@@ -9,6 +9,7 @@ from .document import (
     DocumentWithChunks,
 )
 from .pipeline import (
+    # Legacy models for backward compatibility
     PipelineRun,
     PipelineStatus,
     PipelineStep,
@@ -16,6 +17,17 @@ from .pipeline import (
     PipelineRunCreate,
     PipelineRunUpdate,
     PipelineConfig,
+    # Enhanced models for two-pipeline architecture
+    StepResult,
+    IndexingRun,
+    QueryRun,
+    UserConfigOverride,
+    IndexingRunCreate,
+    IndexingRunUpdate,
+    QueryRunCreate,
+    QueryRunUpdate,
+    UserConfigOverrideCreate,
+    UserConfigOverrideUpdate,
 )
 from .query import (
     Query,
@@ -39,7 +51,7 @@ __all__ = [
     "DocumentUpdate",
     "DocumentChunkCreate",
     "DocumentWithChunks",
-    # Pipeline models
+    # Legacy Pipeline models
     "PipelineRun",
     "PipelineStatus",
     "PipelineStep",
@@ -47,6 +59,17 @@ __all__ = [
     "PipelineRunCreate",
     "PipelineRunUpdate",
     "PipelineConfig",
+    # Enhanced Pipeline models
+    "StepResult",
+    "IndexingRun",
+    "QueryRun",
+    "UserConfigOverride",
+    "IndexingRunCreate",
+    "IndexingRunUpdate",
+    "QueryRunCreate",
+    "QueryRunUpdate",
+    "UserConfigOverrideCreate",
+    "UserConfigOverrideUpdate",
     # Query models
     "Query",
     "QueryResponse",
