@@ -7,10 +7,6 @@ from typing import Dict, Any, List, Optional
 import logging
 from pathlib import Path
 
-# Pydantic for enhanced metadata
-from pydantic import BaseModel, Field
-from typing import Literal
-
 from ...shared.base_step import PipelineStep
 from models import StepResult
 from ...shared.models import DocumentInput, PipelineError
@@ -18,41 +14,8 @@ from ...shared.models import DocumentInput, PipelineError
 logger = logging.getLogger(__name__)
 
 
-class StructuralMetadata(BaseModel):
-    """Enhanced metadata focusing on high-impact, easy-to-implement fields"""
-
-    # Core metadata
-    source_filename: str
-    page_number: int
-    content_type: Literal["text", "table", "full_page_with_images", "extracted_image"]
-
-    # Phase 1: High-impact, easy fields
-    page_context: str = "unknown"  # "text_only_page", "page_with_images", "image_page"
-    content_length: int = 0  # Character count
-    has_numbers: bool = False  # Contains measurements/codes/quantities
-    element_category: str = "unknown"  # From unstructured: Title, NarrativeText, etc.
-
-    # Phase 1 bonus fields
-    has_tables_on_page: bool = False  # Page contains tables
-    has_images_on_page: bool = False  # Page contains images
-    text_complexity: str = "medium"  # "simple", "medium", "complex"
-
-    # Section title detection (3 approaches for testing)
-    section_title_category: Optional[str] = None  # From unstructured Title/Header
-    section_title_inherited: Optional[str] = None  # Inherited from previous title
-    section_title_pattern: Optional[str] = (
-        None  # From numbered patterns like "1.2 Something"
-    )
-
-    # New fields for unified approach
-    processing_strategy: str = "unified_fast_vision"
-    element_id: Optional[str] = None  # Original element ID from unified processing
-    image_filepath: Optional[str] = None  # For extracted images
-    html_text: Optional[str] = None  # HTML representation for tables
-
-
 class UnifiedElementAnalyzer:
-    """Enhanced analyzer for unified partition data"""
+    """Enhanced analyzer for unified partition data using pure JSON processing"""
 
     def __init__(self):
         # Simple patterns that work across languages
@@ -85,10 +48,10 @@ class UnifiedElementAnalyzer:
             r"^\s*.{0,15}?(\d+(?:\.\d+)?\.?)\s+([A-ZÆØÅ].{10,})", re.IGNORECASE
         )
 
-    def analyze_text_element(self, text_element: dict) -> StructuralMetadata:
-        """Analyze a text element from unified processing"""
+    def analyze_text_element(self, text_element: dict) -> dict:
+        """Analyze a text element from partition data using pure JSON processing"""
 
-        element = text_element["element"]
+        # Extract data from partition structure
         element_id = text_element["id"]
         text = text_element["text"]
         category = text_element["category"]
@@ -100,40 +63,36 @@ class UnifiedElementAnalyzer:
             logger.debug(f"Page change: {self.current_page} → {page_num}")
             self.current_page = page_num
 
-        # Initialize metadata
-        struct_meta = StructuralMetadata(
-            source_filename=metadata_dict.get("filename", "Unknown"),
-            page_number=page_num,
-            content_type="text",
-            element_category=category,
-            element_id=element_id,
-            processing_strategy="unified_fast_vision",
+        # Create structural metadata (pure dict, no Pydantic)
+        structural_metadata = {
+            "source_filename": metadata_dict.get("filename", "Unknown"),
+            "page_number": page_num,
+            "content_type": "text",
+            "element_category": category,
+            "element_id": element_id,
+            "processing_strategy": "unified_fast_vision",
+            "content_length": len(text),
+            "has_numbers": self._detect_numbers(text),
+            "text_complexity": self._assess_text_complexity(text),
+            "section_title_inherited": None,  # Will be set by inheritance logic
+            "section_title_pattern": None,  # Will be set by pattern detection
+            "section_title_category": None,  # Will be set by category detection
+        }
+
+        # Apply section inheritance logic
+        structural_metadata = self._detect_section_titles_page_aware(
+            structural_metadata, text, category, page_num
         )
 
-        # Phase 1: High-impact, easy analysis
-        struct_meta.content_length = len(text)
-        struct_meta.has_numbers = self._detect_numbers(text)
-        struct_meta.text_complexity = self._assess_text_complexity(text)
+        return structural_metadata
 
-        # ENHANCED: Page-aware section title detection
-        struct_meta = self._detect_section_titles_page_aware(
-            struct_meta, text, category, page_num
-        )
+    def analyze_table_element(self, table_element: dict, element_id: str) -> dict:
+        """Analyze a table element from partition data using pure JSON processing"""
 
-        return struct_meta
-
-    def analyze_table_element(
-        self, table_element, element_id: str
-    ) -> StructuralMetadata:
-        """Analyze a table element from unified processing"""
-
-        text = getattr(table_element, "text", "")
-        category = getattr(table_element, "category", "Table")
-        metadata_dict = getattr(table_element, "metadata", {})
-
-        if hasattr(metadata_dict, "to_dict"):
-            metadata_dict = metadata_dict.to_dict()
-
+        # Extract data from partition structure
+        text = table_element.get("text", "")
+        category = table_element.get("category", "Table")
+        metadata_dict = table_element.get("metadata", {})
         page_num = metadata_dict.get("page_number", 1)
 
         # Track page changes
@@ -141,78 +100,75 @@ class UnifiedElementAnalyzer:
             logger.debug(f"Page change: {self.current_page} → {page_num}")
             self.current_page = page_num
 
-        # Extract HTML text from table if available
-        html_text = None
-        if hasattr(table_element, "html"):
-            html_text = getattr(table_element, "html", "")
-        elif hasattr(table_element, "metadata") and hasattr(
-            table_element.metadata, "html"
-        ):
-            html_text = getattr(table_element.metadata, "html", "")
+        # Get HTML text from metadata
+        html_text = metadata_dict.get("text_as_html", "")
 
-        # Initialize metadata
-        struct_meta = StructuralMetadata(
-            source_filename=metadata_dict.get("filename", "Unknown"),
-            page_number=page_num,
-            content_type="table",
-            element_category=category,
-            element_id=element_id,
-            processing_strategy="unified_fast_vision",
-            html_text=html_text,
+        # Create structural metadata
+        structural_metadata = {
+            "source_filename": metadata_dict.get("filename", "Unknown"),
+            "page_number": page_num,
+            "content_type": "table",
+            "element_category": category,
+            "element_id": element_id,
+            "processing_strategy": "unified_fast_vision",
+            "html_text": html_text,
+            "content_length": len(text),
+            "has_numbers": self._detect_numbers(text),
+            "has_tables_on_page": True,
+            "text_complexity": "complex",  # Tables are typically complex
+            "section_title_inherited": None,
+            "section_title_pattern": None,
+            "section_title_category": None,
+        }
+
+        # Apply section inheritance logic
+        structural_metadata = self._detect_section_titles_page_aware(
+            structural_metadata, text, category, page_num
         )
 
-        # Phase 1: High-impact, easy analysis
-        struct_meta.content_length = len(text)
-        struct_meta.has_numbers = self._detect_numbers(text)
-        struct_meta.has_tables_on_page = True
-        struct_meta.text_complexity = "complex"  # Tables are typically complex
-
-        # ENHANCED: Page-aware section title detection
-        struct_meta = self._detect_section_titles_page_aware(
-            struct_meta, text, category, page_num
-        )
-
-        return struct_meta
+        return structural_metadata
 
     def analyze_extracted_image(
-        self, page_info: dict, element_id: str
-    ) -> StructuralMetadata:
-        """Analyze an extracted page image from unified processing"""
+        self, page_num: str, page_info: dict, element_id: str
+    ) -> dict:
+        """Analyze an extracted page from partition data using pure JSON processing"""
 
-        page_num = page_info.get("page_number", 1)  # Extract from page_info
+        # Extract data from partition structure
         filename = page_info.get("filename", "Unknown")
         filepath = page_info.get("filepath", "")
         complexity = page_info.get("complexity", "unknown")
 
         # Track page changes
-        if page_num != self.current_page:
-            logger.debug(f"Page change: {self.current_page} → {page_num}")
-            self.current_page = page_num
+        page_num_int = int(page_num)
+        if page_num_int != self.current_page:
+            logger.debug(f"Page change: {self.current_page} → {page_num_int}")
+            self.current_page = page_num_int
 
-        # Initialize metadata
-        struct_meta = StructuralMetadata(
-            source_filename=filename,
-            page_number=page_num,
-            content_type="full_page_with_images",
-            element_category="ExtractedPage",
-            element_id=element_id,
-            processing_strategy="unified_fast_vision",
-            image_filepath=filepath,
-        )
-
-        # Phase 1: High-impact, easy analysis
-        struct_meta.has_images_on_page = True
-        struct_meta.text_complexity = "complex"  # Images are typically complex
-        struct_meta.page_context = "image_page"
+        # Create structural metadata
+        structural_metadata = {
+            "source_filename": filename,
+            "page_number": page_num_int,  # Convert string key to int
+            "content_type": "full_page_with_images",
+            "element_category": "ExtractedPage",
+            "element_id": element_id,
+            "processing_strategy": "unified_fast_vision",
+            "image_filepath": filepath,
+            "has_images_on_page": True,
+            "text_complexity": "complex",  # Images are typically complex
+            "page_context": "image_page",
+            "section_title_inherited": None,
+            "section_title_pattern": None,
+            "section_title_category": None,
+        }
 
         # Get inherited section title
-        page_section = self.page_sections.get(page_num)
+        page_section = self.page_sections.get(page_num_int)
         if page_section:
-            struct_meta.section_title_inherited = page_section
+            structural_metadata["section_title_inherited"] = page_section
         elif self.current_section_title:
-            struct_meta.section_title_inherited = self.current_section_title
+            structural_metadata["section_title_inherited"] = self.current_section_title
 
-        return struct_meta
+        return structural_metadata
 
     def _starts_with_number(self, text: str) -> bool:
         """Check if text starts with a number pattern (1, 1.2, 1.2.1, 23.2, etc.)"""
@@ -313,15 +269,15 @@ class UnifiedElementAnalyzer:
             return "simple"
 
     def _detect_section_titles_page_aware(
-        self, struct_meta: StructuralMetadata, text: str, category: str, page_num: int
-    ) -> StructuralMetadata:
-        """Enhanced section detection with page-aware inheritance"""
+        self, struct_meta: dict, text: str, category: str, page_num: int
+    ) -> dict:
+        """Enhanced section detection with page-aware inheritance (pure dict)"""
 
         # Method 1: Category-based detection (ONLY for numbered titles)
         if category.lower() in ["title", "header"]:
             # Check if title starts with a number pattern
             if self._starts_with_number(text):
-                struct_meta.section_title_category = text.strip()
+                struct_meta["section_title_category"] = text.strip()
                 logger.debug(
                     f'Found numbered category title: "{text.strip()}" (category: {category})'
                 )
@@ -333,7 +289,7 @@ class UnifiedElementAnalyzer:
         # Method 2: Pattern-based detection (ONLY for numbered sections)
         pattern_title = self._detect_pattern_based_title(text, category)
         if pattern_title:
-            struct_meta.section_title_pattern = pattern_title
+            struct_meta["section_title_pattern"] = pattern_title
             logger.debug(
                 f'Found numbered pattern title: "{pattern_title}" (category: {category}, page: {page_num})'
             )
@@ -354,11 +310,11 @@ class UnifiedElementAnalyzer:
         # Method 3: Page-aware inheritance (NEW!)
         page_section = self.page_sections.get(page_num)
         if page_section:
-            struct_meta.section_title_inherited = page_section
+            struct_meta["section_title_inherited"] = page_section
             logger.debug(f'Page {page_num} inherits: "{page_section}"')
         elif self.current_section_title:
             # Fall back to document-level inheritance
-            struct_meta.section_title_inherited = self.current_section_title
+            struct_meta["section_title_inherited"] = self.current_section_title
             logger.debug(f'Document fallback: "{self.current_section_title}"')
 
         return struct_meta
@@ -392,7 +348,7 @@ class UnifiedElementAnalyzer:
 
 
 class MetadataStep(PipelineStep):
-    """Production metadata step implementing structural awareness analysis"""
+    """Production metadata step implementing structural awareness analysis with pure JSON processing"""
 
     def __init__(
         self, config: Dict[str, Any], storage_client=None, progress_tracker=None
@@ -476,15 +432,15 @@ class MetadataStep(PipelineStep):
                     [
                         e
                         for e in enriched_elements
-                        if e["structural_metadata"].has_numbers
+                        if e["structural_metadata"].get("has_numbers", False)
                     ]
                 ),
                 "elements_with_sections": len(
                     [
                         e
                         for e in enriched_elements
-                        if e["structural_metadata"].section_title_inherited
-                        or e["structural_metadata"].section_title_pattern
+                        if e["structural_metadata"].get("section_title_inherited")
+                        or e["structural_metadata"].get("section_title_pattern")
                     ]
                 ),
                 "complexity_distribution": self._get_complexity_distribution(
@@ -497,13 +453,19 @@ class MetadataStep(PipelineStep):
             text_elements = [
                 {
                     "id": elem["id"],
-                    "content_type": elem["structural_metadata"].content_type,
-                    "page": elem["structural_metadata"].page_number,
-                    "section_inherited": elem[
-                        "structural_metadata"
-                    ].section_title_inherited,
-                    "has_numbers": elem["structural_metadata"].has_numbers,
-                    "complexity": elem["structural_metadata"].text_complexity,
+                    "content_type": elem["structural_metadata"].get(
+                        "content_type", "unknown"
+                    ),
+                    "page": elem["structural_metadata"].get("page_number", 0),
+                    "section_inherited": elem["structural_metadata"].get(
+                        "section_title_inherited"
+                    ),
+                    "has_numbers": elem["structural_metadata"].get(
+                        "has_numbers", False
+                    ),
+                    "complexity": elem["structural_metadata"].get(
+                        "text_complexity", "unknown"
+                    ),
                 }
                 for elem in enriched_elements
                 if elem["element_type"] == "text"
@@ -512,11 +474,13 @@ class MetadataStep(PipelineStep):
             table_elements = [
                 {
                     "id": elem["id"],
-                    "page": elem["structural_metadata"].page_number,
-                    "section_inherited": elem[
-                        "structural_metadata"
-                    ].section_title_inherited,
-                    "has_numbers": elem["structural_metadata"].has_numbers,
+                    "page": elem["structural_metadata"].get("page_number", 0),
+                    "section_inherited": elem["structural_metadata"].get(
+                        "section_title_inherited"
+                    ),
+                    "has_numbers": elem["structural_metadata"].get(
+                        "has_numbers", False
+                    ),
                 }
                 for elem in enriched_elements
                 if elem["element_type"] == "table"
@@ -528,18 +492,51 @@ class MetadataStep(PipelineStep):
                 "page_sections": dict(self.analyzer.page_sections),
             }
 
+            # Create enriched partition data by adding structural metadata to original elements
+            enriched_partition_data = partition_data.copy()
+
+            # Add structural metadata to text elements
+            for i, text_element in enumerate(
+                enriched_partition_data.get("text_elements", [])
+            ):
+                if i < len(enriched_elements):
+                    text_element["structural_metadata"] = enriched_elements[i][
+                        "structural_metadata"
+                    ]
+
+            # Add structural metadata to table elements
+            table_start_idx = len(enriched_partition_data.get("text_elements", []))
+            for i, table_element in enumerate(
+                enriched_partition_data.get("table_elements", [])
+            ):
+                if table_start_idx + i < len(enriched_elements):
+                    table_element["structural_metadata"] = enriched_elements[
+                        table_start_idx + i
+                    ]["structural_metadata"]
+
+            # Add structural metadata to extracted pages
+            page_start_idx = table_start_idx + len(
+                enriched_partition_data.get("table_elements", [])
+            )
+            for i, (page_num, page_info) in enumerate(
+                enriched_partition_data.get("extracted_pages", {}).items()
+            ):
+                if page_start_idx + i < len(enriched_elements):
+                    page_info["structural_metadata"] = enriched_elements[
+                        page_start_idx + i
+                    ]["structural_metadata"]
+
+            # Add page sections to the enriched data
+            enriched_partition_data["page_sections"] = dict(self.analyzer.page_sections)
+
             return StepResult(
                 step="metadata",
                 status="completed",
                 duration_seconds=duration,
                 summary_stats=summary_stats,
                 sample_outputs=sample_outputs,
-                # Add real data for downstream steps
-                data={
-                    "enriched_elements": enriched_elements,
-                    "page_sections": dict(self.analyzer.page_sections),
-                    "source_partition_data": partition_data,
-                },
+                # Return enriched partition data with same structure
+                data=enriched_partition_data,
                 started_at=start_time,
                 completed_at=datetime.utcnow(),
             )
@@ -611,7 +608,7 @@ class MetadataStep(PipelineStep):
     def _analyze_metadata_sync(
         self, partition_data: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Synchronous metadata analysis implementation"""
+        """Synchronous metadata analysis with pure JSON processing"""
 
         logger.info("Adding Enhanced Structural Awareness to Unified Data...")
 
@@ -674,13 +671,13 @@ class MetadataStep(PipelineStep):
         logger.info(f"Processing {len(extracted_pages)} extracted pages...")
 
         # Sort pages by page number for consistent numbering
-        sorted_pages = sorted(extracted_pages.items(), key=lambda x: x[0])
+        sorted_pages = sorted(extracted_pages.items(), key=lambda x: int(x[0]))
 
         for page_num, page_info in sorted_pages:
             try:
                 element_id = str(current_id)
                 structural_meta = self.analyzer.analyze_extracted_image(
-                    page_info, element_id
+                    page_num, page_info, element_id
                 )
 
                 enriched_elements.append(
@@ -713,6 +710,6 @@ class MetadataStep(PipelineStep):
         """Get distribution of text complexity levels"""
         distribution = {"simple": 0, "medium": 0, "complex": 0}
         for elem in enriched_elements:
-            complexity = elem["structural_metadata"].text_complexity
+            complexity = elem["structural_metadata"].get("text_complexity", "unknown")
             distribution[complexity] = distribution.get(complexity, 0) + 1
         return distribution
