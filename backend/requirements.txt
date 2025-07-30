@@ -34,11 +34,11 @@ numpy==1.26.4
 scipy==1.16.0
 pandas==2.3.1
 
-# AI/ML (will be added when implementing pipeline)
-# openai==1.30.5
-# langchain==0.0.350
-# langchain-openai==0.0.2
-# langsmith==0.0.69
+# AI/ML (for VLM enrichment)
+openai==1.30.5
+langchain==0.0.350
+langchain-openai==0.0.2
+langsmith==0.0.69
 
 # Text processing (will be added when implementing pipeline)
 # nltk==3.8.1

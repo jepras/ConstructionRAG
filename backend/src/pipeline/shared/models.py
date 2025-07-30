@@ -10,6 +10,7 @@ class DocumentInput(BaseModel):
     """Input data for document processing steps"""
 
     document_id: UUID = Field(description="Document unique identifier")
+    run_id: UUID = Field(description="Pipeline run unique identifier")
     file_path: str = Field(description="Path to the document file")
     filename: str = Field(description="Original filename")
     user_id: UUID = Field(description="User who uploaded the document")
@@ -21,23 +22,16 @@ class DocumentInput(BaseModel):
 class PipelineError(Exception):
     """Custom exception for pipeline errors"""
 
-    def __init__(
-        self,
-        message: str,
-        step: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ):
+    def __init__(self, message: str):
         self.message = message
-        self.step = step
-        self.details = details or {}
         super().__init__(self.message)
 
 
 class ProcessingResult(BaseModel):
-    """Generic result from any processing step"""
+    """Result of a processing operation"""
 
-    success: bool = Field(description="Whether processing was successful")
-    data: Optional[Any] = Field(None, description="Processed data")
+    success: bool = Field(description="Whether the operation was successful")
+    data: Optional[Dict[str, Any]] = Field(None, description="Processing result data")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Processing metadata"
     )
@@ -62,9 +56,6 @@ class StepOutput(BaseModel):
 
     step_name: str = Field(description="Name of the step")
     output_data: Any = Field(description="Output data from the step")
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Step metadata and statistics"
-    )
-    context_updates: Dict[str, Any] = Field(
-        default_factory=dict, description="Context updates for next steps"
-    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Step metadata")
+    success: bool = Field(description="Whether the step was successful")
+    error_message: Optional[str] = Field(None, description="Error message if failed")

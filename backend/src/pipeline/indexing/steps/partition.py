@@ -68,7 +68,7 @@ class PartitionStep(PipelineStep):
 
             # Execute partitioning pipeline
             partition_result = await self._partition_document_async(
-                input_data.file_path, input_data.document_id
+                input_data.file_path, input_data
             )
 
             # Calculate duration
@@ -78,8 +78,7 @@ class PartitionStep(PipelineStep):
             summary_stats = {
                 "text_elements": len(partition_result.get("text_elements", [])),
                 "table_elements": len(partition_result.get("table_elements", [])),
-                "image_elements": len(partition_result.get("image_elements", [])),
-                "extracted_pages": len(partition_result.get("extracted_pages", [])),
+                "extracted_pages": len(partition_result.get("extracted_pages", {})),
                 "pages_analyzed": len(partition_result.get("page_analysis", {})),
                 "processing_strategy": partition_result.get("metadata", {}).get(
                     "processing_strategy", "unknown"
@@ -155,7 +154,6 @@ class PartitionStep(PipelineStep):
                 data={
                     "text_elements": partition_result.get("text_elements", []),
                     "table_elements": partition_result.get("table_elements", []),
-                    "image_elements": partition_result.get("image_elements", []),
                     "extracted_pages": partition_result.get("extracted_pages", {}),
                     "page_analysis": partition_result.get("page_analysis", {}),
                     "document_metadata": partition_result.get(
@@ -217,7 +215,7 @@ class PartitionStep(PipelineStep):
             return 60  # Default 1 minute
 
     async def _partition_document_async(
-        self, filepath: str, document_id: UUID
+        self, filepath: str, document_input: DocumentInput
     ) -> Dict[str, Any]:
         """Execute the unified partitioning pipeline asynchronously"""
 
@@ -235,7 +233,7 @@ class PartitionStep(PipelineStep):
             extracted_pages=result["extracted_pages"],
             stage1_results=result["stage1_results"],
             filepath=filepath,
-            document_id=document_id,
+            document_input=document_input,
         )
 
         return cleaned_result
@@ -285,48 +283,43 @@ class PartitionStep(PipelineStep):
         extracted_pages,
         stage1_results,
         filepath,
-        document_id,
+        document_input,
     ):
-        """Post-process and clean partition results with async image uploads"""
+        """Post-process results with async image uploads to Supabase Storage"""
+        try:
+            # 1. Filter and clean text elements
+            filtered_text_elements = self._filter_text_elements(text_elements)
 
-        logger.info("Post-processing partition results...")
-
-        # 1. Filter and clean text elements
-        filtered_text_elements = self._filter_text_elements(text_elements)
-
-        # 2. Clean page analysis (remove unnecessary fields)
-        cleaned_page_analysis = self._clean_page_analysis(
-            stage1_results["page_analysis"]
-        )
-
-        # 4. Upload extracted page images to Supabase Storage and create image elements
-        image_elements = []
-        uploaded_pages = {}
-
-        if extracted_pages:
-            logger.info(
-                f"Uploading {len(extracted_pages)} extracted page images to Supabase Storage..."
+            # 2. Clean page analysis data
+            cleaned_page_analysis = self._clean_page_analysis(
+                stage1_results.get("page_analysis", {})
             )
 
-            for page_num, page_info in extracted_pages.items():
-                try:
-                    # Upload image to Supabase Storage
-                    upload_result = (
-                        await self.storage_service.upload_extracted_page_image(
+            # 3. Clean table metadata
+            for table in enhanced_tables:
+                table["metadata"] = self._clean_metadata(table.get("metadata", {}))
+
+            # 4. Upload extracted page images to Supabase Storage
+            uploaded_pages = {}
+
+            if extracted_pages:
+                logger.info(
+                    f"Uploading {len(extracted_pages)} extracted page images to Supabase Storage..."
+                )
+
+                for page_num, page_info in extracted_pages.items():
+                    try:
+                        # Upload image to Supabase Storage with new structure
+                        upload_result = await self.storage_service.upload_extracted_page_image(
                             image_path=page_info["filepath"],
-                            document_id=document_id,
+                            run_id=document_input.run_id,  # Use run_id from DocumentInput
+                            document_id=document_input.document_id,  # Use document_id from DocumentInput
                             page_num=page_num,
                             complexity=page_info["complexity"],
                         )
-                    )
 
-                    # Create image element for VLM processing
-                    image_element = {
-                        "id": f"image_page{page_num}",
-                        "category": "Image",
-                        "page": page_num,
-                        "text": "",  # Will be filled by VLM caption
-                        "metadata": {
+                        # Update page info with Supabase URL
+                        uploaded_pages[page_num] = {
                             "url": upload_result["url"],
                             "storage_path": upload_result["storage_path"],
                             "filename": upload_result["filename"],
@@ -337,52 +330,87 @@ class PartitionStep(PipelineStep):
                             "original_image_count": page_info["original_image_count"],
                             "original_table_count": page_info["original_table_count"],
                             "image_type": "extracted_page",
-                        },
-                    }
+                        }
 
-                    image_elements.append(image_element)
-                    uploaded_pages[page_num] = upload_result
+                        logger.info(f"Uploaded page {page_num}: {upload_result['url']}")
 
-                    logger.info(f"Uploaded page {page_num}: {upload_result['url']}")
+                    except Exception as e:
+                        logger.error(f"Failed to upload page {page_num}: {e}")
+                        # Keep local file info as fallback
+                        uploaded_pages[page_num] = page_info
 
-                except Exception as e:
-                    logger.error(f"Failed to upload page {page_num}: {e}")
-                    # Keep local file info as fallback
-                    uploaded_pages[page_num] = page_info
+            # 5. Upload table images to Supabase Storage
+            if enhanced_tables:
+                logger.info(
+                    f"Uploading {len(enhanced_tables)} table images to Supabase Storage..."
+                )
 
-        # 5. Prepare metadata
-        metadata = {
-            "processing_strategy": "unified_v2_pymupdf_fast",
-            "timestamp": datetime.now().isoformat(),
-            "source_file": os.path.basename(filepath),
-            "text_count": len(filtered_text_elements),
-            "enhanced_tables": len(enhanced_tables),
-            "extracted_pages": len(extracted_pages),
-            "image_elements": len(image_elements),
-            "pages_analyzed": len(cleaned_page_analysis),
-            "original_raw_count": len(raw_elements),  # Keep for reference
-            "original_image_count": len(
-                stage1_results["image_locations"]
-            ),  # Keep for reference
-        }
+                for table_element in enhanced_tables:
+                    try:
+                        table_id = table_element["id"]
+                        image_path = table_element["metadata"].get("image_path")
 
-        # 6. Combine cleaned results
-        cleaned_data = {
-            "text_elements": filtered_text_elements,
-            "table_elements": enhanced_tables,
-            "image_elements": image_elements,  # New: image elements for VLM
-            "extracted_pages": uploaded_pages,  # Updated: with Supabase URLs
-            "page_analysis": cleaned_page_analysis,
-            "document_metadata": stage1_results.get(
-                "document_metadata", {}
-            ),  # Add document metadata
-            "metadata": metadata,
-        }
+                        if image_path and Path(image_path).exists():
+                            # Upload table image to Supabase Storage with new structure
+                            upload_result = await self.storage_service.upload_table_image(
+                                image_path=image_path,
+                                run_id=document_input.run_id,  # Use run_id from DocumentInput
+                                document_id=document_input.document_id,  # Use document_id from DocumentInput
+                                table_id=table_id,
+                            )
 
-        logger.info(
-            f"Post-processing complete: {len(filtered_text_elements)} text elements, {len(image_elements)} image elements"
-        )
-        return cleaned_data
+                            # Add Supabase URL to table metadata
+                            table_element["metadata"]["image_url"] = upload_result[
+                                "url"
+                            ]
+                            table_element["metadata"]["image_storage_path"] = (
+                                upload_result["storage_path"]
+                            )
+
+                            logger.info(
+                                f"Uploaded table {table_id}: {upload_result['url']}"
+                            )
+                        else:
+                            logger.debug(f"No image path found for table {table_id}")
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to upload table image for {table_id}: {e}"
+                        )
+                        # Keep local path as fallback
+
+            # 6. Prepare metadata
+            metadata = {
+                "processing_strategy": "unified_v2_pymupdf_fast",
+                "timestamp": datetime.now().isoformat(),
+                "source_file": os.path.basename(filepath),
+                "text_count": len(filtered_text_elements),
+                "enhanced_tables": len(enhanced_tables),
+                "extracted_pages": len(extracted_pages),
+                "pages_analyzed": len(cleaned_page_analysis),
+                "original_raw_count": len(raw_elements),  # Keep for reference
+                "original_image_count": len(
+                    stage1_results["image_locations"]
+                ),  # Keep for reference
+            }
+
+            # 7. Combine cleaned results
+            cleaned_data = {
+                "text_elements": filtered_text_elements,
+                "table_elements": enhanced_tables,
+                "extracted_pages": uploaded_pages,  # Updated: with Supabase URLs
+                "page_analysis": cleaned_page_analysis,
+                "document_metadata": stage1_results.get(
+                    "document_metadata", {}
+                ),  # Add document metadata
+                "metadata": metadata,
+            }
+
+            return cleaned_data
+
+        except Exception as e:
+            logger.error(f"Post-processing failed: {e}")
+            raise PipelineError(f"Post-processing failed: {str(e)}")
 
     def _filter_text_elements(self, text_elements):
         """Filter text elements to remove tiny fragments and improve quality"""
@@ -448,7 +476,7 @@ class PartitionStep(PipelineStep):
         cleaned = {}
 
         # Keep only essential metadata fields
-        essential_fields = ["page_number", "filename"]
+        essential_fields = ["page_number", "filename", "image_path"]
 
         for field in essential_fields:
             if field in metadata:
@@ -717,7 +745,9 @@ class UnifiedPartitionerV2:
 
         # Filter to keep only table elements and enhance with metadata
         enhanced_tables = []
-        table_image_files = list(self.tables_dir.glob("table-*.png"))
+        table_image_files = list(self.tables_dir.glob("table-*.png")) + list(
+            self.tables_dir.glob("table-*.jpg")
+        )
         table_image_index = 0
 
         for i, element in enumerate(table_elements):
@@ -746,9 +776,11 @@ class UnifiedPartitionerV2:
                 if table_image_index < len(table_image_files):
                     table_image_path = str(table_image_files[table_image_index])
                     table_image_index += 1
-                    logger.debug(
+                    logger.info(
                         f"Assigned table image {table_image_path} to {table_id}"
                     )
+                else:
+                    logger.warning(f"No table image file available for {table_id}")
 
                 enhanced_table = {
                     "id": table_id,
@@ -762,7 +794,7 @@ class UnifiedPartitionerV2:
                         "html_length": len(table_html) if table_html else 0,
                         "extraction_method": "hi_res_vision",
                         "text_as_html": table_html,  # Store HTML here for enrichment step
-                        "image_path": table_image_path,  # Add table image path for VLM processing
+                        "image_path": table_image_path,  # Local path for VLM processing
                     },
                 }
 

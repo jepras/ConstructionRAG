@@ -63,7 +63,9 @@ class StepResult(BaseModel):
     completed_at: Optional[datetime] = Field(None)
 
     class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if hasattr(v, "isoformat") else str(v)
+        }
 
 
 class IndexingRun(BaseModel):

@@ -151,6 +151,9 @@ class IndexingOrchestrator:
                 document_id=document_input.document_id, user_id=document_input.user_id
             )
 
+            # Update DocumentInput with run_id for storage operations
+            document_input.run_id = indexing_run.id
+
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(
                 indexing_run_id=indexing_run.id, status="running"

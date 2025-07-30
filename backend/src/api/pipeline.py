@@ -27,9 +27,10 @@ async def start_indexing_pipeline(
 ):
     """Start the indexing pipeline for a document."""
     try:
-        # Create document input
+        # Create document input with placeholder run_id (will be updated by orchestrator)
         document_input = DocumentInput(
             document_id=document_id,
+            run_id=UUID(int=0),  # Placeholder - will be updated by orchestrator
             user_id=current_user["id"],
             file_path=f"/path/to/document/{document_id}.pdf",  # This would come from document service
             filename=f"document_{document_id}.pdf",

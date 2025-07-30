@@ -40,6 +40,9 @@ class StorageService:
                             "image/jpeg",
                             "image/jpg",
                             "application/pdf",
+                            "text/html",
+                            "text/plain",
+                            "text/markdown",
                         ],
                     },
                 )
@@ -85,13 +88,20 @@ class StorageService:
             raise StorageError(f"Failed to upload file: {str(e)}")
 
     async def upload_extracted_page_image(
-        self, image_path: str, document_id: UUID, page_num: int, complexity: str
+        self,
+        image_path: str,
+        run_id: UUID,
+        document_id: UUID,
+        page_num: int,
+        complexity: str,
     ) -> Dict[str, Any]:
         """Upload an extracted page image and return metadata with URL."""
         try:
-            # Create storage path
+            # Create storage path with new structure
             filename = Path(image_path).name
-            storage_path = f"extracted-pages/{document_id}/{filename}"
+            storage_path = (
+                f"{run_id}/processing/{document_id}/extracted-pages/{filename}"
+            )
 
             # Upload file
             url = await self.upload_file(image_path, storage_path, "image/png")
@@ -104,6 +114,7 @@ class StorageService:
                 "page_num": page_num,
                 "complexity": complexity,
                 "document_id": str(document_id),
+                "run_id": str(run_id),
             }
 
         except Exception as e:
@@ -111,13 +122,13 @@ class StorageService:
             raise StorageError(f"Failed to upload extracted page image: {str(e)}")
 
     async def upload_table_image(
-        self, image_path: str, document_id: UUID, table_id: str
+        self, image_path: str, run_id: UUID, document_id: UUID, table_id: str
     ) -> Dict[str, Any]:
         """Upload a table image and return metadata with URL."""
         try:
-            # Create storage path
+            # Create storage path with new structure
             filename = Path(image_path).name
-            storage_path = f"table-images/{document_id}/{filename}"
+            storage_path = f"{run_id}/processing/{document_id}/table-images/{filename}"
 
             # Upload file
             url = await self.upload_file(image_path, storage_path, "image/png")
@@ -129,11 +140,39 @@ class StorageService:
                 "filename": filename,
                 "table_id": table_id,
                 "document_id": str(document_id),
+                "run_id": str(run_id),
             }
 
         except Exception as e:
             logger.error(f"Failed to upload table image: {e}")
             raise StorageError(f"Failed to upload table image: {str(e)}")
+
+    async def upload_generated_file(
+        self,
+        file_path: str,
+        run_id: UUID,
+        filename: str,
+        content_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Upload a generated file (markdown, etc.) to the generated folder."""
+        try:
+            # Create storage path with new structure
+            storage_path = f"{run_id}/generated/{filename}"
+
+            # Upload file
+            url = await self.upload_file(file_path, storage_path, content_type)
+
+            # Return metadata
+            return {
+                "url": url,
+                "storage_path": storage_path,
+                "filename": filename,
+                "run_id": str(run_id),
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to upload generated file: {e}")
+            raise StorageError(f"Failed to upload generated file: {str(e)}")
 
     def _get_content_type(self, file_path: str) -> str:
         """Get content type based on file extension."""
@@ -145,6 +184,7 @@ class StorageService:
             ".pdf": "application/pdf",
             ".html": "text/html",
             ".txt": "text/plain",
+            ".md": "text/markdown",
         }
         return content_types.get(ext, "application/octet-stream")
 
@@ -160,6 +200,40 @@ class StorageService:
             logger.error(f"Failed to delete file {storage_path}: {e}")
             return False
 
+    async def delete_run_directory(self, run_id: UUID) -> bool:
+        """Delete entire run directory and all its contents."""
+        try:
+            # List all files in the run directory
+            run_path = str(run_id)
+            files = await self.list_files(run_path)
+
+            if not files:
+                logger.info(f"No files found in run directory: {run_path}")
+                return True
+
+            # Extract file paths from the list
+            file_paths = []
+            for file_info in files:
+                if isinstance(file_info, dict) and "name" in file_info:
+                    file_paths.append(f"{run_path}/{file_info['name']}")
+                elif isinstance(file_info, str):
+                    file_paths.append(f"{run_path}/{file_info}")
+
+            # Delete all files in the run directory
+            if file_paths:
+                result = self.supabase.storage.from_(self.bucket_name).remove(
+                    file_paths
+                )
+                logger.info(
+                    f"Deleted {len(file_paths)} files from run directory: {run_path}"
+                )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete run directory {run_id}: {e}")
+            return False
+
     async def list_files(self, folder_path: str = "") -> list:
         """List files in a storage folder."""
         try:
@@ -168,3 +242,34 @@ class StorageService:
         except Exception as e:
             logger.error(f"Failed to list files in {folder_path}: {e}")
             return []
+
+    async def get_run_storage_usage(self, run_id: UUID) -> Dict[str, Any]:
+        """Get storage usage statistics for a specific run."""
+        try:
+            run_path = str(run_id)
+            files = await self.list_files(run_path)
+
+            total_files = 0
+            total_size = 0
+
+            for file_info in files:
+                if isinstance(file_info, dict):
+                    total_files += 1
+                    total_size += file_info.get("metadata", {}).get("size", 0)
+
+            return {
+                "run_id": str(run_id),
+                "total_files": total_files,
+                "total_size_bytes": total_size,
+                "total_size_mb": round(total_size / (1024 * 1024), 2),
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get storage usage for run {run_id}: {e}")
+            return {
+                "run_id": str(run_id),
+                "total_files": 0,
+                "total_size_bytes": 0,
+                "total_size_mb": 0,
+                "error": str(e),
+            }

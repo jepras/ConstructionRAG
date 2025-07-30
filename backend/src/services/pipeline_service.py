@@ -81,6 +81,24 @@ class PipelineService:
             logger.error(f"Error updating indexing run status: {e}")
             raise DatabaseError(f"Failed to update indexing run status: {str(e)}")
 
+    def _serialize_step_result(self, step_result: StepResult) -> dict:
+        """Serialize step result with proper datetime handling"""
+        try:
+            # Convert to dict and handle datetime serialization
+            result_dict = step_result.model_dump()
+
+            # Convert datetime objects to ISO format strings
+            if isinstance(result_dict.get("started_at"), datetime):
+                result_dict["started_at"] = result_dict["started_at"].isoformat()
+            if isinstance(result_dict.get("completed_at"), datetime):
+                result_dict["completed_at"] = result_dict["completed_at"].isoformat()
+
+            return result_dict
+        except Exception as e:
+            logger.error(f"Error serializing step result: {e}")
+            # Fallback: convert to string representation
+            return {"error": f"Serialization failed: {str(e)}"}
+
     async def store_step_result(
         self, indexing_run_id: UUID, step_name: str, step_result: StepResult
     ) -> bool:
@@ -99,8 +117,8 @@ class PipelineService:
 
             current_step_results = result.data[0].get("step_results", {})
 
-            # Add the new step result
-            current_step_results[step_name] = step_result.model_dump()
+            # Add the new step result with custom serialization
+            current_step_results[step_name] = self._serialize_step_result(step_result)
 
             # Update the step_results field
             update_result = (
