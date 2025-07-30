@@ -22,8 +22,13 @@ logger = logging.getLogger(__name__)
 class PipelineService:
     """Service for managing pipeline operations in the database."""
 
-    def __init__(self):
-        self.supabase = get_supabase_client()
+    def __init__(self, use_admin_client=False):
+        if use_admin_client:
+            from config.database import get_supabase_admin_client
+
+            self.supabase = get_supabase_admin_client()
+        else:
+            self.supabase = get_supabase_client()
 
     async def create_indexing_run(
         self, document_id: UUID, user_id: UUID

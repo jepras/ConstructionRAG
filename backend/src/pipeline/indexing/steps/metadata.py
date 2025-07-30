@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 import logging
 from pathlib import Path
+from uuid import UUID
 
 from ...shared.base_step import PipelineStep
 from models import StepResult
@@ -382,12 +383,13 @@ class MetadataStep(PipelineStep):
                 # Input is raw partition data
                 partition_data = input_data
                 logger.info("Processing raw partition data")
-            elif isinstance(input_data, str) and input_data.startswith("run_"):
-                # Input is an indexing run ID - load partition data from database
-                from ...services.pipeline_service import PipelineService
+            elif isinstance(input_data, str):
+                # Input is an indexing run ID (UUID string) - load partition data from database
+                from services.pipeline_service import PipelineService
 
-                pipeline_service = PipelineService()
-                indexing_run = await pipeline_service.get_indexing_run(input_data)
+                # Use admin client for testing (bypass RLS)
+                pipeline_service = PipelineService(use_admin_client=True)
+                indexing_run = await pipeline_service.get_indexing_run(UUID(input_data))
                 if not indexing_run:
                     raise PipelineError(f"Indexing run not found: {input_data}")
 
@@ -397,16 +399,38 @@ class MetadataStep(PipelineStep):
                         f"No partition result found in indexing run: {input_data}"
                     )
 
-                partition_data = partition_result.get("data", {})
+                # Handle both dict and StepResult objects
+                if hasattr(partition_result, "data"):
+                    # It's a StepResult object
+                    partition_data = partition_result.data
+                elif isinstance(partition_result, dict):
+                    # It's a dictionary
+                    partition_data = partition_result.get("data", {})
+                else:
+                    raise PipelineError(
+                        f"Unexpected partition result type: {type(partition_result)}"
+                    )
+
                 logger.info(f"Loaded partition data from indexing run: {input_data}")
             else:
                 raise PipelineError(f"Invalid input data type: {type(input_data)}")
+
+            # Show partition data summary for debugging
+            text_elements = partition_data.get("text_elements", [])
+            table_elements = partition_data.get("table_elements", [])
+            extracted_pages = partition_data.get("extracted_pages", {})
+
+            logger.info(f"📋 Partition Data Summary:")
+            logger.info(f"   Text Elements: {len(text_elements)}")
+            logger.info(f"   Table Elements: {len(table_elements)}")
+            logger.info(f"   Extracted Pages: {len(extracted_pages)}")
 
             # Validate input
             if not await self.validate_prerequisites_async(partition_data):
                 raise PipelineError("Prerequisites not met for metadata step")
 
             # Execute metadata analysis
+            logger.info("🚀 Executing metadata analysis...")
             enriched_elements = await self._analyze_metadata_async(partition_data)
 
             # Calculate duration
@@ -492,6 +516,24 @@ class MetadataStep(PipelineStep):
                 "page_sections": dict(self.analyzer.page_sections),
             }
 
+            # Log detailed results for debugging
+            logger.info(f"✅ Metadata analysis completed!")
+            logger.info(f"📊 Summary Stats: {summary_stats}")
+            logger.info(
+                f"📋 Sample Outputs: {len(sample_outputs.get('sample_text_elements', []))} text, {len(sample_outputs.get('sample_tables', []))} tables"
+            )
+            logger.info(f"📄 Page Sections: {sample_outputs.get('page_sections', {})}")
+
+            # Show a sample enriched element
+            if sample_outputs.get("sample_text_elements"):
+                sample = sample_outputs["sample_text_elements"][0]
+                logger.info(f"🔍 Sample Enriched Element:")
+                logger.info(f"   ID: {sample.get('id')}")
+                logger.info(f"   Page: {sample.get('page')}")
+                logger.info(f"   Section Inherited: {sample.get('section_inherited')}")
+                logger.info(f"   Has Numbers: {sample.get('has_numbers')}")
+                logger.info(f"   Complexity: {sample.get('complexity')}")
+
             # Create enriched partition data by adding structural metadata to original elements
             enriched_partition_data = partition_data.copy()
 
@@ -542,7 +584,10 @@ class MetadataStep(PipelineStep):
             )
 
         except Exception as e:
-            logger.error(f"Metadata step failed: {e}")
+            logger.error(f"❌ Metadata step failed: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
             duration = (datetime.utcnow() - start_time).total_seconds()
 
             return StepResult(
