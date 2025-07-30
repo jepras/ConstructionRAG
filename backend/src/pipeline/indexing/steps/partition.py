@@ -1,25 +1,27 @@
 """Production partition step for document processing pipeline."""
 
-import os
-import json
-import asyncio
-import tempfile
 import re
+import asyncio
+import os
+import tempfile
+import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from uuid import UUID
+from typing import Dict, Any, List, Optional, Tuple
+from uuid import UUID, uuid4
 import logging
 
-# Core libraries
-from unstructured.partition.pdf import partition_pdf
+# PDF processing
 import fitz  # PyMuPDF
-from pdf2image import convert_from_path
+from unstructured.partition.pdf import partition_pdf
 
+# Storage
+from services.storage_service import StorageService
+
+# Pipeline components
 from ...shared.base_step import PipelineStep
 from models import StepResult
 from ...shared.models import DocumentInput, PipelineError
-from services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +80,6 @@ class PartitionStep(PipelineStep):
                 "table_elements": len(partition_result.get("table_elements", [])),
                 "image_elements": len(partition_result.get("image_elements", [])),
                 "extracted_pages": len(partition_result.get("extracted_pages", [])),
-                "table_locations": len(partition_result.get("table_locations", [])),
                 "pages_analyzed": len(partition_result.get("page_analysis", {})),
                 "processing_strategy": partition_result.get("metadata", {}).get(
                     "processing_strategy", "unknown"
@@ -88,6 +89,19 @@ class PartitionStep(PipelineStep):
                 ),
                 "original_image_count": partition_result.get("metadata", {}).get(
                     "original_image_count", 0
+                ),
+                "document_metadata": {
+                    "total_pages": partition_result.get("document_metadata", {}).get(
+                        "total_pages", 0
+                    ),
+                    "has_title": bool(
+                        partition_result.get("document_metadata", {}).get("title", "")
+                    ),
+                },
+                "tables_with_html": sum(
+                    1
+                    for table in partition_result.get("table_elements", [])
+                    if table.get("metadata", {}).get("text_as_html")
                 ),
             }
 
@@ -108,15 +122,26 @@ class PartitionStep(PipelineStep):
                 ],
                 "sample_tables": [
                     {
-                        "category": getattr(elem, "category", "Unknown"),
+                        "category": elem.get("category", "Unknown"),
                         "text_preview": (
-                            getattr(elem, "text", "")[:200] + "..."
-                            if len(getattr(elem, "text", "")) > 200
-                            else getattr(elem, "text", "")
+                            elem.get("text", "")[:200] + "..."
+                            if len(elem.get("text", "")) > 200
+                            else elem.get("text", "")
+                        ),
+                        "has_html": bool(
+                            elem.get("metadata", {}).get("text_as_html", "")
+                        ),
+                        "html_preview": (
+                            elem.get("metadata", {}).get("text_as_html", "")[:100]
+                            + "..."
+                            if len(elem.get("metadata", {}).get("text_as_html", ""))
+                            > 100
+                            else elem.get("metadata", {}).get("text_as_html", "")
                         ),
                     }
                     for elem in partition_result.get("table_elements", [])[:2]
                 ],
+                "document_metadata": partition_result.get("document_metadata", {}),
             }
 
             # Return real data structure for downstream processing
@@ -133,7 +158,9 @@ class PartitionStep(PipelineStep):
                     "image_elements": partition_result.get("image_elements", []),
                     "extracted_pages": partition_result.get("extracted_pages", {}),
                     "page_analysis": partition_result.get("page_analysis", {}),
-                    "table_locations": partition_result.get("table_locations", []),
+                    "document_metadata": partition_result.get(
+                        "document_metadata", {}
+                    ),  # Add document metadata
                     "metadata": partition_result.get("metadata", {}),
                 },
                 started_at=start_time,
@@ -267,12 +294,7 @@ class PartitionStep(PipelineStep):
         # 1. Filter and clean text elements
         filtered_text_elements = self._filter_text_elements(text_elements)
 
-        # 2. Clean table locations (remove bbox and other unnecessary fields)
-        cleaned_table_locations = self._clean_table_locations(
-            stage1_results["table_locations"]
-        )
-
-        # 3. Clean page analysis (remove unnecessary fields)
+        # 2. Clean page analysis (remove unnecessary fields)
         cleaned_page_analysis = self._clean_page_analysis(
             stage1_results["page_analysis"]
         )
@@ -334,7 +356,6 @@ class PartitionStep(PipelineStep):
             "timestamp": datetime.now().isoformat(),
             "source_file": os.path.basename(filepath),
             "text_count": len(filtered_text_elements),
-            "table_count": len(cleaned_table_locations),
             "enhanced_tables": len(enhanced_tables),
             "extracted_pages": len(extracted_pages),
             "image_elements": len(image_elements),
@@ -351,8 +372,10 @@ class PartitionStep(PipelineStep):
             "table_elements": enhanced_tables,
             "image_elements": image_elements,  # New: image elements for VLM
             "extracted_pages": uploaded_pages,  # Updated: with Supabase URLs
-            "table_locations": cleaned_table_locations,
             "page_analysis": cleaned_page_analysis,
+            "document_metadata": stage1_results.get(
+                "document_metadata", {}
+            ),  # Add document metadata
             "metadata": metadata,
         }
 
@@ -433,20 +456,6 @@ class PartitionStep(PipelineStep):
 
         return cleaned
 
-    def _clean_table_locations(self, table_locations):
-        """Clean table locations by removing unnecessary fields"""
-        cleaned_locations = []
-
-        for location in table_locations:
-            cleaned_location = {
-                "id": location.get("id"),
-                "page": location.get("page"),
-                "complexity": location.get("complexity"),
-            }
-            cleaned_locations.append(cleaned_location)
-
-        return cleaned_locations
-
     def _clean_page_analysis(self, page_analysis):
         """Clean page analysis by removing unnecessary fields"""
         cleaned_analysis = {}
@@ -491,6 +500,9 @@ class UnifiedPartitionerV2:
         page_analysis = {}
         table_locations = []
         image_locations = []
+
+        # Extract document metadata
+        document_metadata = self._extract_document_metadata(doc)
 
         for page_num in range(len(doc)):
             page = doc[page_num]
@@ -603,6 +615,27 @@ class UnifiedPartitionerV2:
             "page_analysis": page_analysis,
             "table_locations": table_locations,
             "image_locations": image_locations,
+            "document_metadata": document_metadata,
+        }
+
+    def _extract_document_metadata(self, doc):
+        """Extract comprehensive document metadata from PyMuPDF"""
+        metadata = doc.metadata
+
+        # Get page dimensions from first page
+        first_page = doc[0]
+        page_rect = first_page.rect
+
+        return {
+            "total_pages": len(doc),
+            "title": metadata.get("title", ""),
+            "author": metadata.get("author", ""),
+            "subject": metadata.get("subject", ""),
+            "creator": metadata.get("creator", ""),
+            "producer": metadata.get("producer", ""),
+            "creation_date": metadata.get("creationDate", ""),
+            "modification_date": metadata.get("modDate", ""),
+            "page_dimensions": {"width": page_rect.width, "height": page_rect.height},
         }
 
     def stage2_fast_text_extraction(self, filepath):
@@ -684,6 +717,9 @@ class UnifiedPartitionerV2:
 
         # Filter to keep only table elements and enhance with metadata
         enhanced_tables = []
+        table_image_files = list(self.tables_dir.glob("table-*.png"))
+        table_image_index = 0
+
         for i, element in enumerate(table_elements):
             if getattr(element, "category", "") == "Table":
                 # Create enhanced table element with metadata
@@ -705,24 +741,35 @@ class UnifiedPartitionerV2:
                         # Simple HTML conversion for table text
                         table_html = f"<table><tr><td>{table_text.replace(chr(10), '</td></tr><tr><td>')}</td></tr></table>"
 
+                # Assign table image file if available
+                table_image_path = None
+                if table_image_index < len(table_image_files):
+                    table_image_path = str(table_image_files[table_image_index])
+                    table_image_index += 1
+                    logger.debug(
+                        f"Assigned table image {table_image_path} to {table_id}"
+                    )
+
                 enhanced_table = {
                     "id": table_id,
                     "category": "Table",
                     "page": page_num,
                     "text": getattr(element, "text", ""),
-                    "html": table_html,
                     "metadata": {
                         "page_number": page_num,
                         "table_id": table_id,
                         "has_html": bool(table_html),
-                        "row_count": (
-                            len(table_html.split("<tr>")) - 1 if table_html else 0
-                        ),
+                        "html_length": len(table_html) if table_html else 0,
                         "extraction_method": "hi_res_vision",
+                        "text_as_html": table_html,  # Store HTML here for enrichment step
+                        "image_path": table_image_path,  # Add table image path for VLM processing
                     },
                 }
 
                 enhanced_tables.append(enhanced_table)
+
+        # Clean up extracted files (keep only tables, remove figures)
+        self._cleanup_extracted_files()
 
         logger.info(
             f"Enhanced {len(enhanced_tables)} tables with vision processing and metadata"
@@ -764,8 +811,9 @@ class UnifiedPartitionerV2:
                 # Extract full page
                 pixmap = page.get_pixmap(matrix=matrix)
 
-                # Save image
-                filename = f"{pdf_basename}_page{page_num:02d}_{info['complexity']}.png"
+                # Save image with UUID to avoid conflicts
+                unique_id = uuid4().hex[:8]  # Use first 8 chars of UUID
+                filename = f"{pdf_basename}_page{page_num:02d}_{info['complexity']}_{unique_id}.png"
                 save_path = self.images_dir / filename
                 pixmap.save(str(save_path))
 
@@ -788,3 +836,33 @@ class UnifiedPartitionerV2:
         doc.close()
         logger.info(f"Extracted {len(extracted_pages)} full pages")
         return extracted_pages
+
+    def _cleanup_extracted_files(self):
+        """Clean up extracted files, keeping only table images"""
+        logger.info("Cleaning up extracted files...")
+
+        all_extracted_files = list(self.tables_dir.glob("*"))
+        tables_kept = 0
+        figures_removed = 0
+
+        for file_path in all_extracted_files:
+            filename = file_path.name.lower()
+            if filename.startswith("figure-"):
+                # Remove figure files
+                try:
+                    file_path.unlink()
+                    figures_removed += 1
+                    logger.debug(f"Removed figure file: {file_path.name}")
+                except Exception as e:
+                    logger.warning(f"Could not remove {file_path.name}: {e}")
+            elif filename.startswith("table-"):
+                # Keep table files
+                tables_kept += 1
+                logger.debug(f"Kept table file: {file_path.name}")
+            else:
+                # Log other files but don't remove them
+                logger.debug(f"Other file found: {file_path.name}")
+
+        logger.info(
+            f"Cleanup results: {tables_kept} tables kept, {figures_removed} figures removed"
+        )
