@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     # AI/ML APIs
     openai_api_key: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
     voyage_api_key: Optional[str] = None
     langchain_api_key: Optional[str] = None
     langchain_tracing_v2: Optional[str] = None

@@ -75,9 +75,10 @@ class StorageService:
                 file_options={"content-type": content_type},
             )
 
-            # Get public URL
-            url = self.supabase.storage.from_(self.bucket_name).get_public_url(
-                storage_path
+            # Get signed URL (since bucket is private)
+            url = self.supabase.storage.from_(self.bucket_name).create_signed_url(
+                storage_path,
+                expires_in=3600 * 24 * 7,  # 7 days
             )
 
             logger.info(f"Uploaded file to storage: {storage_path} -> {url}")

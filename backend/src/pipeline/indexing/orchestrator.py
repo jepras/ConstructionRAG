@@ -15,6 +15,7 @@ from models import StepResult
 from services.pipeline_service import PipelineService
 from .steps.partition import PartitionStep
 from .steps.metadata import MetadataStep
+from .steps.enrichment import EnrichmentStep
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +70,16 @@ class IndexingOrchestrator:
                 progress_tracker=self.progress_tracker,
             )
 
+            # Initialize real enrichment step
+            enrichment_config = config.steps.get("enrichment", {})
+            self.enrichment_step = EnrichmentStep(
+                config=enrichment_config,
+                storage_client=self.storage,
+                progress_tracker=self.progress_tracker,
+            )
+
             # Initialize other steps (placeholders for now)
             # In the full implementation, these would be actual step classes
-            self.enrichment_step = self._create_placeholder_step(
-                "enrichment", config.steps.get("enrichment", {})
-            )
             self.chunking_step = self._create_placeholder_step(
                 "chunking", config.steps.get("chunking", {})
             )
