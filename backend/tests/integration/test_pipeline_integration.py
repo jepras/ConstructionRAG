@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 Integration test for pipeline steps working together
-Tests partition, metadata, and enrichment steps in sequence
+Tests partition, metadata, enrichment, and chunking steps in sequence
 """
 
 import asyncio
 import os
 import sys
+import requests
 from uuid import UUID
 from pathlib import Path
 from dotenv import load_dotenv
@@ -23,11 +24,97 @@ from pipeline.shared.models import DocumentInput
 from services.pipeline_service import PipelineService
 
 
-async def test_pipeline_integration():
-    """Test partition, metadata, and enrichment steps working together"""
+def debug_url_accessibility(url: str, description: str = ""):
+    """Debug function to test URL accessibility"""
+    print(f"\n🔍 Testing URL accessibility: {description}")
+    print(f"   URL: {url}")
+
     try:
-        print("🧪 Testing Pipeline Integration (Partition + Metadata + Enrichment)")
-        print("=" * 60)
+        # Test HEAD request first
+        head_response = requests.head(url, timeout=10)
+        print(f"   HEAD Status: {head_response.status_code}")
+        print(
+            f"   Content-Type: {head_response.headers.get('content-type', 'unknown')}"
+        )
+        print(
+            f"   Content-Length: {head_response.headers.get('content-length', 'unknown')}"
+        )
+
+        # Test GET request for small content
+        get_response = requests.get(url, timeout=10, stream=True)
+        print(f"   GET Status: {get_response.status_code}")
+
+        if get_response.status_code == 200:
+            # Read first 100 bytes to verify it's an image
+            content = next(get_response.iter_content(100))
+            if content.startswith(b"\x89PNG\r\n\x1a\n"):  # PNG signature
+                print(f"   ✅ Valid PNG image detected")
+            elif content.startswith(b"\xff\xd8\xff"):  # JPEG signature
+                print(f"   ✅ Valid JPEG image detected")
+            else:
+                print(f"   ⚠️  Unknown image format: {content[:10].hex()}")
+        else:
+            print(f"   ❌ GET request failed")
+
+    except Exception as e:
+        print(f"   ❌ Error testing URL: {e}")
+
+
+def analyze_urls_in_data(data: dict, step_name: str):
+    """Analyze URLs in step data to check if they're signed or public"""
+    print(f"\n🔍 DEBUGGING: Analyzing URLs in {step_name} data...")
+
+    # Check table elements
+    table_elements = data.get("table_elements", [])
+    print(f"   Table elements found: {len(table_elements)}")
+
+    for i, table in enumerate(table_elements[:3]):  # Check first 3 tables
+        print(f"\n   Table {i+1}:")
+        print(f"     ID: {table.get('id', 'unknown')}")
+
+        # Check for image URL
+        image_url = table.get("metadata", {}).get("image_url")
+        if image_url:
+            print(f"     Image URL: {image_url}")
+            if "/object/public/" in image_url:
+                print(f"     ⚠️  PUBLIC URL detected")
+            elif "/object/sign/" in image_url:
+                print(f"     ✅ SIGNED URL detected")
+            else:
+                print(f"     ❓ UNKNOWN URL format")
+            debug_url_accessibility(image_url, f"Table {i+1} image")
+        else:
+            print(f"     ❌ No image URL found")
+
+    # Check extracted pages
+    extracted_pages = data.get("extracted_pages", {})
+    print(f"\n   Extracted pages found: {len(extracted_pages)}")
+
+    for page_num, page_info in list(extracted_pages.items())[:3]:  # Check first 3 pages
+        print(f"\n   Page {page_num}:")
+
+        # Check for image URL
+        image_url = page_info.get("url")
+        if image_url:
+            print(f"     Image URL: {image_url}")
+            if "/object/public/" in image_url:
+                print(f"     ⚠️  PUBLIC URL detected")
+            elif "/object/sign/" in image_url:
+                print(f"     ✅ SIGNED URL detected")
+            else:
+                print(f"     ❓ UNKNOWN URL format")
+            debug_url_accessibility(image_url, f"Page {page_num} image")
+        else:
+            print(f"     ❌ No image URL found")
+
+
+async def test_pipeline_integration():
+    """Test partition, metadata, enrichment, and chunking steps working together"""
+    try:
+        print(
+            "🧪 Testing Pipeline Integration (Partition + Metadata + Enrichment + Chunking)"
+        )
+        print("=" * 70)
 
         # Configuration
         document_id = "550e8400-e29b-41d4-a716-446655440000"
@@ -114,6 +201,10 @@ async def test_pipeline_integration():
                 print(f"   Table Elements: {stats.get('table_elements', 0)}")
                 print(f"   Extracted Pages: {stats.get('extracted_pages', 0)}")
 
+            # Debug URLs in partition data
+            if partition_result.data:
+                analyze_urls_in_data(partition_result.data, "partition")
+
         except Exception as e:
             print(f"❌ Partition step failed: {e}")
             return False
@@ -163,6 +254,10 @@ async def test_pipeline_integration():
                 print(
                     f"   Page Sections Detected: {stats.get('page_sections_detected', 0)}"
                 )
+
+            # Debug URLs in metadata data
+            if metadata_result.data:
+                analyze_urls_in_data(metadata_result.data, "metadata")
 
         except Exception as e:
             print(f"❌ Metadata step failed: {e}")
@@ -236,11 +331,68 @@ async def test_pipeline_integration():
             print(f"❌ Enrichment step failed: {e}")
             return False
 
+        # Test Step 4: Chunking
+        print("\n" + "=" * 50)
+        print("🚀 STEP 4: CHUNKING")
+        print("=" * 50)
+
+        try:
+            # Execute chunking step with enrichment result
+            print(f"📥 Processing enrichment output for chunking")
+
+            # Execute chunking step with enrichment result
+            chunking_result = await orchestrator.chunking_step.execute(
+                enrichment_result
+            )
+
+            # Store the result
+            await pipeline_service.store_step_result(
+                indexing_run_id=indexing_run.id,
+                step_name="chunking",
+                step_result=chunking_result,
+            )
+
+            print("✅ Chunking step completed successfully")
+            print(f"   Status: {chunking_result.status}")
+            print(f"   Duration: {chunking_result.duration_seconds:.2f} seconds")
+
+            if chunking_result.status != "completed":
+                print(f"❌ Chunking step failed: {chunking_result.error_message}")
+                return False
+
+            # Display chunking results
+            if chunking_result.summary_stats:
+                print(f"\n📊 Chunking Summary:")
+                stats = chunking_result.summary_stats
+                print(f"   Total chunks created: {stats.get('total_chunks', 0)}")
+                print(f"   Text chunks: {stats.get('text_chunks', 0)}")
+                print(f"   Table chunks: {stats.get('table_chunks', 0)}")
+                print(f"   Image chunks: {stats.get('image_chunks', 0)}")
+                print(
+                    f"   Average chunk size: {stats.get('average_chunk_size', 0)} chars"
+                )
+                print(
+                    f"   Chunking strategy: {stats.get('chunking_strategy', 'unknown')}"
+                )
+
+            if chunking_result.sample_outputs:
+                print(f"\n📋 Sample Chunks:")
+                sample_chunks = chunking_result.sample_outputs.get("sample_chunks", [])
+                if sample_chunks:
+                    print(f"   Sample chunks: {len(sample_chunks)}")
+                    for i, chunk in enumerate(sample_chunks[:3]):
+                        print(
+                            f"     - Chunk {i+1}: {chunk.get('chunk_type', 'unknown')} - {len(chunk.get('text', ''))} chars"
+                        )
+
+        except Exception as e:
+            print(f"❌ Chunking step failed: {e}")
+            return False
+
         # TODO: Future steps (placeholders)
         print("\n" + "=" * 50)
         print("📋 FUTURE STEPS (Not Yet Implemented)")
         print("=" * 50)
-        print("   Step 4: Chunking (text segmentation)")
         print("   Step 5: Embedding (vector creation)")
         print("   Step 6: Storage (vector database)")
 
@@ -249,7 +401,7 @@ async def test_pipeline_integration():
         print("🔍 FINAL VALIDATION")
         print("=" * 50)
 
-        # Check that both steps are stored in database
+        # Check that all steps are stored in database
         final_run = await pipeline_service.get_indexing_run(indexing_run.id)
         if not final_run:
             print("❌ Could not retrieve final indexing run")
@@ -258,19 +410,15 @@ async def test_pipeline_integration():
         step_results = final_run.step_results
         print(f"✅ Stored step results: {list(step_results.keys())}")
 
-        if "partition" not in step_results:
-            print("❌ Partition results not found in database")
-            return False
+        required_steps = ["partition", "metadata", "enrichment", "chunking"]
+        for step in required_steps:
+            if step not in step_results:
+                print(f"❌ {step} results not found in database")
+                return False
+            else:
+                print(f"✅ {step} results found in database")
 
-        if "metadata" not in step_results:
-            print("❌ Metadata results not found in database")
-            return False
-
-        if "enrichment" not in step_results:
-            print("❌ Enrichment results not found in database")
-            return False
-
-        print("✅ All three steps successfully stored in database")
+        print("✅ All four steps successfully stored in database")
         print("✅ Pipeline integration test completed successfully!")
 
         return True

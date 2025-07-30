@@ -20,6 +20,26 @@ from ...shared.models import PipelineError
 logger = logging.getLogger(__name__)
 
 
+def extract_url_string(url_data: Any) -> Optional[str]:
+    """Extract URL string from various URL formats"""
+    if isinstance(url_data, str):
+        return url_data
+    elif isinstance(url_data, dict):
+        # Handle dictionary format with signedURL/signedUrl keys
+        if "signedURL" in url_data:
+            return url_data["signedURL"]
+        elif "signedUrl" in url_data:
+            return url_data["signedUrl"]
+        elif "url" in url_data:
+            return url_data["url"]
+        else:
+            logger.warning(f"Unknown URL dictionary format: {url_data}")
+            return None
+    else:
+        logger.warning(f"Unknown URL data type: {type(url_data)} - {url_data}")
+        return None
+
+
 class ConstructionVLMCaptioner:
     """Specialized VLM captioner for construction/technical content"""
 
@@ -76,6 +96,10 @@ IMPORTANT: Please provide your detailed, technical caption in {self.caption_lang
         page_num = element_context.get("page_number", "unknown")
         source_file = element_context.get("source_filename", "unknown")
 
+        # DEBUG: Log the URL being sent to VLM
+        logger.info(f"VLM DEBUG: Sending table image URL to VLM: {image_url}")
+        logger.info(f"VLM DEBUG: Context - Page: {page_num}, File: {source_file}")
+
         prompt = f"""You are analyzing a table image extracted from page {page_num} of a construction/technical document ({source_file}).
 
 Please provide a comprehensive description that captures:
@@ -100,10 +124,22 @@ IMPORTANT: Please provide your detailed description in {self.caption_language}."
                     },
                 ]
             )
+
+            # DEBUG: Log the message structure being sent
+            logger.info(
+                f"VLM DEBUG: Sending message with image_url type and URL: {image_url}"
+            )
+
             response = await self.vlm_client.ainvoke([message])
+
+            # DEBUG: Log the response
+            logger.info(f"VLM DEBUG: Received response length: {len(response.content)}")
+            logger.info(f"VLM DEBUG: Response preview: {response.content[:200]}...")
+
             return response.content.strip()
         except Exception as e:
             logger.error(f"Error captioning table image: {e}")
+            logger.error(f"VLM DEBUG: Failed to process image URL: {image_url}")
             return f"Error generating caption: {str(e)}"
 
     async def caption_full_page_image_async(
@@ -114,6 +150,12 @@ IMPORTANT: Please provide your detailed description in {self.caption_language}."
         page_num = page_context.get("page_number", "unknown")
         source_file = page_context.get("source_filename", "unknown")
         complexity = page_context.get("text_complexity", "unknown")
+
+        # DEBUG: Log the URL being sent to VLM
+        logger.info(f"VLM DEBUG: Sending full-page image URL to VLM: {image_url}")
+        logger.info(
+            f"VLM DEBUG: Context - Page: {page_num}, File: {source_file}, Complexity: {complexity}"
+        )
 
         # Build context-aware prompt
         context_section = ""
@@ -173,10 +215,28 @@ IMPORTANT: Please provide your comprehensive description in {self.caption_langua
                     },
                 ]
             )
+
+            # DEBUG: Log the message structure being sent
+            logger.info(
+                f"VLM DEBUG: Sending full-page message with image_url type and URL: {image_url}"
+            )
+
             response = await self.vlm_client.ainvoke([message])
+
+            # DEBUG: Log the response
+            logger.info(
+                f"VLM DEBUG: Received full-page response length: {len(response.content)}"
+            )
+            logger.info(
+                f"VLM DEBUG: Full-page response preview: {response.content[:200]}..."
+            )
+
             return response.content.strip()
         except Exception as e:
             logger.error(f"Error captioning full page image: {e}")
+            logger.error(
+                f"VLM DEBUG: Failed to process full-page image URL: {image_url}"
+            )
             return f"Error generating caption: {str(e)}"
 
 
@@ -463,7 +523,21 @@ class EnrichmentStep(PipelineStep):
                 )
 
             # Get table image (Supabase URL or local path)
-            image_url = table_element.get("metadata", {}).get("image_url")
+            image_url_data = table_element.get("metadata", {}).get("image_url")
+
+            # DEBUG: Log the extracted image URL
+            logger.info(
+                f"ENRICHMENT DEBUG: Table element ID: {table_element.get('id', 'unknown')}"
+            )
+            logger.info(f"ENRICHMENT DEBUG: Raw image_url_data: {image_url_data}")
+            logger.info(
+                f"ENRICHMENT DEBUG: Full metadata keys: {list(table_element.get('metadata', {}).keys())}"
+            )
+
+            # Extract the actual URL string
+            image_url = extract_url_string(image_url_data)
+            logger.info(f"ENRICHMENT DEBUG: Extracted image_url: {image_url}")
+
             if image_url:
                 logger.debug(f"Captioning table image: {image_url}")
                 enrichment_metadata["table_image_caption"] = (
@@ -474,6 +548,10 @@ class EnrichmentStep(PipelineStep):
                 enrichment_metadata["table_image_filepath"] = image_url
                 logger.debug(
                     f"Image caption generated ({len(enrichment_metadata['table_image_caption'])} chars)"
+                )
+            else:
+                logger.warning(
+                    f"ENRICHMENT DEBUG: No valid image URL extracted from: {image_url_data}"
                 )
 
             # Calculate caption statistics
@@ -527,7 +605,19 @@ class EnrichmentStep(PipelineStep):
             enrichment_metadata["page_text_context"] = page_text_context
 
             # Use Supabase URL for image
-            image_url = page_info.get("url")
+            image_url_data = page_info.get("url")
+
+            # DEBUG: Log the extracted image URL
+            logger.info(f"ENRICHMENT DEBUG: Page {page_num}")
+            logger.info(f"ENRICHMENT DEBUG: Raw image_url_data: {image_url_data}")
+            logger.info(
+                f"ENRICHMENT DEBUG: Full page_info keys: {list(page_info.keys())}"
+            )
+
+            # Extract the actual URL string
+            image_url = extract_url_string(image_url_data)
+            logger.info(f"ENRICHMENT DEBUG: Extracted image_url: {image_url}")
+
             if image_url:
                 logger.debug(f"Captioning full-page image: {image_url}")
                 enrichment_metadata["full_page_image_caption"] = (
@@ -543,7 +633,9 @@ class EnrichmentStep(PipelineStep):
                     f"Full-page caption generated ({enrichment_metadata['caption_word_count']} words)"
                 )
             else:
-                logger.warning(f"No image URL found for page {page_num}")
+                logger.warning(
+                    f"ENRICHMENT DEBUG: No valid image URL extracted for page {page_num} from: {image_url_data}"
+                )
 
         except Exception as e:
             logger.error(f"Error processing full-page image: {e}")

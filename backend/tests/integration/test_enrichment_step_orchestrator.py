@@ -6,6 +6,8 @@ Integration test for enrichment step through orchestrator
 import asyncio
 import os
 import sys
+import requests
+import json
 from uuid import UUID
 from pathlib import Path
 from dotenv import load_dotenv
@@ -22,15 +24,51 @@ from pipeline.shared.models import DocumentInput
 from services.pipeline_service import PipelineService
 
 
+def debug_url_accessibility(url: str, description: str = ""):
+    """Debug function to test URL accessibility"""
+    print(f"\n🔍 Testing URL accessibility: {description}")
+    print(f"   URL: {url}")
+
+    try:
+        # Test HEAD request first
+        head_response = requests.head(url, timeout=10)
+        print(f"   HEAD Status: {head_response.status_code}")
+        print(
+            f"   Content-Type: {head_response.headers.get('content-type', 'unknown')}"
+        )
+        print(
+            f"   Content-Length: {head_response.headers.get('content-length', 'unknown')}"
+        )
+
+        # Test GET request for small content
+        get_response = requests.get(url, timeout=10, stream=True)
+        print(f"   GET Status: {get_response.status_code}")
+
+        if get_response.status_code == 200:
+            # Read first 100 bytes to verify it's an image
+            content = next(get_response.iter_content(100))
+            if content.startswith(b"\x89PNG\r\n\x1a\n"):  # PNG signature
+                print(f"   ✅ Valid PNG image detected")
+            elif content.startswith(b"\xff\xd8\xff"):  # JPEG signature
+                print(f"   ✅ Valid JPEG image detected")
+            else:
+                print(f"   ⚠️  Unknown image format: {content[:10].hex()}")
+        else:
+            print(f"   ❌ GET request failed")
+
+    except Exception as e:
+        print(f"   ❌ Error testing URL: {e}")
+
+
 async def test_enrichment_step_orchestrator():
     """Test enrichment step through orchestrator"""
     try:
-        # Configuration - using specific run ID as requested
-        existing_run_id = "429d7943-284c-4c52-805a-bcc3e02dd285"
+        # Configuration - using fresh run ID with working signed URLs
+        existing_run_id = "cddd7b49-ed55-438b-9b23-3e9c3a229453"
         document_id = "550e8400-e29b-41d4-a716-446655440000"
         user_id = "123e4567-e89b-12d3-a456-426614174000"
 
-        print(f"✅ Using specific enrichment test run: {existing_run_id}")
+        print(f"✅ Using fresh enrichment test run: {existing_run_id}")
 
         # Get orchestrator with admin client
         db = get_supabase_admin_client()
@@ -69,8 +107,63 @@ async def test_enrichment_step_orchestrator():
 
         print(f"✅ Found metadata step results for run {existing_run_id}")
 
+        # DEBUG: Analyze metadata structure and image URLs
+        print(f"\n🔍 DEBUGGING: Analyzing metadata structure...")
+        metadata_data = metadata_result.data
+
+        # Check table elements
+        table_elements = metadata_data.get("table_elements", [])
+        print(f"   Table elements found: {len(table_elements)}")
+
+        for i, table in enumerate(table_elements[:3]):  # Check first 3 tables
+            print(f"\n   Table {i+1}:")
+            print(f"     ID: {table.get('id', 'unknown')}")
+            print(
+                f"     Page: {table.get('structural_metadata', {}).get('page_number', 'unknown')}"
+            )
+
+            # Check for image URL
+            image_url = table.get("metadata", {}).get("image_url")
+            if image_url:
+                print(f"     Image URL: {image_url}")
+                debug_url_accessibility(image_url, f"Table {i+1} image")
+            else:
+                print(f"     ❌ No image URL found")
+
+            # Check for HTML content
+            html_content = table.get("metadata", {}).get("text_as_html", "")
+            if html_content:
+                print(f"     HTML content: {len(html_content)} chars")
+            else:
+                print(f"     ❌ No HTML content found")
+
+        # Check extracted pages
+        extracted_pages = metadata_data.get("extracted_pages", {})
+        print(f"\n   Extracted pages found: {len(extracted_pages)}")
+
+        for page_num, page_info in list(extracted_pages.items())[
+            :3
+        ]:  # Check first 3 pages
+            print(f"\n   Page {page_num}:")
+            print(
+                f"     Page number: {page_info.get('structural_metadata', {}).get('page_number', 'unknown')}"
+            )
+
+            # Check for image URL
+            image_url = page_info.get("url")
+            if image_url:
+                print(f"     Image URL: {image_url}")
+                debug_url_accessibility(image_url, f"Page {page_num} image")
+            else:
+                print(f"     ❌ No image URL found")
+
+        # Test the known working URL
+        print(f"\n🔍 DEBUGGING: Testing known working URL...")
+        working_url = "https://lvvykzddbyrxcxgiahuo.supabase.co/storage/v1/object/sign/pipeline-assets/20d0d6ed-008b-44c2-b085-54b5332f3a89/processing/550e8400-e29b-41d4-a716-446655440000/extracted-pages/test-with-little-variety_page01_complex_c2aec69b.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV80NjAyNDhhZS0xM2UxLTQwNjUtOTY0Mi1jNjAzYWI2N2I1ZGMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwaXBlbGluZS1hc3NldHMvMjBkMGQ2ZWQtMDA4Yi00NGMyLWIwODUtNTRiNTMzMmYzYTg5L3Byb2Nlc3NpbmcvNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwL2V4dHJhY3RlZC1wYWdlcy90ZXN0LXdpdGgtbGl0dGxlLXZhcmlldHlfcGFnZTAxX2NvbXBsZXhfYzJhZWM2OWIucG5nIiwiaWF0IjoxNzUzODc1MTY2LCJleHAiOjE3NTQ0Nzk5NjZ9.OLpUxR-apNLb-N5zDKpqUBBugl24cjTDyaHWspu3hRg"
+        debug_url_accessibility(working_url, "Known working URL")
+
         # Run only the enrichment step
-        print("🚀 Running enrichment step...")
+        print("\n🚀 Running enrichment step...")
         try:
             # Execute enrichment step with metadata output data
             enrichment_result = await orchestrator.enrichment_step.execute(
@@ -123,27 +216,63 @@ async def test_enrichment_step_orchestrator():
                             f"     - Page {image['page']}: {image['caption_words']} words"
                         )
 
+            # DEBUG: Analyze enrichment results
             if enrichment_result.data:
-                print(f"\n📁 Full Data Structure:")
+                print(f"\n🔍 DEBUGGING: Analyzing enrichment results...")
                 data = enrichment_result.data
-                print(f"   Text elements: {len(data.get('text_elements', []))}")
-                print(f"   Table elements: {len(data.get('table_elements', []))}")
-                print(f"   Extracted pages: {len(data.get('extracted_pages', {}))}")
 
-                # Check enrichment metadata
-                tables_with_enrichment = sum(
-                    1
-                    for t in data.get("table_elements", [])
-                    if "enrichment_metadata" in t
-                )
-                images_with_enrichment = sum(
-                    1
-                    for p in data.get("extracted_pages", {}).values()
-                    if "enrichment_metadata" in p
-                )
+                # Check table enrichment
+                tables_with_enrichment = []
+                for table in data.get("table_elements", []):
+                    if "enrichment_metadata" in table:
+                        enrichment = table["enrichment_metadata"]
+                        tables_with_enrichment.append(
+                            {
+                                "id": table.get("id"),
+                                "html_caption": bool(
+                                    enrichment.get("table_html_caption")
+                                ),
+                                "image_caption": bool(
+                                    enrichment.get("table_image_caption")
+                                ),
+                                "error": enrichment.get("vlm_processing_error"),
+                                "processed": enrichment.get("vlm_processed", False),
+                            }
+                        )
 
-                print(f"   Tables with enrichment: {tables_with_enrichment}")
-                print(f"   Images with enrichment: {images_with_enrichment}")
+                print(f"   Tables with enrichment: {len(tables_with_enrichment)}")
+                for table in tables_with_enrichment[:3]:
+                    print(
+                        f"     - Table {table['id']}: HTML={table['html_caption']}, Image={table['image_caption']}, Processed={table['processed']}"
+                    )
+                    if table["error"]:
+                        print(f"       Error: {table['error']}")
+
+                # Check image enrichment
+                images_with_enrichment = []
+                for page_info in data.get("extracted_pages", {}).values():
+                    if "enrichment_metadata" in page_info:
+                        enrichment = page_info["enrichment_metadata"]
+                        images_with_enrichment.append(
+                            {
+                                "page": page_info.get("structural_metadata", {}).get(
+                                    "page_number"
+                                ),
+                                "has_caption": bool(
+                                    enrichment.get("full_page_image_caption")
+                                ),
+                                "error": enrichment.get("vlm_processing_error"),
+                                "processed": enrichment.get("vlm_processed", False),
+                            }
+                        )
+
+                print(f"   Images with enrichment: {len(images_with_enrichment)}")
+                for image in images_with_enrichment[:3]:
+                    print(
+                        f"     - Page {image['page']}: Caption={image['has_caption']}, Processed={image['processed']}"
+                    )
+                    if image["error"]:
+                        print(f"       Error: {image['error']}")
 
             return True
 

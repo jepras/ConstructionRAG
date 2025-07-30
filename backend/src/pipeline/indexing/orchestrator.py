@@ -16,6 +16,7 @@ from services.pipeline_service import PipelineService
 from .steps.partition import PartitionStep
 from .steps.metadata import MetadataStep
 from .steps.enrichment import EnrichmentStep
+from .steps.chunking import ChunkingStep
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +79,12 @@ class IndexingOrchestrator:
                 progress_tracker=self.progress_tracker,
             )
 
-            # Initialize other steps (placeholders for now)
-            # In the full implementation, these would be actual step classes
-            self.chunking_step = self._create_placeholder_step(
-                "chunking", config.steps.get("chunking", {})
+            # Initialize real chunking step
+            chunking_config = config.steps.get("chunking", {})
+            self.chunking_step = ChunkingStep(
+                config=chunking_config,
+                storage_client=self.storage,
+                progress_tracker=self.progress_tracker,
             )
             self.embedding_step = self._create_placeholder_step(
                 "embedding", config.steps.get("embedding", {})
