@@ -11,7 +11,7 @@ import httpx
 from supabase import Client
 
 from ...shared.base_step import PipelineStep
-from models import StepResult
+from src.models import StepResult
 from ...shared.models import PipelineError
 
 logger = logging.getLogger(__name__)

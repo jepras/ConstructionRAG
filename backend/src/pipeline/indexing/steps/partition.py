@@ -16,11 +16,11 @@ import fitz  # PyMuPDF
 from unstructured.partition.pdf import partition_pdf
 
 # Storage
-from services.storage_service import StorageService
+from src.services.storage_service import StorageService
 
 # Pipeline components
 from ...shared.base_step import PipelineStep
-from models import StepResult
+from src.models import StepResult
 from ...shared.models import DocumentInput, PipelineError
 
 logger = logging.getLogger(__name__)

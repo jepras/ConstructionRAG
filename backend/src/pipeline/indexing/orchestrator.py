@@ -11,8 +11,8 @@ from ..shared.base_step import PipelineStep, StepExecutor
 from ..shared.progress_tracker import ProgressTracker
 from ..shared.config_manager import ConfigManager
 from ..shared.models import DocumentInput, PipelineError
-from models import StepResult
-from services.pipeline_service import PipelineService
+from src.models import StepResult
+from src.services.pipeline_service import PipelineService
 from .steps.partition import PartitionStep
 from .steps.metadata import MetadataStep
 from .steps.enrichment import EnrichmentStep

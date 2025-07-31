@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import UUID
 
 from ...shared.base_step import PipelineStep
-from models import StepResult
+from src.models import StepResult
 from ...shared.models import DocumentInput, PipelineError
 
 logger = logging.getLogger(__name__)
@@ -385,7 +385,7 @@ class MetadataStep(PipelineStep):
                 logger.info("Processing raw partition data")
             elif isinstance(input_data, str):
                 # Input is an indexing run ID (UUID string) - load partition data from database
-                from services.pipeline_service import PipelineService
+                from src.services.pipeline_service import PipelineService
 
                 # Use admin client for testing (bypass RLS)
                 pipeline_service = PipelineService(use_admin_client=True)

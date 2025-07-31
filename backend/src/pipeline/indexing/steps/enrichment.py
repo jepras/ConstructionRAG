@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage
 
 # Pipeline components
 from ...shared.base_step import PipelineStep
-from models import StepResult
+from src.models import StepResult
 from ...shared.models import PipelineError
 
 logger = logging.getLogger(__name__)
