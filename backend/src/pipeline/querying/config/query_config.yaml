@@ -1,25 +1,62 @@
-steps:
+# Query Pipeline Configuration
+query_pipeline:
+  # Query Processing
   query_processing:
-    semantic_expansion_count: 3
-    enable_hyde_documents: true
-    content_category_detection: true
-    danish_query_variations: true
-    
-  retrieval:
-    top_k: 5
-    similarity_threshold: 0.7
-    hybrid_search_weight: 0.5
-    enable_metadata_filtering: true
-    max_results_per_document: 3
-    
-  generation:
-    model: "gpt-4"
+    provider: "openrouter"
+    model: "openai/gpt-3.5-turbo"
+    fallback_models: ["anthropic/claude-3-haiku"]
+    timeout_seconds: 1.0
+    max_tokens: 200
     temperature: 0.1
-    max_tokens: 1000
-    include_citations: true
-    response_language: "danish"
     
-orchestration:
-  response_timeout_seconds: 30
-  max_context_tokens: 8000
-  fail_fast: true 
+    variations:
+      semantic_expansion: true
+      hyde_document: true
+      formal_variation: true
+      parallel_generation: true
+  
+  # Retrieval - References embedding config for consistency
+  retrieval:
+    embedding_model: "${EMBEDDING_CONFIG.model}"  # voyage-multilingual-2
+    dimensions: "${EMBEDDING_CONFIG.dimensions}"  # 1024
+    similarity_metric: "cosine"
+    top_k: 5
+    similarity_thresholds:
+      excellent: 0.75
+      good: 0.60
+      acceptable: 0.40
+      minimum: 0.25
+    danish_thresholds:
+      excellent: 0.70
+      good: 0.55
+      acceptable: 0.35
+      minimum: 0.20
+  
+  # Generation
+  generation:
+    provider: "openrouter"
+    model: "anthropic/claude-3.5-sonnet"
+    fallback_models: ["openai/gpt-4", "meta-llama/llama-3.1-8b-instruct"]
+    timeout_seconds: 5.0
+    max_tokens: 1000
+    temperature: 0.1
+    
+    response_format:
+      include_citations: true
+      include_confidence: true
+      language: "danish"
+  
+  # Quality Analysis
+  quality_analysis:
+    enable_automatic_metrics: true
+    enable_user_feedback: true
+    quality_thresholds:
+      excellent: 0.8
+      good: 0.6
+      acceptable: 0.4
+      poor: 0.2
+    
+    monitoring:
+      enable_dashboard: true
+      retention_days: 30
+      alert_threshold: 0.5  # Alert if avg quality drops below 0.5 
