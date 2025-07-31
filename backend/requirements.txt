@@ -21,6 +21,7 @@ pdf2image==1.17.0
 
 # Unstructured (for PDF partitioning)
 unstructured==0.18.9
+pdfminer.six==20250506
 
 # PyMuPDF (for PDF analysis) - Updated to working version
 PyMuPDF==1.26.3
