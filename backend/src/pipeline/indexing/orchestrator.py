@@ -53,16 +53,11 @@ class IndexingOrchestrator:
     async def initialize_steps(self, user_id: Optional[UUID] = None):
         """Initialize pipeline steps with configuration"""
         try:
-            print("🔧 Starting orchestrator step initialization...")
-            print(f"🔧 Config manager: {self.config_manager}")
-            print(f"🔧 User ID: {user_id}")
-
             # Load configuration
             if not self.config_manager:
                 raise ValueError("Config manager is None - cannot initialize steps")
 
             config = await self.config_manager.get_indexing_config(user_id)
-            print(f"🔧 Loaded config: {config}")
 
             # Initialize real partition step
             partition_config = config.steps.get("partition", {})
@@ -99,25 +94,12 @@ class IndexingOrchestrator:
             )
             # Initialize real embedding step
             embedding_config = config.steps.get("embedding", {})
-            logger.info(f"Initializing embedding step with config: {embedding_config}")
-            logger.info(f"Progress tracker: {self.progress_tracker}")
-            logger.info(f"DB client: {self.db}")
-            logger.info(f"Pipeline service: {self.pipeline_service}")
-            try:
-                self.embedding_step = EmbeddingStep(
-                    config=embedding_config,
-                    progress_tracker=self.progress_tracker,
-                    db=self.db,
-                    pipeline_service=self.pipeline_service,
-                )
-                logger.info("Embedding step initialized successfully")
-                logger.info(f"Embedding step object: {self.embedding_step}")
-            except Exception as e:
-                logger.error(f"Failed to initialize embedding step: {e}")
-                import traceback
-
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
+            self.embedding_step = EmbeddingStep(
+                config=embedding_config,
+                progress_tracker=self.progress_tracker,
+                db=self.db,
+                pipeline_service=self.pipeline_service,
+            )
             self.storage_step = self._create_placeholder_step(
                 "storage", config.steps.get("storage", {})
             )

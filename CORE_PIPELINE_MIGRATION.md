@@ -637,14 +637,14 @@ DELETE /api/query/{id}             # Delete query from history
 4. **Background Task Integration** - FastAPI background tasks with asyncio ✅
 5. **Error Handling Implementation** - Fail fast with comprehensive logging ✅
 
-### Phase 2.3: Step Migration Continuation (Week 4) ✅
+### Phase 2.3: Step Migration Continuation (Week 4-5) ✅
 1. **Enrichment Step** - Convert notebook 03 ✅
 2. **Chunking Step** - Convert notebook 04 ✅
-3. **Embedding Step** - Convert notebook 05  
+3. **Embedding Step** - Convert notebook 05 ✅
 4. **Storage Step** - Convert notebook 06
 5. **End-to-End Testing** - Complete indexing pipeline validation ✅
 
-### Phase 2.4: Query Pipeline (Week 4)
+### Phase 2.4: Query Pipeline (Week 5)
 1. **Query Processing Step** - Convert notebook 07
 2. **Retrieval Step** - Convert notebook 08
 3. **Generation Step** - Convert notebook 11
@@ -654,7 +654,7 @@ DELETE /api/query/{id}             # Delete query from history
 ## ✅ Success Criteria
 
 ### Indexing Pipeline Success
-- [ ] Multiple PDFs process in parallel
+- [x] Multiple PDFs process in parallel
 - [x] Each step provides detailed output for inspection
 - [x] Progress tracking works through API and logs  
 - [x] Failed documents stop processing immediately

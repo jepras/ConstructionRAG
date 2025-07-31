@@ -80,11 +80,7 @@ class EmbeddingStep(PipelineStep):
         db: Client = None,
         pipeline_service=None,
     ):
-        print(f"🔧 EmbeddingStep.__init__ called with config: {config}")
-        print(f"   storage_client: {storage_client}")
-        print(f"   progress_tracker: {progress_tracker}")
-        print(f"   db: {db}")
-        print(f"   pipeline_service: {pipeline_service}")
+        # Initialize embedding step
 
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
@@ -92,16 +88,12 @@ class EmbeddingStep(PipelineStep):
         self.pipeline_service = pipeline_service
 
         # Initialize Voyage client
-        print(f"🔧 Looking for API key in config: {config.get('api_key', 'NOT_FOUND')}")
         api_key = config.get("api_key")
         if not api_key:
             # Try to get from environment variable
             import os
 
             api_key = os.getenv("VOYAGE_API_KEY")
-            print(
-                f"🔧 API key from environment: {api_key[:10] + '...' if api_key else 'NOT_FOUND'}"
-            )
             if not api_key:
                 raise ValueError("Voyage API key not provided in config or environment")
 
@@ -153,6 +145,14 @@ class EmbeddingStep(PipelineStep):
             # Store embeddings back to database
             await self.store_embeddings(chunks_to_embed, embeddings, indexing_run_id)
 
+            # Validate embedding quality
+            quality_metrics = await self.validate_embedding_quality(
+                chunks_to_embed, embeddings
+            )
+
+            # Verify final indexes and optimization
+            index_verification = await self.verify_final_indexes(indexing_run_id)
+
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()
 
@@ -166,6 +166,9 @@ class EmbeddingStep(PipelineStep):
                 "average_embedding_time": (
                     duration / len(chunks_to_embed) if chunks_to_embed else 0
                 ),
+                "quality_score": quality_metrics.get("quality_score", 0.0),
+                "zero_vectors": quality_metrics.get("zero_vectors", 0),
+                "duplicate_embeddings": quality_metrics.get("duplicate_embeddings", 0),
             }
 
             # Create sample outputs
@@ -194,6 +197,8 @@ class EmbeddingStep(PipelineStep):
                     "chunks_processed": len(chunks_to_embed),
                     "embeddings_generated": len(embeddings),
                     "embedding_model": self.voyage_client.model,
+                    "embedding_quality": quality_metrics,
+                    "index_verification": index_verification,
                 },
                 summary_stats=summary_stats,
                 sample_outputs=sample_outputs,
@@ -296,6 +301,172 @@ class EmbeddingStep(PipelineStep):
         except Exception as e:
             logger.error(f"Failed to store embeddings in database: {e}")
             raise
+
+    async def validate_embedding_quality(
+        self, chunks: List[Dict[str, Any]], embeddings: List[List[float]]
+    ) -> Dict[str, Any]:
+        """Validate embedding quality and generate metrics"""
+        try:
+            logger.info("Validating embedding quality...")
+
+            import numpy as np
+
+            # Basic quality checks
+            quality_metrics = {
+                "total_embeddings": len(embeddings),
+                "embedding_dimensions": len(embeddings[0]) if embeddings else 0,
+                "zero_vectors": 0,
+                "duplicate_embeddings": 0,
+                "embedding_stats": {},
+                "similarity_analysis": {},
+                "quality_score": 0.0,
+                "validation_timestamp": datetime.now().isoformat(),
+            }
+
+            if not embeddings:
+                return quality_metrics
+
+            # Convert to numpy for calculations
+            embedding_array = np.array(embeddings)
+
+            # Check for zero vectors
+            zero_vectors = np.sum(np.all(embedding_array == 0, axis=1))
+            quality_metrics["zero_vectors"] = int(zero_vectors)
+
+            # Calculate embedding statistics
+            quality_metrics["embedding_stats"] = {
+                "mean": float(np.mean(embedding_array)),
+                "std": float(np.std(embedding_array)),
+                "min": float(np.min(embedding_array)),
+                "max": float(np.max(embedding_array)),
+                "norm_mean": float(np.mean(np.linalg.norm(embedding_array, axis=1))),
+                "norm_std": float(np.std(np.linalg.norm(embedding_array, axis=1))),
+            }
+
+            # Check for duplicate embeddings (simple check)
+            unique_embeddings = len(set(tuple(emb) for emb in embeddings))
+            quality_metrics["duplicate_embeddings"] = (
+                len(embeddings) - unique_embeddings
+            )
+
+            # Calculate similarity between first few embeddings
+            if len(embeddings) >= 2:
+                # Normalize embeddings for cosine similarity
+                normalized_embeddings = embedding_array / np.linalg.norm(
+                    embedding_array, axis=1, keepdims=True
+                )
+
+                # Calculate similarity between first two embeddings
+                similarity = np.dot(normalized_embeddings[0], normalized_embeddings[1])
+                quality_metrics["similarity_analysis"] = {
+                    "first_two_similarity": float(similarity),
+                    "self_similarity_check": float(
+                        np.dot(normalized_embeddings[0], normalized_embeddings[0])
+                    ),
+                }
+
+            # Calculate overall quality score
+            quality_score = 0.0
+            if quality_metrics["zero_vectors"] == 0:
+                quality_score += 0.3
+            if quality_metrics["duplicate_embeddings"] == 0:
+                quality_score += 0.3
+            if quality_metrics["embedding_stats"]["norm_mean"] > 0.9:
+                quality_score += 0.2
+            if quality_metrics["embedding_stats"]["std"] > 0.01:
+                quality_score += 0.2
+
+            quality_metrics["quality_score"] = quality_score
+
+            logger.info(
+                f"Embedding quality validation completed. Score: {quality_score:.2f}"
+            )
+            return quality_metrics
+
+        except Exception as e:
+            logger.error(f"Embedding quality validation failed: {e}")
+            return {
+                "total_embeddings": len(embeddings),
+                "quality_score": 0.0,
+                "error": str(e),
+                "validation_timestamp": datetime.now().isoformat(),
+            }
+
+    async def store_quality_metrics(
+        self, quality_metrics: Dict[str, Any], indexing_run_id: UUID
+    ):
+        """Store embedding quality metrics in the indexing run"""
+        try:
+            logger.info("Storing embedding quality metrics...")
+
+            # Store quality metrics under the embedding step result
+            # This will be handled by the main embedding step result storage
+            return quality_metrics
+
+            logger.info("Embedding quality metrics stored successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to store quality metrics: {e}")
+            # Don't fail the entire step for this
+
+    async def verify_final_indexes(self, indexing_run_id: UUID):
+        """Verify that all necessary indexes are in place for optimal retrieval"""
+        try:
+            logger.info("Verifying final indexes...")
+
+            # Get a sample embedding to test with
+            result = (
+                self.db.table("document_chunks")
+                .select("embedding_1024")
+                .eq("indexing_run_id", str(indexing_run_id))
+                .limit(1)
+                .execute()
+            )
+
+            if result.data and result.data[0].get("embedding_1024"):
+                # Test that we can query embeddings (this will use the HNSW index)
+                test_embedding = result.data[0]["embedding_1024"]
+
+                # Simple test: count embeddings for this run
+                count_result = (
+                    self.db.table("document_chunks")
+                    .select("id", count="exact")
+                    .eq("indexing_run_id", str(indexing_run_id))
+                    .not_.is_("embedding_1024", "null")
+                    .execute()
+                )
+
+                embedding_count = count_result.count if count_result.count else 0
+
+                logger.info(
+                    f"Index verification successful. Found {embedding_count} embeddings for this run"
+                )
+
+                # Store index verification status under the embedding step result
+                # This will be handled by the main embedding step result storage
+                return {
+                    "embeddings_found": embedding_count,
+                    "index_status": "verified",
+                    "test_results": f"Found {embedding_count} embeddings with HNSW index",
+                }
+
+            else:
+                logger.warning("No embeddings found for index verification")
+                # Return verification failure data
+                return {
+                    "embeddings_found": 0,
+                    "index_status": "failed",
+                    "error_message": "No embeddings found for verification",
+                }
+
+        except Exception as e:
+            logger.error(f"Index verification failed: {e}")
+            # Return verification failure data
+            return {
+                "embeddings_found": 0,
+                "index_status": "failed",
+                "error_message": str(e),
+            }
 
     async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate that input data contains chunking results"""

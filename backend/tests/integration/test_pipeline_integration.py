@@ -24,88 +24,7 @@ from pipeline.shared.models import DocumentInput
 from services.pipeline_service import PipelineService
 
 
-def debug_url_accessibility(url: str, description: str = ""):
-    """Debug function to test URL accessibility"""
-    print(f"\n🔍 Testing URL accessibility: {description}")
-    print(f"   URL: {url}")
-
-    try:
-        # Test HEAD request first
-        head_response = requests.head(url, timeout=10)
-        print(f"   HEAD Status: {head_response.status_code}")
-        print(
-            f"   Content-Type: {head_response.headers.get('content-type', 'unknown')}"
-        )
-        print(
-            f"   Content-Length: {head_response.headers.get('content-length', 'unknown')}"
-        )
-
-        # Test GET request for small content
-        get_response = requests.get(url, timeout=10, stream=True)
-        print(f"   GET Status: {get_response.status_code}")
-
-        if get_response.status_code == 200:
-            # Read first 100 bytes to verify it's an image
-            content = next(get_response.iter_content(100))
-            if content.startswith(b"\x89PNG\r\n\x1a\n"):  # PNG signature
-                print(f"   ✅ Valid PNG image detected")
-            elif content.startswith(b"\xff\xd8\xff"):  # JPEG signature
-                print(f"   ✅ Valid JPEG image detected")
-            else:
-                print(f"   ⚠️  Unknown image format: {content[:10].hex()}")
-        else:
-            print(f"   ❌ GET request failed")
-
-    except Exception as e:
-        print(f"   ❌ Error testing URL: {e}")
-
-
-def analyze_urls_in_data(data: dict, step_name: str):
-    """Analyze URLs in step data to check if they're signed or public"""
-    print(f"\n🔍 DEBUGGING: Analyzing URLs in {step_name} data...")
-
-    # Check table elements
-    table_elements = data.get("table_elements", [])
-    print(f"   Table elements found: {len(table_elements)}")
-
-    for i, table in enumerate(table_elements[:3]):  # Check first 3 tables
-        print(f"\n   Table {i+1}:")
-        print(f"     ID: {table.get('id', 'unknown')}")
-
-        # Check for image URL
-        image_url = table.get("metadata", {}).get("image_url")
-        if image_url:
-            print(f"     Image URL: {image_url}")
-            if "/object/public/" in image_url:
-                print(f"     ⚠️  PUBLIC URL detected")
-            elif "/object/sign/" in image_url:
-                print(f"     ✅ SIGNED URL detected")
-            else:
-                print(f"     ❓ UNKNOWN URL format")
-            debug_url_accessibility(image_url, f"Table {i+1} image")
-        else:
-            print(f"     ❌ No image URL found")
-
-    # Check extracted pages
-    extracted_pages = data.get("extracted_pages", {})
-    print(f"\n   Extracted pages found: {len(extracted_pages)}")
-
-    for page_num, page_info in list(extracted_pages.items())[:3]:  # Check first 3 pages
-        print(f"\n   Page {page_num}:")
-
-        # Check for image URL
-        image_url = page_info.get("url")
-        if image_url:
-            print(f"     Image URL: {image_url}")
-            if "/object/public/" in image_url:
-                print(f"     ⚠️  PUBLIC URL detected")
-            elif "/object/sign/" in image_url:
-                print(f"     ✅ SIGNED URL detected")
-            else:
-                print(f"     ❓ UNKNOWN URL format")
-            debug_url_accessibility(image_url, f"Page {page_num} image")
-        else:
-            print(f"     ❌ No image URL found")
+# Removed debug functions - no longer needed
 
 
 async def test_pipeline_integration():
@@ -201,9 +120,7 @@ async def test_pipeline_integration():
                 print(f"   Table Elements: {stats.get('table_elements', 0)}")
                 print(f"   Extracted Pages: {stats.get('extracted_pages', 0)}")
 
-            # Debug URLs in partition data
-            if partition_result.data:
-                analyze_urls_in_data(partition_result.data, "partition")
+            # Partition data processed successfully
 
         except Exception as e:
             print(f"❌ Partition step failed: {e}")
@@ -255,9 +172,7 @@ async def test_pipeline_integration():
                     f"   Page Sections Detected: {stats.get('page_sections_detected', 0)}"
                 )
 
-            # Debug URLs in metadata data
-            if metadata_result.data:
-                analyze_urls_in_data(metadata_result.data, "metadata")
+            # Metadata data processed successfully
 
         except Exception as e:
             print(f"❌ Metadata step failed: {e}")
@@ -364,16 +279,22 @@ async def test_pipeline_integration():
             if chunking_result.summary_stats:
                 print(f"\n📊 Chunking Summary:")
                 stats = chunking_result.summary_stats
-                print(f"   Total chunks created: {stats.get('total_chunks', 0)}")
-                print(f"   Text chunks: {stats.get('text_chunks', 0)}")
-                print(f"   Table chunks: {stats.get('table_chunks', 0)}")
-                print(f"   Image chunks: {stats.get('image_chunks', 0)}")
+                print(
+                    f"   Total chunks created: {stats.get('total_chunks_created', 0)}"
+                )
+                print(
+                    f"   Elements processed: {stats.get('total_elements_processed', 0)}"
+                )
                 print(
                     f"   Average chunk size: {stats.get('average_chunk_size', 0)} chars"
                 )
-                print(
-                    f"   Chunking strategy: {stats.get('chunking_strategy', 'unknown')}"
-                )
+
+                # Show chunk type distribution
+                chunk_types = stats.get("chunk_type_distribution", {})
+                if chunk_types:
+                    print(f"   Chunk types:")
+                    for chunk_type, count in chunk_types.items():
+                        print(f"     - {chunk_type}: {count}")
 
             if chunking_result.sample_outputs:
                 print(f"\n📋 Sample Chunks:")
@@ -381,9 +302,14 @@ async def test_pipeline_integration():
                 if sample_chunks:
                     print(f"   Sample chunks: {len(sample_chunks)}")
                     for i, chunk in enumerate(sample_chunks[:3]):
-                        print(
-                            f"     - Chunk {i+1}: {chunk.get('chunk_type', 'unknown')} - {len(chunk.get('text', ''))} chars"
+                        chunk_type = chunk.get("metadata", {}).get(
+                            "element_category", "unknown"
                         )
+                        content_preview = chunk.get("content_preview", "")
+                        print(
+                            f"     - Chunk {i+1}: {chunk_type} - {len(content_preview)} chars"
+                        )
+                        print(f"       Preview: {content_preview[:100]}...")
 
         except Exception as e:
             print(f"❌ Chunking step failed: {e}")
@@ -454,11 +380,7 @@ async def test_pipeline_integration():
             print(f"❌ Embedding step failed: {e}")
             return False
 
-        # TODO: Future steps (placeholders)
-        print("\n" + "=" * 50)
-        print("📋 FUTURE STEPS (Not Yet Implemented)")
-        print("=" * 50)
-        print("   Step 6: Storage (vector database)")
+        # Pipeline completed - all steps stored in database
 
         # Final validation
         print("\n" + "=" * 50)
@@ -490,6 +412,10 @@ async def test_pipeline_integration():
 
         print("✅ All five steps successfully stored in database")
         print("✅ Pipeline integration test completed successfully!")
+
+        # Output indexing run ID for easy database lookup
+        print(f"\n📋 INDEXING RUN ID: {indexing_run.id}")
+        print("   Use this ID to query the database for detailed results")
 
         return True
 
