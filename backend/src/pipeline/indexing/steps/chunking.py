@@ -102,37 +102,18 @@ class IntelligentChunker:
             # For tables, use VLM captions if available
             if el.get("element_type") == "table" or el.get("category") == "Table":
                 # Prefer image caption over HTML caption for tables
-                if (
-                    hasattr(enrichment_meta, "table_image_caption")
-                    and enrichment_meta.table_image_caption
-                ):
-                    return enrichment_meta.table_image_caption
-                elif (
-                    hasattr(enrichment_meta, "table_html_caption")
-                    and enrichment_meta.table_html_caption
-                ):
-                    return enrichment_meta.table_html_caption
-                elif hasattr(enrichment_meta, "model_dump"):
-                    meta_dict = enrichment_meta.model_dump()
-                    if meta_dict.get("table_image_caption"):
-                        return meta_dict["table_image_caption"]
-                    elif meta_dict.get("table_html_caption"):
-                        return meta_dict["table_html_caption"]
+                if enrichment_meta.get("table_image_caption"):
+                    return enrichment_meta["table_image_caption"]
+                elif enrichment_meta.get("table_html_caption"):
+                    return enrichment_meta["table_html_caption"]
 
             # For full-page images, use VLM caption
             elif (
                 el.get("element_type") == "full_page_image"
                 or el.get("content_type") == "full_page_with_images"
             ):
-                if (
-                    hasattr(enrichment_meta, "full_page_image_caption")
-                    and enrichment_meta.full_page_image_caption
-                ):
-                    return enrichment_meta.full_page_image_caption
-                elif hasattr(enrichment_meta, "model_dump"):
-                    meta_dict = enrichment_meta.model_dump()
-                    if meta_dict.get("full_page_image_caption"):
-                        return meta_dict["full_page_image_caption"]
+                if enrichment_meta.get("full_page_image_caption"):
+                    return enrichment_meta["full_page_image_caption"]
 
         # Fallback to original text extraction logic
         # Try direct text field
