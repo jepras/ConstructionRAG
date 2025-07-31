@@ -23,8 +23,8 @@ from models import PipelineStatus
 async def test_embedding_step_orchestrator():
     """Test the embedding step with real data from a previous run."""
 
-    # Use the same run ID from the chunking test
-    existing_run_id = "b1758e7b-4e9f-4afd-8d2b-8adc43f872ec"
+    # Use the specific run ID provided
+    existing_run_id = "e11f08ed-8df3-4704-b9bb-d967e3da3b5a"
     document_id = "550e8400-e29b-41d4-a716-446655440000"  # Test document ID
 
     print(f"🧪 Testing embedding step with run ID: {existing_run_id}")
@@ -63,6 +63,72 @@ async def test_embedding_step_orchestrator():
 
         chunks = chunking_result.data.get("chunks", [])
         print(f"✅ Found {len(chunks)} chunks from chunking step")
+
+        # Debug: Check what's actually in the database for this run
+        print("\n🔍 DEBUGGING: Checking database state...")
+        try:
+            # Check all chunks for this run
+            all_chunks_result = (
+                db.table("document_chunks")
+                .select("*")
+                .eq("indexing_run_id", existing_run_id)
+                .execute()
+            )
+
+            print(f"   Total chunks in DB for this run: {len(all_chunks_result.data)}")
+
+            # Check chunks without embeddings
+            chunks_without_embeddings = (
+                db.table("document_chunks")
+                .select("*")
+                .eq("indexing_run_id", existing_run_id)
+                .is_("embedding_1024", "null")
+                .execute()
+            )
+
+            print(
+                f"   Chunks without embeddings: {len(chunks_without_embeddings.data)}"
+            )
+
+            # Check chunks with embeddings
+            chunks_with_embeddings = (
+                db.table("document_chunks")
+                .select("*")
+                .eq("indexing_run_id", existing_run_id)
+                .not_.is_("embedding_1024", "null")
+                .execute()
+            )
+
+            print(f"   Chunks with embeddings: {len(chunks_with_embeddings.data)}")
+
+            if chunks_without_embeddings.data:
+                print(
+                    f"   Sample chunk without embedding: {chunks_without_embeddings.data[0].get('chunk_id', 'unknown')}"
+                )
+
+            # If no chunks in DB, we need to store them first
+            if len(all_chunks_result.data) == 0:
+                print(f"\n⚠️  No chunks found in database for this run!")
+                print(f"   The chunking step didn't store chunks in the database.")
+                print(f"   We need to run the chunking step again to store chunks.")
+
+                # Store chunks from chunking result
+                print(f"\n🔧 Storing chunks from chunking result...")
+                await orchestrator.chunking_step.store_chunks_in_database(
+                    chunks, UUID(existing_run_id), UUID(document_id)
+                )
+
+                # Check again after storing
+                all_chunks_result = (
+                    db.table("document_chunks")
+                    .select("*")
+                    .eq("indexing_run_id", existing_run_id)
+                    .execute()
+                )
+                print(f"   Chunks stored in DB: {len(all_chunks_result.data)}")
+
+        except Exception as e:
+            print(f"   ❌ Error checking database: {e}")
 
         # Initialize orchestrator
         print("🔧 Initializing orchestrator...")
@@ -116,13 +182,13 @@ async def test_embedding_step_orchestrator():
             )
 
             chunks_with_embeddings = [
-                c for c in chunks_with_embeddings if c.get("embedding") is not None
+                c for c in chunks_with_embeddings if c.get("embedding_1024") is not None
             ]
             print(f"   Chunks with embeddings in DB: {len(chunks_with_embeddings)}")
 
             if chunks_with_embeddings:
                 sample_chunk = chunks_with_embeddings[0]
-                embedding = sample_chunk.get("embedding", [])
+                embedding = sample_chunk.get("embedding_1024", [])
                 print(f"   Sample embedding dimensions: {len(embedding)}")
                 print(f"   Embedding model: {sample_chunk.get('embedding_model')}")
                 print(
@@ -132,8 +198,8 @@ async def test_embedding_step_orchestrator():
             return True
         else:
             print(f"❌ Embedding step failed: {embedding_result.status}")
-            if embedding_result.error:
-                print(f"   Error: {embedding_result.error}")
+            if embedding_result.error_message:
+                print(f"   Error: {embedding_result.error_message}")
             return False
 
     except Exception as e:

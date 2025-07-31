@@ -24,9 +24,9 @@ steps:
     max_chunk_size: 2000
     
   embedding:
-    model: "voyage-large-2"
+    model: "voyage-multilingual-2"
     provider: "voyage"
-    dimensions: 1536
+    dimensions: 1024
     batch_size: 100
     max_retries: 3
     retry_delay: 1.0

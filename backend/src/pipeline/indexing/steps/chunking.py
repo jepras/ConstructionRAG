@@ -694,7 +694,7 @@ class ChunkingStep(PipelineStep):
                         "content": chunk["content"],
                         "metadata": chunk["metadata"],
                         # Embedding fields will be NULL initially
-                        "embedding": None,
+                        "embedding_1024": None,
                         "embedding_model": None,
                         "embedding_provider": None,
                         "embedding_metadata": {},

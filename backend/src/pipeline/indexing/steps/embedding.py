@@ -24,7 +24,7 @@ class VoyageEmbeddingClient:
         self.api_key = api_key
         self.model = model
         self.base_url = "https://api.voyageai.com/v1/embeddings"
-        self.dimensions = 1536  # voyage-large-2 dimensions
+        self.dimensions = 1024  # voyage-multilingual-2 dimensions
 
     async def get_embeddings(
         self, texts: List[str], batch_size: int = 100
@@ -225,7 +225,7 @@ class EmbeddingStep(PipelineStep):
 
             if self.resume_capability:
                 # Only get chunks without embeddings for resume capability
-                query = query.is_("embedding", "null")
+                query = query.is_("embedding_1024", "null")
 
             result = query.execute()
 
@@ -279,7 +279,7 @@ class EmbeddingStep(PipelineStep):
             for chunk, embedding in zip(chunks, embeddings):
                 self.db.table("document_chunks").update(
                     {
-                        "embedding": embedding,
+                        "embedding_1024": embedding,
                         "embedding_model": self.voyage_client.model,
                         "embedding_provider": "voyage",
                         "embedding_metadata": {
