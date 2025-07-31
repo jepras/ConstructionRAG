@@ -7,17 +7,106 @@ from uuid import UUID
 import logging
 from fastapi import BackgroundTasks
 
-from ..shared.base_step import PipelineStep, StepExecutor
-from ..shared.progress_tracker import ProgressTracker
-from ..shared.config_manager import ConfigManager
-from ..shared.models import DocumentInput, PipelineError
-from src.models import StepResult
-from src.services.pipeline_service import PipelineService
-from .steps.partition import PartitionStep
-from .steps.metadata import MetadataStep
-from .steps.enrichment import EnrichmentStep
-from .steps.chunking import ChunkingStep
-from .steps.embedding import EmbeddingStep
+print("DEBUG: Starting orchestrator.py import process")
+
+try:
+    print("DEBUG: Importing shared.base_step")
+    from ..shared.base_step import PipelineStep, StepExecutor
+
+    print("DEBUG: Successfully imported shared.base_step")
+except Exception as e:
+    print(f"DEBUG: Failed to import shared.base_step: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing shared.progress_tracker")
+    from ..shared.progress_tracker import ProgressTracker
+
+    print("DEBUG: Successfully imported shared.progress_tracker")
+except Exception as e:
+    print(f"DEBUG: Failed to import shared.progress_tracker: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing shared.config_manager")
+    from ..shared.config_manager import ConfigManager
+
+    print("DEBUG: Successfully imported shared.config_manager")
+except Exception as e:
+    print(f"DEBUG: Failed to import shared.config_manager: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing shared.models")
+    from ..shared.models import DocumentInput, PipelineError
+
+    print("DEBUG: Successfully imported shared.models")
+except Exception as e:
+    print(f"DEBUG: Failed to import shared.models: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing src.models")
+    from src.models import StepResult
+
+    print("DEBUG: Successfully imported src.models")
+except Exception as e:
+    print(f"DEBUG: Failed to import src.models: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing src.services.pipeline_service")
+    from src.services.pipeline_service import PipelineService
+
+    print("DEBUG: Successfully imported src.services.pipeline_service")
+except Exception as e:
+    print(f"DEBUG: Failed to import src.services.pipeline_service: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing steps.partition")
+    from .steps.partition import PartitionStep
+
+    print("DEBUG: Successfully imported steps.partition")
+except Exception as e:
+    print(f"DEBUG: Failed to import steps.partition: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing steps.metadata")
+    from .steps.metadata import MetadataStep
+
+    print("DEBUG: Successfully imported steps.metadata")
+except Exception as e:
+    print(f"DEBUG: Failed to import steps.metadata: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing steps.enrichment")
+    from .steps.enrichment import EnrichmentStep
+
+    print("DEBUG: Successfully imported steps.enrichment")
+except Exception as e:
+    print(f"DEBUG: Failed to import steps.enrichment: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing steps.chunking")
+    from .steps.chunking import ChunkingStep
+
+    print("DEBUG: Successfully imported steps.chunking")
+except Exception as e:
+    print(f"DEBUG: Failed to import steps.chunking: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing steps.embedding")
+    from .steps.embedding import EmbeddingStep
+
+    print("DEBUG: Successfully imported steps.embedding")
+except Exception as e:
+    print(f"DEBUG: Failed to import steps.embedding: {e}")
+    raise
 
 logger = logging.getLogger(__name__)
 

@@ -4,9 +4,19 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from datetime import datetime
 import os
+import sys
+
+print("DEBUG: Starting main.py import process")
 
 # Import configuration
-from src.config.settings import get_settings
+try:
+    print("DEBUG: Importing src.config.settings")
+    from src.config.settings import get_settings
+
+    print("DEBUG: Successfully imported src.config.settings")
+except Exception as e:
+    print(f"DEBUG: Failed to import src.config.settings: {e}")
+    raise
 
 # Create FastAPI app
 app = FastAPI(
@@ -55,8 +65,23 @@ async def api_health():
 
 
 # Include API routers
-from src.api import auth_router
-from src.api import pipeline
+try:
+    print("DEBUG: Importing src.api.auth_router")
+    from src.api import auth_router
+
+    print("DEBUG: Successfully imported src.api.auth_router")
+except Exception as e:
+    print(f"DEBUG: Failed to import src.api.auth_router: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing src.api.pipeline")
+    from src.api import pipeline
+
+    print("DEBUG: Successfully imported src.api.pipeline")
+except Exception as e:
+    print(f"DEBUG: Failed to import src.api.pipeline: {e}")
+    raise
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])

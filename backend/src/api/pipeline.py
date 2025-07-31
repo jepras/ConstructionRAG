@@ -6,12 +6,61 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 import logging
 
-from ..models.pipeline import IndexingRun, QueryRun, StepResult
-from ..services.pipeline_service import PipelineService
-from ..pipeline.indexing.orchestrator import get_indexing_orchestrator
-from ..pipeline.shared.models import DocumentInput
-from .auth import get_current_user
-from ..utils.exceptions import DatabaseError, PipelineError
+print("DEBUG: Starting pipeline.py import process")
+
+try:
+    print("DEBUG: Importing models.pipeline")
+    from ..models.pipeline import IndexingRun, QueryRun, StepResult
+
+    print("DEBUG: Successfully imported models.pipeline")
+except Exception as e:
+    print(f"DEBUG: Failed to import models.pipeline: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing services.pipeline_service")
+    from ..services.pipeline_service import PipelineService
+
+    print("DEBUG: Successfully imported services.pipeline_service")
+except Exception as e:
+    print(f"DEBUG: Failed to import services.pipeline_service: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing pipeline.indexing.orchestrator")
+    from ..pipeline.indexing.orchestrator import get_indexing_orchestrator
+
+    print("DEBUG: Successfully imported pipeline.indexing.orchestrator")
+except Exception as e:
+    print(f"DEBUG: Failed to import pipeline.indexing.orchestrator: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing pipeline.shared.models")
+    from ..pipeline.shared.models import DocumentInput
+
+    print("DEBUG: Successfully imported pipeline.shared.models")
+except Exception as e:
+    print(f"DEBUG: Failed to import pipeline.shared.models: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing auth")
+    from .auth import get_current_user
+
+    print("DEBUG: Successfully imported auth")
+except Exception as e:
+    print(f"DEBUG: Failed to import auth: {e}")
+    raise
+
+try:
+    print("DEBUG: Importing utils.exceptions")
+    from ..utils.exceptions import DatabaseError, PipelineError
+
+    print("DEBUG: Successfully imported utils.exceptions")
+except Exception as e:
+    print(f"DEBUG: Failed to import utils.exceptions: {e}")
+    raise
 
 logger = logging.getLogger(__name__)
 
