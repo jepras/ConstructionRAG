@@ -10,7 +10,7 @@ from .shared import (
 )
 
 from .indexing import IndexingOrchestrator
-from .querying import QueryOrchestrator
+from .querying import QueryPipelineOrchestrator
 
 __all__ = [
     # Shared components
@@ -22,5 +22,5 @@ __all__ = [
     "PipelineError",
     # Pipeline orchestrators
     "IndexingOrchestrator",
-    "QueryOrchestrator",
+    "QueryPipelineOrchestrator",
 ]

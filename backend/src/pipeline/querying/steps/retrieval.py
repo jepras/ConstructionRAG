@@ -8,10 +8,10 @@ from uuid import UUID
 import httpx
 from supabase import Client
 
-from src.pipeline.querying.models import SearchResult, QueryVariations
-from src.pipeline.shared.base_step import PipelineStep
-from src.config.database import get_supabase_admin_client
-from src.config.settings import get_settings
+from pipeline.querying.models import SearchResult, QueryVariations
+from pipeline.shared.base_step import PipelineStep
+from config.database import get_supabase_admin_client
+from config.settings import get_settings
 
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class DocumentRetriever(PipelineStep):
 
     async def execute(self, input_data: QueryVariations) -> "StepResult":
         """Execute the retrieval step"""
-        from src.pipeline.shared.base_step import StepResult
+        from pipeline.shared.base_step import StepResult
 
         start_time = time.time()
 
@@ -109,7 +109,9 @@ class DocumentRetriever(PipelineStep):
                     "similarity_metric": self.config.similarity_metric,
                     "top_k": self.config.top_k,
                 },
-                sample_outputs={"results": [result.dict() for result in results[:3]]},
+                sample_outputs={
+                    "search_results": [result.dict() for result in results]
+                },
             )
         except Exception as e:
             return StepResult(

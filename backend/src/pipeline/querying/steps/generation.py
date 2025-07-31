@@ -4,15 +4,15 @@ from typing import List, Dict, Any, Optional
 import httpx
 from pydantic import BaseModel
 
-from src.pipeline.shared.base_step import PipelineStep, StepResult
-from src.pipeline.querying.models import (
+from pipeline.shared.base_step import PipelineStep, StepResult
+from pipeline.querying.models import (
     SearchResult,
     QueryResponse,
     QualityMetrics,
     ResponseQuality,
     QualityDecision,
 )
-from src.config.settings import get_settings
+from config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +66,7 @@ class ResponseGenerator(PipelineStep):
                 sample_outputs={
                     "response_preview": response.response[:200] + "...",
                     "sources_count": len(response.search_results),
-                },
-                data={
                     "response": response.dict(),
-                    "quality_metrics": quality_metrics.dict(),
                 },
             )
 

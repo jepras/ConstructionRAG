@@ -1,5 +1,5 @@
 """Query pipeline for real-time question answering."""
 
-from .orchestrator import QueryOrchestrator
+from .orchestrator import QueryPipelineOrchestrator
 
-__all__ = ["QueryOrchestrator"]
+__all__ = ["QueryPipelineOrchestrator"]
