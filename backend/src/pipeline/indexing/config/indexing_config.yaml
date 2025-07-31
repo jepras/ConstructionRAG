@@ -25,8 +25,14 @@ steps:
     
   embedding:
     model: "voyage-large-2"
+    provider: "voyage"
     dimensions: 1536
     batch_size: 100
+    max_retries: 3
+    retry_delay: 1.0
+    timeout_seconds: 30
+    cost_tracking: true
+    resume_capability: true
     
   storage:
     collection_prefix: "construction_docs"

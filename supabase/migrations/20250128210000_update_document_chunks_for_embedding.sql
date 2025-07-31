@@ -39,9 +39,9 @@ DROP COLUMN IF EXISTS chunk_index,
 DROP COLUMN IF EXISTS page_number,
 DROP COLUMN IF EXISTS section_title;
 
--- Update embedding vector dimension from 1536 to 1024 for voyage-multimodal-3
+-- Update embedding vector dimension to 1536 for voyage-large-2
 ALTER TABLE document_chunks 
-ALTER COLUMN embedding TYPE VECTOR(1024);
+ALTER COLUMN embedding TYPE VECTOR(1536);
 
 -- Drop old IVFFlat index and create HNSW index
 DROP INDEX IF EXISTS idx_document_chunks_embedding;
@@ -73,8 +73,8 @@ ON document_chunks (document_id, chunk_id);
 -- (The existing policies should still work, but let's ensure they cover the new field)
 
 -- Add comment for documentation
-COMMENT ON TABLE document_chunks IS 'Document chunks with embeddings for vector search. Updated for embedding step with voyage-multimodal-3 support.';
+COMMENT ON TABLE document_chunks IS 'Document chunks with embeddings for vector search. Updated for embedding step with voyage-large-2 support.';
 COMMENT ON COLUMN document_chunks.chunk_id IS 'Unique identifier for chunk within document (e.g. chunk_000001)';
-COMMENT ON COLUMN document_chunks.embedding IS 'Vector embedding using voyage-multimodal-3 (1024 dimensions)';
+COMMENT ON COLUMN document_chunks.embedding IS 'Vector embedding using voyage-large-2 (1536 dimensions)';
 COMMENT ON COLUMN document_chunks.metadata IS 'Chunk metadata including page_number, section_title, element_category, etc.';
 COMMENT ON COLUMN document_chunks.embedding_metadata IS 'Embedding-specific metadata like processing time, confidence scores, etc.';

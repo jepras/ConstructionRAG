@@ -389,11 +389,75 @@ async def test_pipeline_integration():
             print(f"❌ Chunking step failed: {e}")
             return False
 
+        # Test Step 5: Embedding
+        print("\n" + "=" * 50)
+        print("🚀 STEP 5: EMBEDDING")
+        print("=" * 50)
+
+        try:
+            # Execute embedding step with chunking result
+            print(f"📥 Processing chunking output for embedding")
+
+            # Execute embedding step with chunking result
+            embedding_result = await orchestrator.embedding_step.execute(
+                chunking_result, indexing_run.id, document_id
+            )
+
+            # Store the result
+            await pipeline_service.store_step_result(
+                indexing_run_id=indexing_run.id,
+                step_name="embedding",
+                step_result=embedding_result,
+            )
+
+            print("✅ Embedding step completed successfully")
+            print(f"   Status: {embedding_result.status}")
+            print(f"   Duration: {embedding_result.duration_seconds:.2f} seconds")
+
+            if embedding_result.status != "completed":
+                print(f"❌ Embedding step failed: {embedding_result.error_message}")
+                return False
+
+            # Display embedding results
+            if embedding_result.summary_stats:
+                print(f"\n📊 Embedding Summary:")
+                stats = embedding_result.summary_stats
+                print(f"   Total chunks: {stats.get('total_chunks', 0)}")
+                print(
+                    f"   Embeddings generated: {stats.get('embeddings_generated', 0)}"
+                )
+                print(f"   Embedding model: {stats.get('embedding_model', 'unknown')}")
+                print(
+                    f"   Embedding dimensions: {stats.get('embedding_dimensions', 0)}"
+                )
+                print(f"   Batch size used: {stats.get('batch_size_used', 0)}")
+                print(
+                    f"   Average time per chunk: {stats.get('average_embedding_time', 0):.3f}s"
+                )
+
+            if embedding_result.sample_outputs:
+                print(f"\n📋 Sample Embeddings:")
+                sample_embeddings = embedding_result.sample_outputs.get(
+                    "sample_embeddings", []
+                )
+                if sample_embeddings:
+                    print(f"   Sample embeddings: {len(sample_embeddings)}")
+                    for i, embedding in enumerate(sample_embeddings[:3]):
+                        print(
+                            f"     - Embedding {i+1}: {embedding.get('embedding_preview', 'unknown')}"
+                        )
+                        print(
+                            f"       Content: {embedding.get('content_preview', 'unknown')}"
+                        )
+
+        except Exception as e:
+            print(f"❌ Embedding step failed: {e}")
+            return False
+
         # TODO: Future steps (placeholders)
         print("\n" + "=" * 50)
         print("📋 FUTURE STEPS (Not Yet Implemented)")
         print("=" * 50)
-        print("   Step 5: Embedding (vector creation)")
         print("   Step 6: Storage (vector database)")
 
         # Final validation
@@ -410,7 +474,13 @@ async def test_pipeline_integration():
         step_results = final_run.step_results
         print(f"✅ Stored step results: {list(step_results.keys())}")
 
-        required_steps = ["partition", "metadata", "enrichment", "chunking"]
+        required_steps = [
+            "partition",
+            "metadata",
+            "enrichment",
+            "chunking",
+            "embedding",
+        ]
         for step in required_steps:
             if step not in step_results:
                 print(f"❌ {step} results not found in database")
@@ -418,7 +488,7 @@ async def test_pipeline_integration():
             else:
                 print(f"✅ {step} results found in database")
 
-        print("✅ All four steps successfully stored in database")
+        print("✅ All five steps successfully stored in database")
         print("✅ Pipeline integration test completed successfully!")
 
         return True

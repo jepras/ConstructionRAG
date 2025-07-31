@@ -17,6 +17,7 @@ from .steps.partition import PartitionStep
 from .steps.metadata import MetadataStep
 from .steps.enrichment import EnrichmentStep
 from .steps.chunking import ChunkingStep
+from .steps.embedding import EmbeddingStep
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,16 @@ class IndexingOrchestrator:
     async def initialize_steps(self, user_id: Optional[UUID] = None):
         """Initialize pipeline steps with configuration"""
         try:
+            print("🔧 Starting orchestrator step initialization...")
+            print(f"🔧 Config manager: {self.config_manager}")
+            print(f"🔧 User ID: {user_id}")
+
             # Load configuration
+            if not self.config_manager:
+                raise ValueError("Config manager is None - cannot initialize steps")
+
             config = await self.config_manager.get_indexing_config(user_id)
+            print(f"🔧 Loaded config: {config}")
 
             # Initialize real partition step
             partition_config = config.steps.get("partition", {})
@@ -88,9 +97,27 @@ class IndexingOrchestrator:
                 db=self.db,
                 pipeline_service=self.pipeline_service,
             )
-            self.embedding_step = self._create_placeholder_step(
-                "embedding", config.steps.get("embedding", {})
-            )
+            # Initialize real embedding step
+            embedding_config = config.steps.get("embedding", {})
+            logger.info(f"Initializing embedding step with config: {embedding_config}")
+            logger.info(f"Progress tracker: {self.progress_tracker}")
+            logger.info(f"DB client: {self.db}")
+            logger.info(f"Pipeline service: {self.pipeline_service}")
+            try:
+                self.embedding_step = EmbeddingStep(
+                    config=embedding_config,
+                    progress_tracker=self.progress_tracker,
+                    db=self.db,
+                    pipeline_service=self.pipeline_service,
+                )
+                logger.info("Embedding step initialized successfully")
+                logger.info(f"Embedding step object: {self.embedding_step}")
+            except Exception as e:
+                logger.error(f"Failed to initialize embedding step: {e}")
+                import traceback
+
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
             self.storage_step = self._create_placeholder_step(
                 "storage", config.steps.get("storage", {})
             )
@@ -183,8 +210,12 @@ class IndexingOrchestrator:
             for step in self.steps:
                 step_executor = StepExecutor(step, progress_tracker)
 
-                # Special handling for chunking step to pass run information
+                # Special handling for steps that need run information
                 if isinstance(step, ChunkingStep):
+                    result = await step.execute(
+                        current_data, indexing_run.id, document_input.document_id
+                    )
+                elif isinstance(step, EmbeddingStep):
                     result = await step.execute(
                         current_data, indexing_run.id, document_input.document_id
                     )
@@ -292,4 +323,9 @@ async def get_indexing_orchestrator(
     progress_tracker: ProgressTracker = None,
 ) -> IndexingOrchestrator:
     """Get indexing orchestrator with all dependencies injected"""
-    return IndexingOrchestrator(db, storage, config_manager, progress_tracker)
+    # Create pipeline service if not provided
+    pipeline_service = PipelineService(db) if db else None
+
+    return IndexingOrchestrator(
+        db, storage, config_manager, progress_tracker, pipeline_service
+    )
