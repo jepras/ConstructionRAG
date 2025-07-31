@@ -342,7 +342,7 @@ async def test_pipeline_integration():
 
             # Execute chunking step with enrichment result
             chunking_result = await orchestrator.chunking_step.execute(
-                enrichment_result
+                enrichment_result, indexing_run.id, document_id
             )
 
             # Store the result

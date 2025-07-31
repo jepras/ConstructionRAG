@@ -18,10 +18,10 @@ CREATE TABLE document_chunks (
     -- Core chunk data (for embedding generation)
     chunk_id TEXT NOT NULL,
     content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}',
+    metadata JSONB DEFAULT '{}',  -- Contains page_number, section_title, etc.
     
     -- Embedding data (for retrieval)
-    embedding vector(1024),
+    embedding vector(1024),  -- voyage-multimodal-3 dimensions
     embedding_model TEXT,
     embedding_provider TEXT,
     embedding_metadata JSONB DEFAULT '{}',
@@ -32,6 +32,8 @@ CREATE TABLE document_chunks (
     CONSTRAINT unique_chunk_per_document UNIQUE (document_id, chunk_id)
 );
 ```
+
+**Note**: Page numbers, section titles, and other structural data are stored in the `metadata` JSONB field for flexibility and consistency with the chunking step output.
 
 ### Indexes for Performance
 ```sql
@@ -69,15 +71,22 @@ CREATE INDEX idx_document_chunks_document_id ON document_chunks (document_id);
 
 ## 🛠️ Technical Decisions
 
+### Key Design Decisions Made
+- **Single Embedding Model**: No support for multiple embeddings per chunk initially
+- **HNSW Index**: Use HNSW over IVFFlat for better performance and accuracy
+- **Metadata-First Approach**: Store page_number, section_title in metadata JSONB for flexibility
+- **Resume Capability**: Filter `WHERE embedding IS NULL` for interrupted processing
+- **Model Choice**: voyage-multimodal-3 for better construction document support (images + text)
+
 ### 1. Single Step: Embed & Store
 - **Approach**: Combine embedding generation and storage in one step
 - **Benefits**: Atomic operations, better error handling, progress tracking
 - **Implementation**: Read chunks → Generate embeddings → Update table
 
 ### 2. Voyage API Integration
-- **Model**: `voyage-multilingual-2` (1024 dimensions)
+- **Model**: `voyage-multimodal-3` (1024 dimensions)
 - **Provider**: Voyage AI
-- **Batch Size**: 100 chunks per API call
+- **Batch Size**: 100 chunks per API call (dynamic sizing)
 - **Retry Logic**: Exponential backoff with max 3 retries
 
 ### 3. Database Integration
@@ -122,14 +131,15 @@ CREATE INDEX idx_document_chunks_document_id ON document_chunks (document_id);
 ### indexing_config.yaml
 ```yaml
 embedding:
-  model: "voyage-multilingual-2"
+  model: "voyage-multimodal-3"
   provider: "voyage"
   dimensions: 1024
-  batch_size: 100
+  batch_size: 100  # Dynamic sizing based on content length
   max_retries: 3
   retry_delay: 1.0
   timeout_seconds: 30
   cost_tracking: true
+  resume_capability: true  # Process WHERE embedding IS NULL
 ```
 
 ### Environment Variables
@@ -151,7 +161,7 @@ VOYAGE_API_KEY=your_voyage_api_key
     "chunks_failed": 0,
     "average_embedding_time_ms": 150,
     "total_api_cost": 0.00075,
-    "embedding_model": "voyage-multilingual-2",
+    "embedding_model": "voyage-multimodal-3",
     "embedding_provider": "voyage"
   },
   "sample_outputs": {

@@ -69,7 +69,9 @@ async def test_chunking_step_orchestrator():
         print("🚀 Running chunking step...")
 
         # Execute chunking step with enrichment output data
-        chunking_result = await orchestrator.chunking_step.execute(enrichment_result)
+        chunking_result = await orchestrator.chunking_step.execute(
+            enrichment_result, UUID(existing_run_id), UUID(document_id)
+        )
 
         # Store the result
         await pipeline_service.store_step_result(

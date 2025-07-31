@@ -85,6 +85,8 @@ class IndexingOrchestrator:
                 config=chunking_config,
                 storage_client=self.storage,
                 progress_tracker=self.progress_tracker,
+                db=self.db,
+                pipeline_service=self.pipeline_service,
             )
             self.embedding_step = self._create_placeholder_step(
                 "embedding", config.steps.get("embedding", {})
@@ -180,7 +182,14 @@ class IndexingOrchestrator:
 
             for step in self.steps:
                 step_executor = StepExecutor(step, progress_tracker)
-                result = await step_executor.execute_with_tracking(current_data)
+
+                # Special handling for chunking step to pass run information
+                if isinstance(step, ChunkingStep):
+                    result = await step.execute(
+                        current_data, indexing_run.id, document_input.document_id
+                    )
+                else:
+                    result = await step_executor.execute_with_tracking(current_data)
 
                 # Store step result in database
                 await self.pipeline_service.store_step_result(

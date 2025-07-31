@@ -5,6 +5,7 @@ import uuid
 import asyncio
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Literal
+from uuid import UUID
 import logging
 from pathlib import Path
 
@@ -519,21 +520,31 @@ class ChunkingStep(PipelineStep):
     """Production chunking step that preserves intelligent chunking logic"""
 
     def __init__(
-        self, config: Dict[str, Any], storage_client=None, progress_tracker=None
+        self,
+        config: Dict[str, Any],
+        storage_client=None,
+        progress_tracker=None,
+        db=None,
+        pipeline_service=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
+        self.db = db
+        self.pipeline_service = pipeline_service
 
         # Initialize chunking engine
         chunking_config = config.get("chunking", {})
         self.chunker = IntelligentChunker(chunking_config)
 
-    async def execute(self, input_data: Any) -> StepResult:
+    async def execute(
+        self, input_data: Any, indexing_run_id: UUID = None, document_id: UUID = None
+    ) -> StepResult:
         """Execute the chunking step with enriched data from previous step"""
         start_time = datetime.now()
 
         try:
             logger.info("Starting chunking step execution")
+            print("DEBUG: Starting chunking step execution")
 
             # Extract enriched data from input
             enriched_data = input_data
@@ -542,23 +553,32 @@ class ChunkingStep(PipelineStep):
             elif hasattr(input_data, "output_data"):
                 enriched_data = input_data.output_data
 
+            logger.info(f"DEBUG: Input data type: {type(input_data)}")
+            logger.info(f"DEBUG: Enriched data type: {type(enriched_data)}")
+            logger.info(
+                f"DEBUG: Enriched data keys: {list(enriched_data.keys()) if isinstance(enriched_data, dict) else 'Not a dict'}"
+            )
+
             # Combine all elements from enriched data
             all_elements = []
 
             # Add text elements
             text_elements = enriched_data.get("text_elements", [])
+            logger.info(f"DEBUG: Found {len(text_elements)} text elements")
             for element in text_elements:
                 element["element_type"] = "text"
             all_elements.extend(text_elements)
 
             # Add table elements
             table_elements = enriched_data.get("table_elements", [])
+            logger.info(f"DEBUG: Found {len(table_elements)} table elements")
             for element in table_elements:
                 element["element_type"] = "table"
             all_elements.extend(table_elements)
 
             # Add extracted pages (full page images)
             extracted_pages = enriched_data.get("extracted_pages", {})
+            logger.info(f"DEBUG: Found {len(extracted_pages)} extracted pages")
             for page_num, page_info in extracted_pages.items():
                 page_info["element_type"] = "full_page_image"
                 page_info["page_number"] = int(page_num)
@@ -615,6 +635,14 @@ class ChunkingStep(PipelineStep):
             logger.info(f"Chunking completed: {len(final_chunks)} chunks created")
             logger.info(f"Summary: {summary_stats}")
 
+            # Store chunks in database for embedding step
+            if indexing_run_id and document_id:
+                await self.store_chunks_in_database(
+                    final_chunks, indexing_run_id, document_id
+                )
+            else:
+                logger.warning("No run information provided, skipping database storage")
+
             return StepResult(
                 step="chunking",
                 status="completed",
@@ -644,6 +672,42 @@ class ChunkingStep(PipelineStep):
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
             )
+
+    async def store_chunks_in_database(
+        self, chunks: List[Dict[str, Any]], indexing_run_id: UUID, document_id: UUID
+    ):
+        """Store chunks in document_chunks table for embedding step"""
+        if not self.db:
+            logger.warning("No database client available, skipping chunk storage")
+            return
+
+        try:
+            logger.info(f"Storing {len(chunks)} chunks in document_chunks table")
+
+            # Store each chunk in database
+            for chunk_index, chunk in enumerate(chunks):
+                self.db.table("document_chunks").insert(
+                    {
+                        "indexing_run_id": str(indexing_run_id),
+                        "document_id": str(document_id),
+                        "chunk_id": chunk["chunk_id"],
+                        "content": chunk["content"],
+                        "metadata": chunk["metadata"],
+                        # Embedding fields will be NULL initially
+                        "embedding": None,
+                        "embedding_model": None,
+                        "embedding_provider": None,
+                        "embedding_metadata": {},
+                        "embedding_created_at": None,
+                    }
+                ).execute()
+
+            logger.info(f"Successfully stored {len(chunks)} chunks in database")
+
+        except Exception as e:
+            logger.error(f"Failed to store chunks in database: {e}")
+            # Don't raise the exception - chunk storage failure shouldn't fail the entire step
+            # The chunks are still returned in the StepResult for backward compatibility
 
     async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate that input data contains enriched elements"""
