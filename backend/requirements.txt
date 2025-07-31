@@ -5,20 +5,19 @@ python-multipart==0.0.6
 
 # Configuration and validation
 pydantic[email]==2.11.7
-pydantic-settings==2.2.0
+pydantic-settings==2.1.0
 
 # Database - Updated to working versions
 supabase==2.17.0
 psycopg2-binary==2.9.9
-websockets==13.0
+websockets==15.0.1
 
 # HTTP client - Updated to working version
 httpx==0.28.1
 
 # PDF processing (for pipeline) - Updated to working versions
 pypdf==5.8.0
-pdfplumber==0.10.3
-pdfminer.six==20250506
+pdf2image==1.17.0
 
 # Unstructured (for PDF partitioning)
 unstructured==0.18.9
@@ -26,27 +25,19 @@ unstructured==0.18.9
 # PyMuPDF (for PDF analysis) - Updated to working version
 PyMuPDF==1.26.3
 
-# PDF to image conversion - Updated to working version
-pdf2image==1.17.0
-
 # Scientific computing - Added working versions
 numpy==1.26.4
 scipy==1.16.0
 pandas==2.3.1
 
 # AI/ML (for VLM enrichment)
-openai==1.30.5
-langchain==0.0.350
-langchain-openai==0.0.2
-langsmith==0.0.69
+openai==1.97.0
+langchain==0.3.26
+langchain-openai==0.3.28
+langsmith==0.4.8
 
-# Text processing (will be added when implementing pipeline)
-# nltk==3.8.1
-# spacy==3.7.2
-
-# Vector embeddings (will be added when implementing pipeline)
-# sentence-transformers==2.2.2
-# torch==2.7.1+cpu
+# Vector embeddings (for production)
+voyageai==0.3.3
 
 # Utilities
 python-dotenv==1.0.0

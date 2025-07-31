@@ -13,13 +13,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+# No longer needed with absolute imports
+# sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from config.database import get_supabase_admin_client
-from pipeline.indexing.orchestrator import get_indexing_orchestrator
-from pipeline.shared.models import DocumentInput
-from services.pipeline_service import PipelineService
+from src.config.database import get_supabase_admin_client
+from src.pipeline.indexing.orchestrator import get_indexing_orchestrator
+from src.pipeline.shared.models import DocumentInput
+from src.services.pipeline_service import PipelineService
 
 
 async def test_partition_step_orchestrator():
@@ -58,7 +58,7 @@ async def test_partition_step_orchestrator():
 
         pipeline_service = AdminPipelineService()
 
-        from pipeline.indexing.orchestrator import IndexingOrchestrator
+        from src.pipeline.indexing.orchestrator import IndexingOrchestrator
 
         orchestrator = IndexingOrchestrator(
             db=db,

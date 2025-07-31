@@ -19,8 +19,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from pipeline.querying.orchestrator import QueryPipelineOrchestrator
-from pipeline.querying.models import QueryRequest
+from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
+from src.pipeline.querying.models import QueryRequest
 
 
 class TestQueryPipelineIntegration:

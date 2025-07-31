@@ -8,8 +8,8 @@ import sys
 import asyncio
 from pathlib import Path
 
-# Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+# No longer needed with absolute imports
+# sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 
 def run_integration_tests():

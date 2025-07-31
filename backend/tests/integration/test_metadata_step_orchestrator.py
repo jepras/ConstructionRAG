@@ -16,10 +16,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from config.database import get_supabase_admin_client
-from pipeline.indexing.orchestrator import get_indexing_orchestrator
-from pipeline.shared.models import DocumentInput
-from services.pipeline_service import PipelineService
+from src.config.database import get_supabase_admin_client
+from src.pipeline.indexing.orchestrator import get_indexing_orchestrator
+from src.pipeline.shared.models import DocumentInput
+from src.services.pipeline_service import PipelineService
 
 
 async def test_metadata_step_orchestrator():
@@ -51,7 +51,7 @@ async def test_metadata_step_orchestrator():
         # Create PipelineService with admin client
         pipeline_service = PipelineService(use_admin_client=True)
 
-        from pipeline.indexing.orchestrator import IndexingOrchestrator
+        from src.pipeline.indexing.orchestrator import IndexingOrchestrator
 
         orchestrator = IndexingOrchestrator(
             db=db,

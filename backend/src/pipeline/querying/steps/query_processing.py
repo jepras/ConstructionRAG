@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage
 
 from pipeline.querying.models import QueryVariations
 from pipeline.shared.base_step import PipelineStep
-from config.settings import get_settings
+from src.config.settings import get_settings
 
 
 logger = logging.getLogger(__name__)

@@ -17,9 +17,9 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from config.database import get_supabase_admin_client
-from pipeline.indexing.orchestrator import IndexingOrchestrator
-from services.pipeline_service import PipelineService
+from src.config.database import get_supabase_admin_client
+from src.pipeline.indexing.orchestrator import IndexingOrchestrator
+from src.services.pipeline_service import PipelineService
 
 
 async def test_chunking_step_orchestrator():

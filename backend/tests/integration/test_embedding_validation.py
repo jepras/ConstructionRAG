@@ -23,8 +23,8 @@ load_dotenv()
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from config.database import get_supabase_client
-from services.pipeline_service import PipelineService
+from src.config.database import get_supabase_client
+from src.services.pipeline_service import PipelineService
 
 # ==============================================================================
 # 1. CONFIGURATION

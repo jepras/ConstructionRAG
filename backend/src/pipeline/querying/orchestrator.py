@@ -23,8 +23,8 @@ from pipeline.querying.models import (
     QualityMetrics,
     SearchResult,
 )
-from config.database import get_supabase_admin_client
-from config.settings import get_settings
+from src.config.database import get_supabase_admin_client
+from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

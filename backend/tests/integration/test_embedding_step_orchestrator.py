@@ -13,11 +13,11 @@ load_dotenv()
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from pipeline.indexing.orchestrator import get_indexing_orchestrator
-from pipeline.shared.progress_tracker import ProgressTracker
-from services.pipeline_service import PipelineService
-from config.database import get_supabase_client
-from models import PipelineStatus
+from src.pipeline.indexing.orchestrator import get_indexing_orchestrator
+from src.pipeline.shared.progress_tracker import ProgressTracker
+from src.services.pipeline_service import PipelineService
+from src.config.database import get_supabase_client
+from src.models import PipelineStatus
 
 
 async def test_embedding_step_orchestrator():

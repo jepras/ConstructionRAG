@@ -7,14 +7,14 @@ from uuid import UUID
 from datetime import datetime
 import logging
 
-from config.database import get_supabase_client
-from models.pipeline import (
+from src.config.database import get_supabase_client
+from src.models.pipeline import (
     StepResult,
     IndexingRun,
     IndexingRunCreate,
     IndexingRunUpdate,
 )
-from utils.exceptions import DatabaseError
+from src.utils.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class PipelineService:
 
     def __init__(self, use_admin_client=False):
         if use_admin_client:
-            from config.database import get_supabase_admin_client
+            from src.config.database import get_supabase_admin_client
 
             self.supabase = get_supabase_admin_client()
         else:

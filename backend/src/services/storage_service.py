@@ -7,8 +7,8 @@ from typing import Optional, Dict, Any
 from uuid import UUID
 import logging
 
-from config.database import get_supabase_admin_client
-from utils.exceptions import StorageError
+from src.config.database import get_supabase_admin_client
+from src.utils.exceptions import StorageError
 
 logger = logging.getLogger(__name__)
 

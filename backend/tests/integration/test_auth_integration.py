@@ -8,11 +8,11 @@ import os
 import sys
 from uuid import UUID
 
-# Add the src directory to the path so we can import our modules
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+# No longer needed with absolute imports
+# sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-from config.database import get_supabase_client
-from config.settings import get_settings
+from src.config.database import get_supabase_client
+from src.config.settings import get_settings
 
 
 async def test_with_authentication():
@@ -51,7 +51,7 @@ async def test_with_authentication():
 
         # Method 3: Use admin client to bypass RLS (for testing)
         print("\n🔑 Method 3: Use admin client to bypass RLS...")
-        from config.database import get_supabase_admin_client
+        from src.config.database import get_supabase_admin_client
 
         admin_client = get_supabase_admin_client()
 

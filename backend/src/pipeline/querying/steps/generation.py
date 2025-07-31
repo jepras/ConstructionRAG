@@ -12,7 +12,7 @@ from pipeline.querying.models import (
     ResponseQuality,
     QualityDecision,
 )
-from config.settings import get_settings
+from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
