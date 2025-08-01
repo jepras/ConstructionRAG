@@ -13,7 +13,8 @@ import logging
 
 # PDF processing
 import fitz  # PyMuPDF
-from unstructured.partition.pdf import partition_pdf
+
+# from unstructured.partition.pdf import partition_pdf  # TEMPORARILY DISABLED - using PyMuPDF only
 
 # Storage
 from src.services.storage_service import StorageService
@@ -669,54 +670,28 @@ class UnifiedPartitionerV2:
     def stage2_fast_text_extraction(self, filepath):
         """Stage 2: Fast unstructured extraction for text content with language support"""
         logger.info("Stage 2: Fast text extraction with unstructured...")
-
-        # Fast extraction to get text content
-        fast_elements = partition_pdf(
-            filename=filepath,
-            strategy="fast",
-            languages=["dan"],  # Danish language support
-            max_characters=50000,
-            combine_text_under_n_chars=200,
-            include_metadata=True,
-            include_page_breaks=True,
+        logger.warning(
+            "TEMPORARILY DISABLED - unstructured partition_pdf not available"
         )
 
-        logger.info(f"Found {len(fast_elements)} text elements")
+        # TEMPORARILY DISABLED - using PyMuPDF only for now
+        # Fast extraction to get text content
+        # fast_elements = partition_pdf(
+        #     filename=filepath,
+        #     strategy="fast",
+        #     languages=["dan"],  # Danish language support
+        #     max_characters=50000,
+        #     combine_text_under_n_chars=200,
+        #     include_metadata=True,
+        #     include_page_breaks=True,
+        # )
 
-        # Process text elements
+        # Placeholder - return empty results for now
+        fast_elements = []
         text_elements = []
-        raw_elements = []  # Preserve raw elements for downstream metadata access
+        raw_elements = []
 
-        for i, element in enumerate(fast_elements):
-            element_id = str(i + 1)  # Simple numeric ID
-            category = getattr(element, "category", "Unknown")
-            metadata_dict = getattr(element, "metadata", {})
-
-            if hasattr(metadata_dict, "to_dict"):
-                metadata_dict = metadata_dict.to_dict()
-
-            page_num = metadata_dict.get("page_number", 1)
-
-            # Store raw element for downstream access
-            raw_elements.append(element)
-
-            # Only include non-table, non-image elements in processed text
-            if category not in ["Table", "Image"]:
-                # Remove coordinates from metadata
-                if "coordinates" in metadata_dict:
-                    del metadata_dict["coordinates"]
-
-                text_elements.append(
-                    {
-                        "id": element_id,
-                        "element": element,
-                        "category": category,
-                        "page": page_num,
-                        "text": getattr(element, "text", ""),
-                        "metadata": metadata_dict,
-                    }
-                )
-
+        logger.info(f"Found {len(fast_elements)} text elements (DISABLED)")
         logger.info(f"Processed {len(text_elements)} text elements")
         return text_elements, raw_elements
 
@@ -729,19 +704,26 @@ class UnifiedPartitionerV2:
         logger.info(
             f"Stage 3: Targeted table processing ({len(table_locations)} tables)..."
         )
-
-        # Process tables with vision capabilities
-        table_elements = partition_pdf(
-            filename=filepath,
-            strategy="hi_res",
-            languages=["dan"],
-            extract_images_in_pdf=True,
-            extract_image_block_types=["Table"],
-            extract_image_block_output_dir=str(self.tables_dir),
-            extract_image_block_to_payload=False,
-            infer_table_structure=True,
-            pdf_infer_table_structure=True,
+        logger.warning(
+            "TEMPORARILY DISABLED - unstructured partition_pdf not available"
         )
+
+        # TEMPORARILY DISABLED - using PyMuPDF only for now
+        # Process tables with vision capabilities
+        # table_elements = partition_pdf(
+        #     filename=filepath,
+        #     strategy="hi_res",
+        #     languages=["dan"],
+        #     extract_images_in_pdf=True,
+        #     extract_image_block_types=["Table"],
+        #     extract_image_block_output_dir=str(self.tables_dir),
+        #     extract_image_block_to_payload=False,
+        #     infer_table_structure=True,
+        #     pdf_infer_table_structure=True,
+        # )
+
+        # Placeholder - return empty results for now
+        table_elements = []
 
         # Filter to keep only table elements and enhance with metadata
         enhanced_tables = []
