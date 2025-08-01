@@ -114,11 +114,17 @@ async def get_current_user_info(
     return current_user
 
 
+class RefreshTokenRequest(BaseModel):
+    """Refresh token request model"""
+
+    refresh_token: str
+
+
 @router.post("/refresh", response_model=AuthResponse, tags=["Authentication"])
-async def refresh_token(refresh_token: str):
+async def refresh_token(request: RefreshTokenRequest):
     """Refresh access token"""
     try:
-        result = await auth_service.refresh_token(refresh_token)
+        result = await auth_service.refresh_token(request.refresh_token)
         return AuthResponse(**result)
     except HTTPException:
         raise
