@@ -135,35 +135,59 @@ class AuthService:
             )
 
     async def get_current_user(self, access_token: str) -> Optional[Dict[str, Any]]:
-        """Get current user from access token"""
+        """Get current user from access token - Simple JWT-only approach"""
         try:
-            # Set the access token for this request
-            self.supabase_client.auth.set_session(access_token, None)
+            # Simple JWT decoding - no session management complexity
+            import base64
+            import json
+            from datetime import datetime
 
-            # Get user data
-            user = self.supabase_client.auth.get_user()
+            try:
+                # Split the JWT token and decode the payload
+                parts = access_token.split(".")
+                if len(parts) != 3:
+                    logger.error("Invalid JWT token format")
+                    return None
 
-            if user:
+                # Decode the payload (second part)
+                payload = json.loads(
+                    base64.urlsafe_b64decode(parts[1] + "==").decode("utf-8")
+                )
+
+                # Check if token is expired
+                exp = payload.get("exp")
+                if exp and datetime.now().timestamp() > exp:
+                    logger.error("JWT token has expired")
+                    return None
+
+                user_id = payload.get("sub")
+                if not user_id:
+                    logger.error("No user ID found in JWT token")
+                    return None
+
                 # Get user profile from database
-                profile = await self._get_user_profile(user.id)
+                profile = await self._get_user_profile(user_id)
 
                 return {
-                    "id": user.id,
-                    "email": user.email,
-                    "email_confirmed_at": user.email_confirmed_at,
-                    "created_at": user.created_at,
+                    "id": user_id,
+                    "email": payload.get("email"),
+                    "email_confirmed_at": payload.get("email_confirmed_at"),
+                    "created_at": payload.get("created_at"),
                     "profile": profile,
                 }
 
-            return None
+            except Exception as e:
+                logger.error(f"Failed to decode JWT token: {str(e)}")
+                return None
 
         except Exception as e:
             logger.error(f"Failed to get current user: {str(e)}")
             return None
 
     async def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
-        """Refresh access token"""
+        """Refresh access token - Simple approach"""
         try:
+            # Use Supabase to refresh the token (this part works fine)
             response = self.supabase_client.auth.refresh_session(refresh_token)
 
             if response.session:

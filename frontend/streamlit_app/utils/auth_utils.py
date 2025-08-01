@@ -1,9 +1,12 @@
 import streamlit as st
 import requests
 import os
+import logging
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import json
+
+logger = logging.getLogger(__name__)
 
 
 class AuthManager:
@@ -93,7 +96,7 @@ class AuthManager:
             return {"success": False, "message": str(e)}
 
     def get_current_user(self) -> Optional[Dict[str, Any]]:
-        """Get current user information"""
+        """Get current user information - Simple JWT approach"""
         try:
             access_token = self._get_access_token()
             if not access_token:
@@ -106,17 +109,22 @@ class AuthManager:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException:
-            # Token might be expired, try to refresh
-            if self._refresh_token():
-                return self.get_current_user()
+            # Token might be expired - just return None, let user sign in again
+            logger.info("Token expired or invalid - user needs to sign in again")
             return None
 
     def is_authenticated(self) -> bool:
-        """Check if user is authenticated"""
+        """Check if user is authenticated - Simple approach"""
+        # Just check if we have tokens stored
         if not st.session_state.get("authenticated", False):
             return False
 
-        # Check if token is expired
+        # Check if we have an access token
+        access_token = st.session_state.get("access_token")
+        if not access_token:
+            return False
+
+        # Simple expiration check (optional - backend will validate anyway)
         expires_at = st.session_state.get("token_expires_at")
         if expires_at:
             try:
@@ -124,8 +132,9 @@ class AuthManager:
                     expires_at.replace("Z", "+00:00")
                 )
                 if datetime.now(expires_datetime.tzinfo) >= expires_datetime:
-                    # Token expired, try to refresh
-                    return self._refresh_token()
+                    # Token expired - clear auth state
+                    self._clear_auth_data()
+                    return False
             except:
                 pass
 
@@ -136,7 +145,7 @@ class AuthManager:
         return st.session_state.get("access_token")
 
     def _refresh_token(self) -> bool:
-        """Refresh access token"""
+        """Refresh access token - Manual refresh only"""
         try:
             refresh_token = st.session_state.get("refresh_token")
             if not refresh_token:

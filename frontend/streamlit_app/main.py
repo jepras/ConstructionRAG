@@ -1,8 +1,11 @@
 import streamlit as st
 import os
 import sys
+import logging
 from datetime import datetime
 from utils.auth_utils import init_auth
+
+logger = logging.getLogger(__name__)
 
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -333,17 +336,27 @@ def show_query_page():
         import requests
 
         try:
-            # Get auth token
-            session = auth_manager.get_session()
-            if not session:
-                st.error("❌ No active session found. Please sign in again.")
+            # Get auth token from session state
+            access_token = st.session_state.get("access_token")
+            if not access_token:
+                st.error("❌ No access token found. Please sign in again.")
                 return
 
             # Prepare headers with authentication
             headers = {
-                "Authorization": f"Bearer {session.access_token}",
+                "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             }
+
+            # Debug: Log the request details
+            logger.info(f"🔍 Making query API request...")
+            logger.info(
+                f"📡 URL: https://constructionrag-production.up.railway.app/api/query"
+            )
+            logger.info(f"📤 Headers: {headers}")
+            logger.info(
+                f"📤 Payload: {{'query': 'What is this construction project about?'}}"
+            )
 
             response = requests.post(
                 "https://constructionrag-production.up.railway.app/api/query",
@@ -351,6 +364,12 @@ def show_query_page():
                 headers=headers,
                 timeout=10,
             )
+
+            # Debug: Log the response details
+            logger.info(f"📥 Response status: {response.status_code}")
+            logger.info(f"📥 Response headers: {dict(response.headers)}")
+            logger.info(f"📥 Response content: {response.text}")
+
             if response.status_code == 200:
                 st.success("✅ Query API working!")
                 st.json(response.json())

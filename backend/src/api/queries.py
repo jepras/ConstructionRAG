@@ -24,7 +24,7 @@ from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/query", tags=["queries"])
+router = APIRouter(prefix="/query", tags=["queries"])
 
 
 # Pydantic models for API requests/responses
