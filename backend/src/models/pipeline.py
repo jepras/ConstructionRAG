@@ -78,7 +78,6 @@ class IndexingRun(BaseModel):
     """Indexing pipeline run model matching the indexing_runs table"""
 
     id: UUID = Field(description="Indexing run unique identifier")
-    document_id: UUID = Field(description="Associated document ID")
     upload_type: UploadType = Field(
         UploadType.USER_PROJECT, description="Type of upload"
     )
@@ -210,7 +209,6 @@ class PipelineRunUpdate(BaseModel):
 class IndexingRunCreate(BaseModel):
     """Model for creating a new indexing run"""
 
-    document_id: UUID
     upload_type: UploadType = UploadType.USER_PROJECT
     upload_id: Optional[str] = None
     project_id: Optional[UUID] = None
@@ -362,3 +360,23 @@ class EmailUploadUpdate(BaseModel):
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class IndexingRunDocument(BaseModel):
+    """Junction table model for indexing_run_documents"""
+
+    id: UUID = Field(description="Junction record unique identifier")
+    indexing_run_id: UUID = Field(description="Indexing run ID")
+    document_id: UUID = Field(description="Document ID")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+
+
+class IndexingRunDocumentCreate(BaseModel):
+    """Model for creating a new indexing run document relationship"""
+
+    indexing_run_id: UUID
+    document_id: UUID

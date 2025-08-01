@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
 from src.pipeline.querying.models import QueryRequest, QueryResponse, QueryFeedback
 from src.api.auth import get_current_user
-from src.config.database import get_supabase_admin_client
+from src.config.database import get_supabase_admin_client, get_supabase_client
 from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -114,7 +114,7 @@ async def get_query_history(
     current_user=Depends(get_current_user),
     limit: int = Query(20, ge=1, le=100, description="Number of queries to return"),
     offset: int = Query(0, ge=0, description="Number of queries to skip"),
-    db=Depends(get_supabase_admin_client),
+    db=Depends(get_supabase_client),
 ):
     """
     Get user's query history with pagination.
@@ -173,7 +173,7 @@ async def submit_query_feedback(
     query_id: str,
     feedback: QueryFeedback,
     current_user=Depends(get_current_user),
-    db=Depends(get_supabase_admin_client),
+    db=Depends(get_supabase_client),
 ):
     """
     Submit user feedback on query results.
@@ -239,7 +239,7 @@ async def submit_query_feedback(
 async def get_quality_dashboard(
     time_period: str = Query("7d", description="Time period: 1d, 7d, 30d"),
     current_user=Depends(get_current_user),
-    db=Depends(get_supabase_admin_client),
+    db=Depends(get_supabase_client),
 ):
     """
     Get admin quality dashboard metrics.

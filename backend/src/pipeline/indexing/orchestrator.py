@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 import logging
@@ -191,12 +192,12 @@ class IndexingOrchestrator:
 
             async def execute(self, input_data: Any) -> StepResult:
                 """Placeholder execution"""
-                start_time = time.time()
+                start_time = datetime.utcnow()
 
                 # Simulate processing time
                 await asyncio.sleep(1)
 
-                duration = time.time() - start_time
+                duration = (datetime.utcnow() - start_time).total_seconds()
 
                 return StepResult(
                     step=self.name,
@@ -206,6 +207,8 @@ class IndexingOrchestrator:
                     sample_outputs={
                         "placeholder": f"Placeholder output for {self.name}"
                     },
+                    started_at=start_time,
+                    completed_at=datetime.utcnow(),
                 )
 
             async def validate_prerequisites_async(self, input_data: Any) -> bool:
@@ -228,12 +231,17 @@ class IndexingOrchestrator:
 
             # Create indexing run in database
             indexing_run = await self.pipeline_service.create_indexing_run(
-                document_id=document_input.document_id,
-                user_id=document_input.user_id,
                 upload_type=document_input.upload_type,
                 upload_id=document_input.upload_id,
                 project_id=document_input.project_id,
             )
+
+            # Link document to indexing run
+            if document_input.document_id:
+                await self.pipeline_service.link_document_to_indexing_run(
+                    indexing_run_id=indexing_run.id,
+                    document_id=document_input.document_id,
+                )
 
             # Update DocumentInput with run_id for storage operations
             document_input.run_id = indexing_run.id
@@ -264,6 +272,14 @@ class IndexingOrchestrator:
 
             for step in self.steps:
                 step_executor = StepExecutor(step, progress_tracker)
+
+                # Debug logging to see what we're passing to each step
+                logger.info(
+                    f"🔍 Orchestrator passing to {step.get_step_name()}: type={type(current_data)}"
+                )
+                logger.info(
+                    f"🔍 Orchestrator passing to {step.get_step_name()}: {current_data}"
+                )
 
                 # Special handling for steps that need run information
                 if isinstance(step, ChunkingStep):
@@ -296,7 +312,24 @@ class IndexingOrchestrator:
                     return False
 
                 # Update current data for next step
-                current_data = result
+                # Pass the data field from StepResult, not the entire StepResult object
+                if hasattr(result, "data") and result.data is not None:
+                    current_data = result.data
+                    logger.info(
+                        f"🔍 Orchestrator passing result.data to next step: type={type(result.data)}"
+                    )
+                else:
+                    current_data = result
+                    logger.info(
+                        f"🔍 Orchestrator passing entire result to next step (no data field): type={type(result)}"
+                    )
+
+                logger.info(
+                    f"🔍 Orchestrator step {step.get_step_name()} returned: type={type(result)}"
+                )
+                logger.info(
+                    f"🔍 Orchestrator step {step.get_step_name()} returned: {result}"
+                )
                 logger.info(f"Completed step {step.get_step_name()}")
 
             # Mark indexing run as completed
@@ -378,8 +411,8 @@ async def get_indexing_orchestrator(
     progress_tracker: ProgressTracker = None,
 ) -> IndexingOrchestrator:
     """Get indexing orchestrator with all dependencies injected"""
-    # Create pipeline service if not provided
-    pipeline_service = PipelineService(db) if db else None
+    # Create pipeline service if not provided - use admin client for background operations
+    pipeline_service = PipelineService(use_admin_client=True) if db is None else None
 
     return IndexingOrchestrator(
         db, storage, config_manager, progress_tracker, pipeline_service

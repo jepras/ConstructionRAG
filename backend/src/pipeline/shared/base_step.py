@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel
 import time
 import asyncio
+from datetime import datetime
 from src.models import StepResult
 from .models import DocumentInput, PipelineError
 
@@ -52,22 +53,20 @@ class StepExecutor:
 
     async def execute_with_tracking(self, input_data: Any) -> StepResult:
         """Execute step with comprehensive error handling and progress tracking"""
-        start_time = time.time()
+        start_time = datetime.utcnow()
         step_name = self.step.get_step_name()
 
         try:
             # Validate prerequisites
             if not await self.step.validate_prerequisites_async(input_data):
-                raise PipelineError(
-                    f"Prerequisites not met for {step_name}", step=step_name
-                )
+                raise PipelineError(f"Prerequisites not met for {step_name}")
 
             # Execute step
             result = await self.step.execute(input_data)
 
             # Update timestamps
-            result.completed_at = time.time()
-            result.duration_seconds = result.completed_at - start_time
+            result.completed_at = datetime.utcnow()
+            result.duration_seconds = (result.completed_at - start_time).total_seconds()
 
             # Update progress if tracker available
             if self.progress_tracker:
@@ -82,10 +81,10 @@ class StepExecutor:
             error_result = StepResult(
                 step=step_name,
                 status="failed",
-                duration_seconds=time.time() - start_time,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__, "step": step_name},
-                completed_at=time.time(),
+                completed_at=datetime.utcnow(),
             )
 
             # Update progress if tracker available
@@ -107,7 +106,7 @@ class ExamplePartitionStep(PipelineStep):
 
         All dependencies are explicit, no side effects beyond return value.
         """
-        start_time = time.time()
+        start_time = datetime.utcnow()
 
         try:
             # Pure function call with explicit dependencies
@@ -120,7 +119,7 @@ class ExamplePartitionStep(PipelineStep):
             # Placeholder for actual implementation
             elements = []  # This would be the actual partitioned elements
 
-            duration = time.time() - start_time
+            duration = (datetime.utcnow() - start_time).total_seconds()
 
             return StepResult(
                 step="partition",
@@ -149,15 +148,18 @@ class ExamplePartitionStep(PipelineStep):
                 sample_outputs={
                     "sample_elements": [str(e)[:200] + "..." for e in elements[:3]]
                 },
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
         except Exception as e:
             return StepResult(
                 step="partition",
                 status="failed",
-                duration_seconds=time.time() - start_time,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
+                completed_at=datetime.utcnow(),
             )
 
     async def validate_prerequisites_async(self, input_data: DocumentInput) -> bool:

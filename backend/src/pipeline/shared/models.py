@@ -21,7 +21,9 @@ class DocumentInput(BaseModel):
     run_id: UUID = Field(description="Pipeline run unique identifier")
     file_path: str = Field(description="Path to the document file")
     filename: str = Field(description="Original filename")
-    user_id: UUID = Field(description="User who uploaded the document")
+    user_id: Optional[UUID] = Field(
+        None, description="User who uploaded the document (None for email uploads)"
+    )
     upload_type: UploadType = Field(description="Type of upload")
     upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
     project_id: Optional[UUID] = Field(None, description="Project ID for user projects")

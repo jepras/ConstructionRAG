@@ -636,10 +636,12 @@ class ChunkingStep(PipelineStep):
                         "validation": validation,
                     },
                 },
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.utcnow() - start_time).total_seconds()
             logger.error(f"Chunking step failed: {str(e)}")
 
             return StepResult(
@@ -648,6 +650,8 @@ class ChunkingStep(PipelineStep):
                 duration_seconds=duration,
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
     async def store_chunks_in_database(

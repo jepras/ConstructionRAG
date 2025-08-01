@@ -428,6 +428,12 @@ class MetadataStep(PipelineStep):
         start_time = datetime.utcnow()
 
         try:
+            # Debug logging to see what we're receiving in execute
+            logger.info(
+                f"🔍 MetadataStep execute received input_data type: {type(input_data)}"
+            )
+            logger.info(f"🔍 MetadataStep execute received input_data: {input_data}")
+
             logger.info("Starting metadata step for partition data")
 
             # Handle input data - could be StepResult from partition step, raw data, or indexing run ID
@@ -659,9 +665,20 @@ class MetadataStep(PipelineStep):
     async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate metadata step prerequisites"""
         try:
+            # Debug logging to see what we're receiving
+            logger.info(
+                f"🔍 MetadataStep validate_prerequisites_async received input_data type: {type(input_data)}"
+            )
+            logger.info(
+                f"🔍 MetadataStep validate_prerequisites_async received input_data: {input_data}"
+            )
+
             # Check if input_data contains partition results
             if not isinstance(input_data, dict):
                 logger.error("Input data is not a dictionary")
+                logger.error(
+                    f"Expected dict, got {type(input_data)} with value: {input_data}"
+                )
                 return False
 
             # Check for required keys from partition step

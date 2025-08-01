@@ -135,9 +135,11 @@ class EmbeddingStep(PipelineStep):
                 return StepResult(
                     step="embedding",
                     status="completed",
-                    duration_seconds=(datetime.now() - start_time).total_seconds(),
+                    duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                     data={"chunks_processed": 0, "embeddings_generated": 0},
                     summary_stats={"total_chunks": 0, "embeddings_generated": 0},
+                    started_at=start_time,
+                    completed_at=datetime.utcnow(),
                 )
 
             logger.info(f"Found {len(chunks_to_embed)} chunks that need embedding")
@@ -157,7 +159,7 @@ class EmbeddingStep(PipelineStep):
             index_verification = await self.verify_final_indexes(indexing_run_id)
 
             # Calculate duration
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.utcnow() - start_time).total_seconds()
 
             # Create summary statistics
             summary_stats = {
@@ -205,10 +207,12 @@ class EmbeddingStep(PipelineStep):
                 },
                 summary_stats=summary_stats,
                 sample_outputs=sample_outputs,
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.utcnow() - start_time).total_seconds()
             logger.error(f"Embedding step failed: {str(e)}")
 
             return StepResult(
@@ -217,6 +221,8 @@ class EmbeddingStep(PipelineStep):
                 duration_seconds=duration,
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
     async def get_chunks_for_embedding(

@@ -95,21 +95,37 @@ async def upload_email_pdf(
         await storage_service.create_storage_structure(
             upload_type=UploadType.EMAIL,
             upload_id=upload_id,
-            index_run_id=UUID(index_run_id)
+            index_run_id=UUID(index_run_id),
         )
 
-        # Create temporary file
+        # Get file content
+        content = await file.read()
+
+        # Upload to Supabase Storage using new structure
+        storage_path = (
+            f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
+        )
+
+        # Create a temporary file just for upload (will be cleaned up immediately)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
 
         try:
-            # Upload to Supabase Storage using new structure
-            storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
-            public_url = await storage_service.upload_file(
+            upload_result = await storage_service.upload_file(
                 file_path=temp_file_path, storage_path=storage_path
             )
+            # Extract the signed URL from the response
+            if isinstance(upload_result, dict) and "signedURL" in upload_result:
+                public_url = upload_result["signedURL"]
+            elif isinstance(upload_result, dict) and "signedUrl" in upload_result:
+                public_url = upload_result["signedUrl"]
+            else:
+                public_url = str(upload_result)
+        finally:
+            # Clean up temp file immediately after upload
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
 
             # Create index run record
             index_run_data = {
@@ -119,7 +135,7 @@ async def upload_email_pdf(
                 "status": "processing",
                 "created_at": "now()",
             }
-            
+
             db.table("indexing_runs").insert(index_run_data).execute()
 
             # Store in email_uploads table
@@ -144,7 +160,7 @@ async def upload_email_pdf(
                 upload_id=upload_id,
                 index_run_id=index_run_id,
                 email=email,
-                file_path=temp_file_path,
+                storage_url=public_url,  # Pass storage URL instead of file path
                 filename=file.filename,
             )
 
@@ -156,11 +172,6 @@ async def upload_email_pdf(
                 message="PDF uploaded successfully. Processing started.",
                 expires_at=result.data[0]["expires_at"],
             )
-
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
 
     except StorageError as e:
         logger.error(f"Storage error during email upload: {e}")
@@ -222,8 +233,10 @@ async def upload_project_document(
         raise HTTPException(400, "File size must be less than 50MB")
 
     try:
-        # Initialize services
-        db = get_supabase_admin_client()
+        # Initialize services - use regular client for user project operations
+        from src.config.database import get_supabase_client
+
+        db = get_supabase_client()
         storage_service = StorageService()
         pipeline_service = PipelineService()
 
@@ -356,7 +369,9 @@ async def get_project_documents(
     """Get list of documents in a project"""
 
     try:
-        db = get_supabase_admin_client()
+        from src.config.database import get_supabase_client
+
+        db = get_supabase_client()
 
         # Verify user owns project
         project_result = (
@@ -410,7 +425,9 @@ async def get_project_document(
     """Get specific document details"""
 
     try:
-        db = get_supabase_admin_client()
+        from src.config.database import get_supabase_client
+
+        db = get_supabase_client()
 
         # Verify user owns project and document
         document_result = (
@@ -454,7 +471,9 @@ async def delete_project_document(
     """Delete a document from a project"""
 
     try:
-        db = get_supabase_admin_client()
+        from src.config.database import get_supabase_client
+
+        db = get_supabase_client()
 
         # Verify user owns project and document
         document_result = (
@@ -487,25 +506,40 @@ async def delete_project_document(
 
 
 async def process_email_upload_async(
-    upload_id: str, index_run_id: str, email: str, file_path: str, filename: str
+    upload_id: str, index_run_id: str, email: str, storage_url: str, filename: str
 ):
     """Background processing for email uploads"""
 
     try:
-        logger.info(f"Starting email upload processing for {upload_id} (index run: {index_run_id})")
+        logger.info(
+            f"Starting email upload processing for {upload_id} (index run: {index_run_id})"
+        )
 
         # Initialize services
         storage_service = StorageService()
         db = get_supabase_admin_client()
 
+        # Create document record for email upload
+        document_id = str(uuid4())
+        document_data = {
+            "id": document_id,
+            "user_id": None,  # No user for email uploads
+            "filename": filename,
+            "file_size": 0,  # We don't have file size from URL, set to 0
+            "status": "processing",
+            "upload_type": "email",
+            "upload_id": upload_id,
+            "index_run_id": index_run_id,
+        }
+
+        db.table("documents").insert(document_data).execute()
+
         # Create document input for pipeline
         document_input = DocumentInput(
-            document_id=UUID(
-                upload_id
-            ),  # Use upload_id as document_id for email uploads
+            document_id=UUID(document_id),  # Use the created document ID
             run_id=UUID(index_run_id),  # Use the actual index run ID
             user_id=None,  # No user for email uploads
-            file_path=file_path,
+            file_path=storage_url,  # Use storage URL as file path
             filename=filename,
             upload_type=UploadType.EMAIL,
             upload_id=upload_id,
@@ -551,13 +585,14 @@ async def process_email_upload_async(
             db.table("email_uploads").update(
                 {"status": "failed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
-            
+
             # Update indexing_runs table with error
             db.table("indexing_runs").update(
                 {"status": "failed", "completed_at": "now()"}
             ).eq("id", index_run_id).execute()
         except:
             pass
+    # No file cleanup needed since we're using storage URLs
 
 
 async def process_project_document_async(

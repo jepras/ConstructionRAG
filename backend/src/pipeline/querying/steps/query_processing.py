@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 import os
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
@@ -9,6 +10,7 @@ from langchain_core.messages import HumanMessage
 
 from ..models import QueryVariations
 from ...shared.base_step import PipelineStep
+from src.models import StepResult
 from src.config.settings import get_settings
 
 
@@ -208,11 +210,10 @@ Svar kun med det omskrevne spørgsmål:"""
         # TODO: Implement selection logic
         return variations.original
 
-    async def execute(self, input_data: str) -> "StepResult":
+    async def execute(self, input_data: str) -> StepResult:
         """Execute the query processing step"""
-        from ...shared.base_step import StepResult
 
-        start_time = time.time()
+        start_time = datetime.utcnow()
 
         try:
             variations = await self.process(input_data)
@@ -220,7 +221,7 @@ Svar kun med det omskrevne spørgsmål:"""
             return StepResult(
                 step="query_processing",
                 status="completed",
-                duration_seconds=time.time() - start_time,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
                     "original_query": variations.original,
                     "variations_generated": 3,
@@ -229,14 +230,18 @@ Svar kun med det omskrevne spørgsmål:"""
                     "has_formal": variations.formal is not None,
                 },
                 sample_outputs={"variations": variations.dict()},
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
         except Exception as e:
             return StepResult(
                 step="query_processing",
                 status="failed",
-                duration_seconds=time.time() - start_time,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
     async def validate_prerequisites_async(self, input_data: str) -> bool:

@@ -344,19 +344,7 @@ class StorageService:
                     f"{base_path}/temp/embedding",
                 ]
 
-            # Create placeholder files to establish folder structure
-            for folder in folders:
-                placeholder_path = f"{folder}/.placeholder"
-                try:
-                    await self.upload_file(
-                        file_path=None,  # Will create empty file
-                        storage_path=placeholder_path,
-                        content_type="text/plain",
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not create placeholder for {folder}: {e}")
-
-            logger.info(f"Created storage structure for {upload_type.value}")
+            logger.info(f"Storage structure paths defined for {upload_type.value}")
             return True
 
         except Exception as e:

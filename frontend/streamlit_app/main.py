@@ -266,6 +266,18 @@ def show_upload_page():
         user = user_info["user"]
         st.success(f"✅ Signed in as: {user.get('email', 'N/A')}")
 
+    # Email input field
+    email = st.text_input(
+        "Email Address",
+        value=user.get("email", "") if user_info and user_info.get("user") else "",
+        help="Enter the email address for processing notifications",
+        placeholder="your.email@example.com",
+    )
+
+    if not email:
+        st.warning("⚠️ Please enter an email address to continue.")
+        return
+
     # File uploader
     uploaded_files = st.file_uploader(
         "Choose PDF files",
@@ -316,15 +328,19 @@ def show_upload_page():
                                 "file": (file.name, file.getvalue(), "application/pdf")
                             }
 
+                            # Prepare form data with email
+                            data = {"email": email}
+
                             # Log upload attempt
                             logger.info(
-                                f"📤 Uploading file: {file.name} ({file.size} bytes)"
+                                f"📤 Uploading file: {file.name} ({file.size} bytes) to email: {email}"
                             )
 
-                            # Upload to email-uploads endpoint (simpler for now)
+                            # Upload to email-uploads endpoint
                             response = requests.post(
                                 f"{backend_url}/api/email-uploads",
                                 files=files,
+                                data=data,
                                 headers=headers,
                                 timeout=30,
                             )

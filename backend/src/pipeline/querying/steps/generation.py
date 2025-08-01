@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 import httpx
 from pydantic import BaseModel
@@ -68,6 +69,8 @@ class ResponseGenerator(PipelineStep):
                     "sources_count": len(response.search_results),
                     "response": response.dict(),
                 },
+                started_at=datetime.utcnow(),
+                completed_at=datetime.utcnow(),
             )
 
         except Exception as e:
@@ -78,6 +81,8 @@ class ResponseGenerator(PipelineStep):
                 duration_seconds=0.0,
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
+                started_at=datetime.utcnow(),
+                completed_at=datetime.utcnow(),
             )
 
     async def generate_response(

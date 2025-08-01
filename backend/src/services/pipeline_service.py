@@ -35,16 +35,13 @@ class PipelineService:
 
     async def create_indexing_run(
         self,
-        document_id: UUID,
-        user_id: UUID,
         upload_type: UploadType = UploadType.USER_PROJECT,
         upload_id: Optional[str] = None,
         project_id: Optional[UUID] = None,
     ) -> IndexingRun:
-        """Create a new indexing run for a document."""
+        """Create a new indexing run."""
         try:
             indexing_run_data = IndexingRunCreate(
-                document_id=document_id,
                 upload_type=upload_type,
                 upload_id=upload_id,
                 project_id=project_id,
@@ -53,7 +50,6 @@ class PipelineService:
 
             # Convert UUIDs to strings for JSON serialization
             data_dict = indexing_run_data.model_dump()
-            data_dict["document_id"] = str(data_dict["document_id"])
             if data_dict.get("project_id"):
                 data_dict["project_id"] = str(data_dict["project_id"])
 
@@ -67,6 +63,39 @@ class PipelineService:
         except Exception as e:
             logger.error(f"Error creating indexing run: {e}")
             raise DatabaseError(f"Failed to create indexing run: {str(e)}")
+
+    async def link_document_to_indexing_run(
+        self,
+        indexing_run_id: UUID,
+        document_id: UUID,
+    ) -> bool:
+        """Link a document to an indexing run."""
+        try:
+            from src.models.pipeline import IndexingRunDocumentCreate
+
+            link_data = IndexingRunDocumentCreate(
+                indexing_run_id=indexing_run_id,
+                document_id=document_id,
+            )
+
+            data_dict = link_data.model_dump()
+            data_dict["indexing_run_id"] = str(data_dict["indexing_run_id"])
+            data_dict["document_id"] = str(data_dict["document_id"])
+
+            result = (
+                self.supabase.table("indexing_run_documents")
+                .insert(data_dict)
+                .execute()
+            )
+
+            if not result.data:
+                raise DatabaseError("Failed to link document to indexing run")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error linking document to indexing run: {e}")
+            raise DatabaseError(f"Failed to link document to indexing run: {str(e)}")
 
     async def create_project(
         self, user_id: UUID, name: str, description: Optional[str] = None

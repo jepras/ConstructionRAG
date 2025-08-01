@@ -92,7 +92,7 @@ class DocumentRetriever(PipelineStep):
         """Execute the retrieval step"""
         from ...shared.base_step import StepResult
 
-        start_time = time.time()
+        start_time = datetime.utcnow()
 
         try:
             # Search documents using query variations
@@ -101,7 +101,7 @@ class DocumentRetriever(PipelineStep):
             return StepResult(
                 step="retrieval",
                 status="completed",
-                duration_seconds=time.time() - start_time,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
                     "total_results": len(results),
                     "query_variations": 3,
@@ -112,14 +112,18 @@ class DocumentRetriever(PipelineStep):
                 sample_outputs={
                     "search_results": [result.dict() for result in results]
                 },
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
         except Exception as e:
             return StepResult(
                 step="retrieval",
                 status="failed",
-                duration_seconds=time.time() - start_time,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
             )
 
     async def search(self, variations: QueryVariations) -> List[SearchResult]:
