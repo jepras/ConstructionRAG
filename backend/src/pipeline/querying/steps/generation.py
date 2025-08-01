@@ -4,8 +4,8 @@ from typing import List, Dict, Any, Optional
 import httpx
 from pydantic import BaseModel
 
-from pipeline.shared.base_step import PipelineStep, StepResult
-from pipeline.querying.models import (
+from ...shared.base_step import PipelineStep, StepResult
+from ..models import (
     SearchResult,
     QueryResponse,
     QualityMetrics,

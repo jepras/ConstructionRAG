@@ -8,8 +8,8 @@ from uuid import UUID
 import httpx
 from supabase import Client
 
-from pipeline.querying.models import SearchResult, QueryVariations
-from pipeline.shared.base_step import PipelineStep
+from ..models import SearchResult, QueryVariations
+from ...shared.base_step import PipelineStep
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 
@@ -90,7 +90,7 @@ class DocumentRetriever(PipelineStep):
 
     async def execute(self, input_data: QueryVariations) -> "StepResult":
         """Execute the retrieval step"""
-        from pipeline.shared.base_step import StepResult
+        from ...shared.base_step import StepResult
 
         start_time = time.time()
 

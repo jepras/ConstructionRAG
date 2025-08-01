@@ -12,7 +12,7 @@ from uuid import UUID
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from config.database import get_supabase_admin_client
-from pipeline.indexing.steps.metadata import MetadataStep
+from src.pipeline.indexing.steps.metadata import MetadataStep
 
 
 class AdminPipelineService:

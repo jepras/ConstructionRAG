@@ -475,15 +475,7 @@ class PyMuPDFOnlyPartitioner:
     def _table_to_html(self, table_data):
         """Convert PyMuPDF table to HTML - improved version"""
         try:
-            # Method 1: Try to get HTML directly from table
-            html = table_data.to_html()
-            if html and html.strip():
-                return html
-        except Exception as e:
-            print(f"    ⚠️  Direct HTML extraction failed: {e}")
-
-        try:
-            # Method 2: Convert to pandas DataFrame and then to HTML
+            # Method 1: Convert to pandas DataFrame and then to HTML (primary method)
             df = table_data.to_pandas()
             if not df.empty:
                 html = df.to_html(
@@ -494,7 +486,7 @@ class PyMuPDFOnlyPartitioner:
             print(f"    ⚠️  Pandas HTML conversion failed: {e}")
 
         try:
-            # Method 3: Extract raw text and create simple HTML table
+            # Method 2: Extract raw text and create simple HTML table
             text = table_data.extract()
             if text and text.strip():
                 # Split by lines and create table structure
@@ -529,7 +521,7 @@ class PyMuPDFOnlyPartitioner:
         except Exception as e:
             print(f"    ⚠️  Text-to-HTML conversion failed: {e}")
 
-        # Method 4: Fallback - simple table with raw text
+        # Method 3: Fallback - simple table with raw text
         try:
             text = table_data.extract()
             if text:
@@ -703,6 +695,16 @@ def save_pymupdf_only_data(combined_data, pickle_path, json_path):
                 },
             }
             for elem in combined_data["text_elements"]
+        ],
+        "table_elements": [
+            {
+                "id": table["id"],
+                "category": table["category"],
+                "page": table["page"],
+                "text": table["text"],
+                "metadata": table["metadata"],
+            }
+            for table in combined_data["table_elements"]
         ],
         "table_locations": [
             {

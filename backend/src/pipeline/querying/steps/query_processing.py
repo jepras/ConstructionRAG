@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
-from pipeline.querying.models import QueryVariations
-from pipeline.shared.base_step import PipelineStep
+from ..models import QueryVariations
+from ...shared.base_step import PipelineStep
 from src.config.settings import get_settings
 
 
@@ -210,7 +210,7 @@ Svar kun med det omskrevne spørgsmål:"""
 
     async def execute(self, input_data: str) -> "StepResult":
         """Execute the query processing step"""
-        from pipeline.shared.base_step import StepResult
+        from ...shared.base_step import StepResult
 
         start_time = time.time()
 

@@ -7,15 +7,15 @@ from typing import Dict, Any, Optional, List
 from uuid import uuid4
 from datetime import datetime
 
-from pipeline.shared.base_step import PipelineStep, StepResult
-from pipeline.shared.progress_tracker import ProgressTracker
-from pipeline.querying.steps.query_processing import (
+from ..shared.base_step import PipelineStep, StepResult
+from ..shared.progress_tracker import ProgressTracker
+from .steps.query_processing import (
     QueryProcessor,
     QueryProcessingConfig,
 )
-from pipeline.querying.steps.retrieval import DocumentRetriever, RetrievalConfig
-from pipeline.querying.steps.generation import ResponseGenerator, GenerationConfig
-from pipeline.querying.models import (
+from .steps.retrieval import DocumentRetriever, RetrievalConfig
+from .steps.generation import ResponseGenerator, GenerationConfig
+from .models import (
     QueryVariations,
     QueryResponse,
     QueryRequest,
