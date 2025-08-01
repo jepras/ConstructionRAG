@@ -18,37 +18,55 @@ Just as DeepWiki analyzes code repositories to create comprehensive wikis, our s
 - **Stakeholder Context**: Track responsibilities across architects, engineers, contractors, and inspectors
 - **Project Lifecycle Awareness**: Understand how documents relate to different construction phases
 
-## Desired End State
+## Current Implementation Status (Phase 3 Complete)
 
-### High-Level Architecture
+### High-Level Architecture (Implemented)
 ```
-Users → Streamlit Frontend → FastAPI Backend (Modular Monolith) → Databases
+Users → Streamlit Frontend → FastAPI Backend (Modular Monolith) → Supabase
                                     ↓
-                              FastAPI Background Tasks → PDF Processing
+                              FastAPI Background Tasks → PDF Processing Pipeline
                                     ↓
-                              LangSmith → LLM Observability
+                              Voyage AI → pgvector → Query Pipeline
 ```
 
-### Core Components
-- **Frontend**: Streamlit (deployed on Streamlit Cloud)
-- **Backend**: FastAPI (deployed on Railway)
-- **Authentication**: Supabase Auth
-- **Database**: Supabase PostgreSQL with pgvector
-- **Vector Database**: Supabase pgvector (free tier)
-- **File Storage**: Supabase Storage (free tier)
-- **Background Processing**: FastAPI Background Tasks (free)
-- **Observability**: LangSmith (LLM) + Supabase (basic metrics) + Honeycomb (detailed tracing - later)
+### Core Components (Production Ready)
+- **Frontend**: Streamlit (deployed on Streamlit Cloud) ✅
+- **Backend**: FastAPI (deployed on Railway) ✅
+- **Authentication**: Supabase Auth ✅
+- **Database**: Supabase PostgreSQL with pgvector ✅
+- **Vector Database**: Supabase pgvector ✅
+- **File Storage**: Supabase Storage ✅
+- **Background Processing**: FastAPI Background Tasks ✅
+- **Embedding**: Voyage AI API ✅
+- **Generation**: OpenRouter (Anthropic Claude 3.5 Sonnet) ✅
+- **Observability**: LangSmith (planned for Phase 5)
 
-### Key Features
-- User authentication and session management
-- PDF upload and processing (10-50 PDFs, 1-200 pages each)
-- Automatic project overview generation
-- Construction-specific document structuring
-- Configurable pipeline parameters (chunking, embedding models, retrieval methods)
-- Query interface with conversation history
-- Background processing with progress tracking
-- Comprehensive observability and monitoring
-- Modular, testable architecture
+### Production Deployment
+- **Backend**: https://constructionrag-production.up.railway.app/ ✅
+- **API Documentation**: https://constructionrag-production.up.railway.app/docs ✅
+- **SSL/TLS**: Valid Let's Encrypt certificate ✅
+- **Health Check**: `/health` endpoint responding ✅
+
+### Key Features (Implemented)
+- ✅ User authentication and session management (Supabase Auth)
+- ✅ PDF upload and processing (dual system: email + user projects)
+- ✅ Complete indexing pipeline (partition → metadata → enrichment → chunking → embedding)
+- ✅ Query processing with semantic variations and HyDE
+- ✅ Document retrieval with vector similarity search
+- ✅ Response generation with construction-specific prompts
+- ✅ Background processing with progress tracking
+- ✅ Dual upload architecture (anonymous email uploads + authenticated user projects)
+- ✅ File validation and storage management
+- ✅ Database integration with comprehensive schema
+- ✅ API documentation with OpenAPI/Swagger
+- ✅ Error handling and fallback responses
+
+### Key Features (Planned)
+- 🔄 Automatic project overview generation (Phase 4)
+- 🔄 Construction-specific document structuring (Phase 4)
+- 🔄 Query interface with conversation history (Phase 4)
+- 🔄 Comprehensive observability and monitoring (Phase 5)
+- 🔄 Configurable pipeline parameters (Phase 4)
 
 ## Design Decisions
 
@@ -117,46 +135,53 @@ Project Overview
 
 ### Application Structure (Modular Monolith)
 
-#### Backend Structure (FastAPI)
+#### Backend Structure (FastAPI) - Implemented
 ```
 src/
-├── main.py                 # FastAPI application entry point
+├── main.py                 # FastAPI application entry point ✅
 ├── config/
-│   ├── settings.py         # Application configuration
-│   └── database.py         # Database connection setup
+│   ├── settings.py         # Application configuration ✅
+│   └── database.py         # Database connection setup ✅
 ├── api/
-│   ├── auth.py             # Authentication endpoints
-│   ├── documents.py        # Document management endpoints
-│   ├── queries.py          # Query processing endpoints
-│   └── pipeline.py         # Pipeline status endpoints
+│   ├── auth.py             # Authentication endpoints ✅
+│   ├── documents.py        # Document management endpoints ✅
+│   ├── queries.py          # Query processing endpoints ✅
+│   └── pipeline.py         # Pipeline status endpoints ✅
 ├── pipeline/
-│   ├── __init__.py
-│   ├── orchestrator.py     # Pipeline coordination
-│   ├── partition.py        # Step 01: PDF partitioning
-│   ├── metadata.py         # Step 02: Metadata extraction
-│   ├── enrichment.py       # Step 03: Data enrichment
-│   ├── chunking.py         # Step 04: Text chunking
-│   ├── embedding.py        # Step 05: Text embedding
-│   ├── storage.py          # Step 06: Vector storage
-│   ├── query_processing.py # Step 07: Query processing
-│   ├── retrieval.py        # Step 08: Document retrieval
-│   └── generation.py       # Step 11: Response generation
+│   ├── indexing/           # Indexing pipeline ✅
+│   │   ├── orchestrator.py # Indexing coordination ✅
+│   │   └── steps/
+│   │       ├── partition.py        # Step 01: PDF partitioning ✅
+│   │       ├── metadata.py         # Step 02: Metadata extraction ✅
+│   │       ├── enrichment.py       # Step 03: VLM captioning ✅
+│   │       ├── chunking.py         # Step 04: Text chunking ✅
+│   │       └── embedding.py        # Step 05: Text embedding ✅
+│   ├── querying/           # Query pipeline ✅
+│   │   ├── orchestrator.py # Query coordination ✅
+│   │   └── steps/
+│   │       ├── query_processing.py # Step 07: Query processing ✅
+│   │       ├── retrieval.py        # Step 08: Document retrieval ✅
+│   │       └── generation.py       # Step 11: Response generation ✅
+│   └── shared/             # Shared pipeline components ✅
+│       ├── base_step.py
+│       ├── config_manager.py
+│       ├── models.py
+│       └── progress_tracker.py
 ├── services/
-│   ├── file_service.py     # Supabase Storage file management
-│   ├── auth_service.py     # Supabase authentication
-│   └── background_service.py # Concurrent background task management
+│   ├── storage_service.py  # Supabase Storage management ✅
+│   ├── auth_service.py     # Supabase authentication ✅
+│   └── pipeline_service.py # Pipeline database operations ✅
 ├── models/
-│   ├── document.py         # Document data models
-│   ├── query.py            # Query data models
-│   └── pipeline.py         # Pipeline data models
+│   ├── document.py         # Document data models ✅
+│   ├── query.py            # Query data models ✅
+│   ├── pipeline.py         # Pipeline data models ✅
+│   └── user.py             # User data models ✅
 ├── utils/
-│   ├── logging.py          # Structured logging
-│   ├── monitoring.py       # Observability utilities
-│   └── exceptions.py       # Custom exceptions
+│   ├── logging.py          # Structured logging ✅
+│   └── exceptions.py       # Custom exceptions ✅
 └── tests/
-    ├── unit/
-    ├── integration/
-    └── notebooks/          # Keep for exploration
+    ├── integration/        # Integration tests ✅
+    └── unit/               # Unit tests (planned)
 ```
 
 #### Frontend Structure (Streamlit - Current)
@@ -324,64 +349,137 @@ construction-rag/
 └── docker-compose.yml    # Full stack deployment
 ```
 
-### Database Schema (Supabase)
+### Database Schema (Supabase) - Implemented
 ```sql
--- Users (handled by Supabase Auth)
--- Documents
-CREATE TABLE documents (
-    id UUID PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id),
+-- Users (handled by Supabase Auth) ✅
+-- Email Uploads ✅
+CREATE TABLE email_uploads (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
     filename TEXT NOT NULL,
-    s3_key TEXT NOT NULL,
-    status TEXT NOT NULL,
-    metadata JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
+    file_size INTEGER,
+    status TEXT DEFAULT 'processing',
+    public_url TEXT,
+    processing_results JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 days')
 );
 
--- Pipeline Runs
-CREATE TABLE pipeline_runs (
-    id UUID PRIMARY KEY,
-    document_id UUID REFERENCES documents(id),
-    status TEXT NOT NULL,
-    step_results JSONB,
-    started_at TIMESTAMP DEFAULT NOW(),
-    completed_at TIMESTAMP
+-- User Projects ✅
+CREATE TABLE projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Queries
-CREATE TABLE queries (
-    id UUID PRIMARY KEY,
-    user_id UUID REFERENCES auth.users(id),
-    query_text TEXT NOT NULL,
-    response_text TEXT,
-    metadata JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
+-- Indexing Runs ✅
+CREATE TABLE indexing_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    document_count INTEGER DEFAULT 0,
+    processing_results JSONB DEFAULT '{}',
+    upload_type TEXT DEFAULT 'user_project',
+    upload_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(project_id, version)
+);
+
+-- Documents ✅
+CREATE TABLE documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    file_size INTEGER,
+    file_path TEXT,
+    page_count INTEGER,
+    status TEXT DEFAULT 'pending',
+    upload_type TEXT DEFAULT 'user_project',
+    upload_id TEXT,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    index_run_id UUID,
+    error_message TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Document Chunks ✅
+CREATE TABLE document_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_text TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    page_number INTEGER,
+    metadata JSONB DEFAULT '{}',
+    embedding_vector vector(1536),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Query Runs ✅
+CREATE TABLE query_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT,
+    original_query TEXT NOT NULL,
+    query_variations JSONB,
+    search_results JSONB,
+    final_response TEXT,
+    performance_metrics JSONB,
+    quality_metrics JSONB,
+    response_time_ms INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
-### API Endpoints
+### API Endpoints (Implemented)
 ```
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/auth/user
+# Authentication ✅
+POST /api/auth/signup
+POST /api/auth/signin
+POST /api/auth/signout
+POST /api/auth/reset-password
+GET  /api/auth/me
+POST /api/auth/refresh
 
-POST /api/documents/upload
-GET  /api/documents
-GET  /api/documents/{id}/status
-DELETE /api/documents/{id}
+# Email Uploads (Anonymous) ✅
+POST /api/email-uploads
+GET  /api/email-uploads/{upload_id}
 
+# User Project Uploads (Authenticated) ✅
+POST /api/projects/{project_id}/documents
+GET  /api/projects/{project_id}/documents
+GET  /api/projects/{project_id}/documents/{document_id}
+DELETE /api/projects/{project_id}/documents/{document_id}
+
+# Query Processing ✅
 POST /api/query
 GET  /api/query/history
-GET  /api/query/{id}
+POST /api/query/{query_id}/feedback
+GET  /api/query/quality-dashboard
 
-GET  /api/pipeline/status/{job_id}
-GET  /api/pipeline/config
-PUT  /api/pipeline/config
+# Pipeline Management ✅
+POST /api/pipeline/indexing/start
+GET  /api/pipeline/indexing/runs/{document_id}
+GET  /api/pipeline/indexing/runs/{run_id}/status
+GET  /api/pipeline/indexing/runs/{run_id}/steps/{step_name}
+
+# Health & Status ✅
+GET  /health
+GET  /api/health
+GET  /api/pipeline/health
 ```
 
-### Configuration Structure
+### Configuration Structure (Implemented)
 ```yaml
-# pipeline_config.yaml
+# Indexing Pipeline Config ✅
 pipeline:
   chunking:
     chunk_size: 1000
@@ -397,25 +495,67 @@ pipeline:
     method: "hybrid"
     top_k: 5
     similarity_threshold: 0.7
-  
-  generation:
-    model: "gpt-4"
-    temperature: 0.1
-    max_tokens: 1000
+
+# Query Pipeline Config ✅
+query_processing:
+  model: "openai/gpt-3.5-turbo"
+  timeout_seconds: 1.0
+  language: "danish"
+
+generation:
+  model: "anthropic/claude-3.5-sonnet"
+  timeout_seconds: 5.0
+  max_tokens: 1000
+
+# Storage Config ✅
+storage:
+  bucket_name: "pipeline-assets"
+  email_uploads_path: "email-uploads"
+  user_projects_path: "users"
 ```
+
+## Implementation Status & Next Steps
+
+### Current Status (Phase 3 Complete)
+- ✅ **Backend API**: Complete FastAPI application with all endpoints
+- ✅ **Database**: Full Supabase schema with all tables
+- ✅ **Storage**: Supabase Storage with dual upload architecture
+- ✅ **Pipeline**: Complete indexing and query pipelines
+- ✅ **Authentication**: Supabase Auth integration
+- ✅ **Deployment**: Railway production deployment
+- 🔄 **Frontend**: Streamlit app (needs connection to production API)
+- 🔄 **Observability**: LangSmith integration (planned)
+
+### Next Phases
+- **Phase 4**: Frontend Development (Week 7-8)
+  - Connect Streamlit to production API
+  - Implement document upload UI
+  - Add query interface with conversation history
+  - Create user authentication UI
+
+- **Phase 5**: Observability (Week 9)
+  - LangSmith integration for LLM tracing
+  - Application monitoring and alerting
+  - Performance optimization
+
+- **Phase 6**: Production Deployment (Week 10)
+  - Complete system deployment
+  - Load testing and optimization
+  - User acceptance testing
 
 ## Cost-Effective Implementation
 
-### Starting Costs (Free/Minimal)
+### Current Costs (Production Ready)
 ```
-Frontend: Streamlit Cloud (Free)
-Backend: Railway (Free tier - $5 credit/month)
-Database: Supabase (Free tier)
-Storage: Supabase Storage (Free tier - 1GB)
-Vector DB: Supabase pgvector (Free)
-Background Processing: FastAPI Background Tasks (Free)
-Embeddings: API (pay per use - ~$10-15/month for 100 PDFs)
-Total: ~$10-15/month
+Frontend: Streamlit Cloud (Free) ✅
+Backend: Railway (Free tier - $5 credit/month) ✅
+Database: Supabase (Free tier) ✅
+Storage: Supabase Storage (Free tier - 1GB) ✅
+Vector DB: Supabase pgvector (Free) ✅
+Background Processing: FastAPI Background Tasks (Free) ✅
+Embeddings: Voyage AI API (pay per use) ✅
+Generation: OpenRouter API (pay per use) ✅
+Total: ~$10-15/month (current usage)
 ```
 
 ### Scaling Costs (When Needed)

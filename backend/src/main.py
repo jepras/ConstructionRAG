@@ -74,13 +74,15 @@ try:
 except Exception as e:
     raise
 
+try:
+    from src.api import documents
+except Exception as e:
+    raise
+
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])
 app.include_router(queries.router, prefix="/api", tags=["Queries"])
-
-# Additional routers (will be added later)
-# from api import documents
-# app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
+app.include_router(documents.router, tags=["Documents"])
 
 if __name__ == "__main__":
     settings = get_settings()
