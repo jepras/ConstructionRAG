@@ -300,6 +300,28 @@ def show_query_page():
         "Ask questions about your construction project and get AI-powered answers."
     )
 
+    # Test Query API button
+    st.markdown("### Test Backend Query API")
+    if st.button("🧪 Test Query API", type="secondary"):
+        import requests
+
+        try:
+            response = requests.post(
+                "https://constructionrag-production.up.railway.app/api/query",
+                json={"query": "What is this construction project about?"},
+                timeout=10,
+            )
+            if response.status_code == 200:
+                st.success("✅ Query API working!")
+                st.json(response.json())
+            else:
+                st.error(f"❌ Query API error: {response.status_code}")
+                st.text(f"Response: {response.text}")
+        except Exception as e:
+            st.error(f"❌ Query API failed: {str(e)}")
+
+    st.markdown("---")
+
     # Query input
     query = st.text_area(
         "Ask a question about your construction project:",
