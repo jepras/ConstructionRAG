@@ -24,6 +24,7 @@ except Exception as e:
 
 try:
     from ..shared.models import DocumentInput, PipelineError
+    from src.models.pipeline import UploadType
 except Exception as e:
     raise
 
@@ -75,12 +76,27 @@ class IndexingOrchestrator:
         config_manager: ConfigManager = None,
         progress_tracker: ProgressTracker = None,
         pipeline_service: PipelineService = None,
+        use_test_storage: bool = False,
+        upload_type: UploadType = UploadType.USER_PROJECT,
     ):
         self.db = db
         self.storage = storage
         self.config_manager = config_manager or ConfigManager(db)
         self.progress_tracker = progress_tracker
         self.pipeline_service = pipeline_service or PipelineService()
+        self.upload_type = upload_type
+
+        # Initialize storage service based on test flag
+        if use_test_storage:
+            from src.services.storage_service import StorageService
+
+            self.storage_service = StorageService.create_test_storage()
+            logger.info("Using test storage service")
+        else:
+            from src.services.storage_service import StorageService
+
+            self.storage_service = StorageService()
+            logger.info("Using production storage service")
 
         # Initialize steps with injected dependencies
         # These will be properly initialized when config is loaded
@@ -108,6 +124,7 @@ class IndexingOrchestrator:
                 config=partition_config,
                 storage_client=self.storage,
                 progress_tracker=self.progress_tracker,
+                storage_service=self.storage_service,
             )
 
             # Initialize real metadata step
@@ -116,6 +133,7 @@ class IndexingOrchestrator:
                 config=metadata_config,
                 storage_client=self.storage,
                 progress_tracker=self.progress_tracker,
+                storage_service=self.storage_service,
             )
 
             # Initialize real enrichment step
@@ -124,6 +142,7 @@ class IndexingOrchestrator:
                 config=enrichment_config,
                 storage_client=self.storage,
                 progress_tracker=self.progress_tracker,
+                storage_service=self.storage_service,
             )
 
             # Initialize real chunking step
@@ -134,6 +153,7 @@ class IndexingOrchestrator:
                 progress_tracker=self.progress_tracker,
                 db=self.db,
                 pipeline_service=self.pipeline_service,
+                storage_service=self.storage_service,
             )
             # Initialize embedding & storage step (combined)
             embedding_config = config.steps.get("embedding", {})
@@ -142,6 +162,7 @@ class IndexingOrchestrator:
                 progress_tracker=self.progress_tracker,
                 db=self.db,
                 pipeline_service=self.pipeline_service,
+                storage_service=self.storage_service,
             )
 
             self.steps = [
@@ -207,11 +228,24 @@ class IndexingOrchestrator:
 
             # Create indexing run in database
             indexing_run = await self.pipeline_service.create_indexing_run(
-                document_id=document_input.document_id, user_id=document_input.user_id
+                document_id=document_input.document_id,
+                user_id=document_input.user_id,
+                upload_type=document_input.upload_type,
+                upload_id=document_input.upload_id,
+                project_id=document_input.project_id,
             )
 
             # Update DocumentInput with run_id for storage operations
             document_input.run_id = indexing_run.id
+
+            # Create storage structure for the upload type
+            await self.storage_service.create_storage_structure(
+                upload_type=document_input.upload_type,
+                upload_id=document_input.upload_id,
+                user_id=document_input.user_id,
+                project_id=document_input.project_id,
+                index_run_id=indexing_run.id,
+            )
 
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(

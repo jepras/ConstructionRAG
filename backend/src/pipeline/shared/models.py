@@ -4,6 +4,14 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 from uuid import UUID
 from pathlib import Path
+from enum import Enum
+
+
+class UploadType(str, Enum):
+    """Type of upload - email-based or user project."""
+
+    EMAIL = "email"
+    USER_PROJECT = "user_project"
 
 
 class DocumentInput(BaseModel):
@@ -14,6 +22,12 @@ class DocumentInput(BaseModel):
     file_path: str = Field(description="Path to the document file")
     filename: str = Field(description="Original filename")
     user_id: UUID = Field(description="User who uploaded the document")
+    upload_type: UploadType = Field(description="Type of upload")
+    upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
+    project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
+    index_run_id: Optional[UUID] = Field(
+        None, description="Index run ID for user projects"
+    )
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional document metadata"
     )

@@ -16,6 +16,7 @@ from langchain_core.messages import HumanMessage
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import PipelineError
+from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -208,10 +209,15 @@ class EnrichmentStep(PipelineStep):
     """Production enrichment step implementing VLM captioning for tables and images"""
 
     def __init__(
-        self, config: Dict[str, Any], storage_client=None, progress_tracker=None
+        self,
+        config: Dict[str, Any],
+        storage_client=None,
+        progress_tracker=None,
+        storage_service=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
+        self.storage_service = storage_service or StorageService()
 
         # Extract configuration
         self.vlm_model = config.get("vlm_model", "anthropic/claude-3-5-sonnet")

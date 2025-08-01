@@ -11,6 +11,7 @@ from uuid import UUID
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import DocumentInput, PipelineError
+from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -279,44 +280,27 @@ class UnifiedElementAnalyzer:
             # Check if title starts with a number pattern
             if self._starts_with_number(text):
                 struct_meta["section_title_category"] = text.strip()
-                logger.debug(
-                    f'Found numbered category title: "{text.strip()}" (category: {category})'
-                )
-            else:
-                logger.debug(
-                    f'Skipping non-numbered title: "{text.strip()}" (category: {category})'
-                )
 
         # Method 2: Pattern-based detection (ONLY for numbered sections)
         pattern_title = self._detect_pattern_based_title(text, category)
         if pattern_title:
             struct_meta["section_title_pattern"] = pattern_title
-            logger.debug(
-                f'Found numbered pattern title: "{pattern_title}" (category: {category}, page: {page_num})'
-            )
 
             # Check if this is a MAJOR section (should update page inheritance)
             is_major_section = self._is_major_section(text, category)
 
             if is_major_section:
-                logger.debug(
-                    f"MAJOR NUMBERED SECTION: Updating page {page_num} inheritance"
-                )
                 # Update page-level section
                 self.page_sections[page_num] = pattern_title
                 self.current_section_title = pattern_title
-            else:
-                logger.debug(f"Minor numbered section: Not changing page inheritance")
 
         # Method 3: Page-aware inheritance (NEW!)
         page_section = self.page_sections.get(page_num)
         if page_section:
             struct_meta["section_title_inherited"] = page_section
-            logger.debug(f'Page {page_num} inherits: "{page_section}"')
         elif self.current_section_title:
             # Fall back to document-level inheritance
             struct_meta["section_title_inherited"] = self.current_section_title
-            logger.debug(f'Document fallback: "{self.current_section_title}"')
 
         return struct_meta
 
@@ -331,12 +315,77 @@ class UnifiedElementAnalyzer:
         if not self._starts_with_number(text):
             return False
 
+        # Avoid truncated text (ends with hyphen, ellipsis, or incomplete words)
+        text_stripped = text.strip()
+        if (
+            text_stripped.endswith("-")
+            or text_stripped.endswith("...")
+            or text_stripped.endswith("..")
+        ):
+            return False
+
+        # Option 2: Filter by Content Patterns - Detect diagram-specific patterns
+        if self._contains_diagram_patterns(text_stripped):
+            return False
+
+        # Option 1: Filter by Text Position/Context - Check for multiple numbered items in proximity
+        if self._has_diagram_context(text_stripped):
+            return False
+
         # Check for major section patterns (numbered sections with meaningful content)
-        if self.major_section_pattern.match(text.strip()):
+        if self.major_section_pattern.match(text_stripped):
             return True
 
         # Additional check: numbered sections that are long enough to be major
-        if self._starts_with_number(text) and len(text.strip()) > 10:
+        if self._starts_with_number(text) and len(text_stripped) > 10:
+            return True
+
+        return False
+
+    def _has_diagram_context(self, current_text: str) -> bool:
+        """Check if current text appears in context with multiple numbered items (diagram)"""
+
+        if len(self.recent_text_elements) < 3:
+            return False
+
+        # Count numbered items in recent context
+        numbered_items = 0
+        for elem in self.recent_text_elements[-5:]:  # Check last 5 elements
+            if self._starts_with_number(elem["text"]):
+                numbered_items += 1
+
+        # If we have 3+ numbered items in recent context, likely a diagram
+        if numbered_items >= 3:
+            return True
+
+        return False
+
+    def _contains_diagram_patterns(self, text: str) -> bool:
+        """Detect if text contains diagram-specific patterns that should not be major sections"""
+
+        # Check for bullet point patterns
+        if re.search(r"^\s*[-•*]\s+", text):
+            return True
+
+        # Check for letter-numbered lists (a) b) c))
+        if re.search(r"[a-z]\)\s+", text, re.IGNORECASE):
+            return True
+
+        # Check for mixed numbering patterns (like "1. 2. 3." in same text)
+        numbers = re.findall(r"\d+\.", text)
+        if len(numbers) >= 2:
+            return True
+
+        # Check for diagram keywords
+        diagram_keywords = [
+            "tilbud",
+            "licitation",
+            "værktøjer",
+            "sagsstørrelse",
+            "tilstande",
+        ]
+        text_lower = text.lower()
+        if any(keyword in text_lower for keyword in diagram_keywords):
             return True
 
         return False
@@ -346,16 +395,23 @@ class UnifiedElementAnalyzer:
         self.page_sections = {}
         self.current_page = None
         self.current_section_title = None
+        # Reset context tracking for new document
+        self.recent_text_elements = []
 
 
 class MetadataStep(PipelineStep):
     """Production metadata step implementing structural awareness analysis with pure JSON processing"""
 
     def __init__(
-        self, config: Dict[str, Any], storage_client=None, progress_tracker=None
+        self,
+        config: Dict[str, Any],
+        storage_client=None,
+        progress_tracker=None,
+        storage_service=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
+        self.storage_service = storage_service or StorageService()
 
         # Extract configuration
         self.enable_section_detection = config.get("enable_section_detection", True)
@@ -667,6 +723,14 @@ class MetadataStep(PipelineStep):
         text_elements = partition_data.get("text_elements", [])
         logger.info(f"Processing {len(text_elements)} text elements...")
 
+        # Show category distribution
+        categories = {}
+        for elem in text_elements:
+            cat = elem.get("category", "Unknown")
+            categories[cat] = categories.get(cat, 0) + 1
+        print(f"📊 Category distribution: {categories}")
+        logger.info(f"Category distribution: {categories}")
+
         # Sort text elements by page number for proper inheritance
         sorted_text_elements = sorted(text_elements, key=lambda x: x["page"])
 
@@ -746,6 +810,34 @@ class MetadataStep(PipelineStep):
         logger.info("PAGE SECTION SUMMARY:")
         for page_num, section in self.analyzer.page_sections.items():
             logger.info(f'Page {page_num}: "{section}"')
+
+        # Count elements with section inheritance
+        elements_with_sections = sum(
+            1
+            for elem in enriched_elements
+            if elem.get("structural_metadata", {}).get("section_title_inherited")
+        )
+        print(
+            f"📊 Elements with section inheritance: {elements_with_sections}/{len(enriched_elements)}"
+        )
+        logger.info(
+            f"Elements with section inheritance: {elements_with_sections}/{len(enriched_elements)}"
+        )
+
+        # Show section inheritance summary
+        section_summary = {}
+        for elem in enriched_elements:
+            inherited = elem.get("structural_metadata", {}).get(
+                "section_title_inherited"
+            )
+            if inherited:
+                section_summary[inherited] = section_summary.get(inherited, 0) + 1
+
+        print("📋 Section Inheritance Summary:")
+        for section, count in section_summary.items():
+            print(f"   '{section}': {count} elements")
+
+        logger.info("Section inheritance summary: " + str(section_summary))
 
         return enriched_elements
 

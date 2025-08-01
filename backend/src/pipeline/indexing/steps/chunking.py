@@ -12,6 +12,7 @@ from pathlib import Path
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import PipelineError
+from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -507,11 +508,13 @@ class ChunkingStep(PipelineStep):
         progress_tracker=None,
         db=None,
         pipeline_service=None,
+        storage_service=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
         self.db = db
         self.pipeline_service = pipeline_service
+        self.storage_service = storage_service or StorageService()
 
         # Initialize chunking engine
         chunking_config = config.get("chunking", {})

@@ -13,6 +13,9 @@ from src.models.pipeline import (
     IndexingRun,
     IndexingRunCreate,
     IndexingRunUpdate,
+    UploadType,
+    Project,
+    EmailUpload,
 )
 from src.utils.exceptions import DatabaseError
 
@@ -31,17 +34,28 @@ class PipelineService:
             self.supabase = get_supabase_client()
 
     async def create_indexing_run(
-        self, document_id: UUID, user_id: UUID
+        self,
+        document_id: UUID,
+        user_id: UUID,
+        upload_type: UploadType = UploadType.USER_PROJECT,
+        upload_id: Optional[str] = None,
+        project_id: Optional[UUID] = None,
     ) -> IndexingRun:
         """Create a new indexing run for a document."""
         try:
             indexing_run_data = IndexingRunCreate(
-                document_id=document_id, status="pending"
+                document_id=document_id,
+                upload_type=upload_type,
+                upload_id=upload_id,
+                project_id=project_id,
+                status="pending",
             )
 
             # Convert UUIDs to strings for JSON serialization
             data_dict = indexing_run_data.model_dump()
             data_dict["document_id"] = str(data_dict["document_id"])
+            if data_dict.get("project_id"):
+                data_dict["project_id"] = str(data_dict["project_id"])
 
             result = self.supabase.table("indexing_runs").insert(data_dict).execute()
 
@@ -54,6 +68,110 @@ class PipelineService:
             logger.error(f"Error creating indexing run: {e}")
             raise DatabaseError(f"Failed to create indexing run: {str(e)}")
 
+    async def create_project(
+        self, user_id: UUID, name: str, description: Optional[str] = None
+    ) -> Project:
+        """Create a new project for a user."""
+        try:
+            from src.models.pipeline import Project, ProjectCreate
+
+            project_data = ProjectCreate(
+                user_id=user_id, name=name, description=description
+            )
+
+            # Convert UUIDs to strings for JSON serialization
+            data_dict = project_data.model_dump()
+            data_dict["user_id"] = str(data_dict["user_id"])
+
+            result = self.supabase.table("projects").insert(data_dict).execute()
+
+            if not result.data:
+                raise DatabaseError("Failed to create project")
+
+            return Project(**result.data[0])
+
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
+            raise DatabaseError(f"Failed to create project: {str(e)}")
+
+    async def create_email_upload(
+        self, upload_id: str, email: str, filename: str, file_size: Optional[int] = None
+    ) -> EmailUpload:
+        """Create a new email upload record."""
+        try:
+            from src.models.pipeline import EmailUpload, EmailUploadCreate
+
+            email_upload_data = EmailUploadCreate(
+                id=upload_id, email=email, filename=filename, file_size=file_size
+            )
+
+            data_dict = email_upload_data.model_dump()
+
+            result = self.supabase.table("email_uploads").insert(data_dict).execute()
+
+            if not result.data:
+                raise DatabaseError("Failed to create email upload")
+
+            return EmailUpload(**result.data[0])
+
+        except Exception as e:
+            logger.error(f"Error creating email upload: {e}")
+            raise DatabaseError(f"Failed to create email upload: {str(e)}")
+
+    async def update_email_upload_status(
+        self,
+        upload_id: str,
+        status: str,
+        public_url: Optional[str] = None,
+        processing_results: Optional[Dict[str, Any]] = None,
+    ) -> EmailUpload:
+        """Update the status of an email upload."""
+        try:
+            from src.models.pipeline import EmailUpload, EmailUploadUpdate
+
+            # Ensure processing_results doesn't contain datetime objects
+            if processing_results:
+                # Convert any datetime objects to ISO strings
+                def convert_datetime(obj):
+                    if isinstance(obj, datetime):
+                        return obj.isoformat()
+                    elif isinstance(obj, dict):
+                        return {k: convert_datetime(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [convert_datetime(item) for item in obj]
+                    return obj
+
+                processing_results = convert_datetime(processing_results)
+
+            update_data = EmailUploadUpdate(
+                status=status,
+                public_url=public_url,
+                processing_results=processing_results,
+                completed_at=(
+                    datetime.utcnow().isoformat()
+                    if status in ["completed", "failed"]
+                    else None
+                ),
+            )
+
+            data_dict = update_data.model_dump(exclude_unset=True)
+
+            result = (
+                self.supabase.table("email_uploads")
+                .update(data_dict)
+                .eq("id", upload_id)
+                .execute()
+            )
+
+            if not result.data:
+                raise DatabaseError("Failed to update email upload")
+
+            return EmailUpload(**result.data[0])
+
+        except Exception as e:
+            logger.error(f"Error updating email upload status: {e}")
+            raise DatabaseError(f"Failed to update email upload status: {str(e)}")
+
     async def update_indexing_run_status(
         self, indexing_run_id: UUID, status: str, error_message: Optional[str] = None
     ) -> IndexingRun:
@@ -63,7 +181,9 @@ class PipelineService:
                 status=status,
                 error_message=error_message,
                 completed_at=(
-                    datetime.utcnow() if status in ["completed", "failed"] else None
+                    datetime.utcnow().isoformat()
+                    if status in ["completed", "failed"]
+                    else None
                 ),
             )
 

@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.config.database import get_supabase_admin_client
 from src.pipeline.indexing.orchestrator import IndexingOrchestrator
-from src.pipeline.shared.models import DocumentInput
+from src.pipeline.shared.models import DocumentInput, UploadType
 from src.services.pipeline_service import PipelineService
 
 
@@ -57,6 +57,9 @@ async def test_pipeline_integration():
             user_id=UUID(user_id),
             file_path=str(test_pdf_path),
             filename=test_pdf_path.name,
+            upload_type=UploadType.USER_PROJECT,
+            project_id=UUID("123e4567-e89b-12d3-a456-426614174001"),
+            index_run_id=UUID("123e4567-e89b-12d3-a456-426614174002"),
             metadata={},
         )
 
@@ -67,6 +70,8 @@ async def test_pipeline_integration():
         orchestrator = IndexingOrchestrator(
             db=db,
             pipeline_service=pipeline_service,
+            use_test_storage=True,  # Use test bucket for integration tests
+            upload_type=UploadType.USER_PROJECT,
         )
 
         print("✅ Orchestrator initialized with admin client")

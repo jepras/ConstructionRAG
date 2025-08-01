@@ -5,6 +5,13 @@ from uuid import UUID
 from enum import Enum
 
 
+class UploadType(str, Enum):
+    """Type of upload - email-based or user project."""
+
+    EMAIL = "email"
+    USER_PROJECT = "user_project"
+
+
 class PipelineStatus(str, Enum):
     """Pipeline run status"""
 
@@ -72,6 +79,11 @@ class IndexingRun(BaseModel):
 
     id: UUID = Field(description="Indexing run unique identifier")
     document_id: UUID = Field(description="Associated document ID")
+    upload_type: UploadType = Field(
+        UploadType.USER_PROJECT, description="Type of upload"
+    )
+    upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
+    project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
     status: PipelineStatus = Field(
         PipelineStatus.PENDING, description="Indexing run status"
     )
@@ -199,6 +211,9 @@ class IndexingRunCreate(BaseModel):
     """Model for creating a new indexing run"""
 
     document_id: UUID
+    upload_type: UploadType = UploadType.USER_PROJECT
+    upload_id: Optional[str] = None
+    project_id: Optional[UUID] = None
     status: PipelineStatus = PipelineStatus.PENDING
 
 
@@ -209,6 +224,9 @@ class IndexingRunUpdate(BaseModel):
     step_results: Optional[Dict[str, StepResult]] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    upload_type: Optional[UploadType] = None
+    upload_id: Optional[str] = None
+    project_id: Optional[UUID] = None
 
 
 class QueryRunCreate(BaseModel):
@@ -258,3 +276,89 @@ class PipelineConfig(BaseModel):
     generation_max_tokens: int = Field(
         1000, description="Maximum tokens for generation"
     )
+
+
+# New models for storage structure support
+class Project(BaseModel):
+    """Project model matching the projects table"""
+
+    id: UUID = Field(description="Project unique identifier")
+    user_id: UUID = Field(description="User ID from Supabase Auth")
+    name: str = Field(description="Project name")
+    description: Optional[str] = Field(None, description="Project description")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Project creation timestamp"
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Project last update timestamp"
+    )
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+
+
+class EmailUpload(BaseModel):
+    """Email upload model matching the email_uploads table"""
+
+    id: str = Field(description="Upload ID from storage path")
+    email: str = Field(description="User email address")
+    filename: str = Field(description="Original filename")
+    file_size: Optional[int] = Field(None, description="File size in bytes")
+    status: str = Field("processing", description="Upload status")
+    public_url: Optional[str] = Field(None, description="Generated page URL")
+    processing_results: Dict[str, Any] = Field(
+        default_factory=dict, description="Processing results"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Upload creation timestamp"
+    )
+    completed_at: Optional[datetime] = Field(
+        None, description="Processing completion timestamp"
+    )
+    expires_at: datetime = Field(
+        default_factory=lambda: datetime.utcnow().replace(
+            day=datetime.utcnow().day + 30
+        ),
+        description="Upload expiration timestamp",
+    )
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: v.isoformat()}
+
+
+class ProjectCreate(BaseModel):
+    """Model for creating a new project"""
+
+    user_id: UUID
+    name: str
+    description: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    """Model for updating an existing project"""
+
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class EmailUploadCreate(BaseModel):
+    """Model for creating a new email upload"""
+
+    id: str
+    email: str
+    filename: str
+    file_size: Optional[int] = None
+
+
+class EmailUploadUpdate(BaseModel):
+    """Model for updating an existing email upload"""
+
+    status: Optional[str] = None
+    public_url: Optional[str] = None
+    processing_results: Optional[Dict[str, Any]] = None
+    completed_at: Optional[datetime] = None
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}

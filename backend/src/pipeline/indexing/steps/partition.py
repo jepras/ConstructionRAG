@@ -29,11 +29,15 @@ class PartitionStep(PipelineStep):
     """Production partition step implementing the unified partitioning pipeline"""
 
     def __init__(
-        self, config: Dict[str, Any], storage_client=None, progress_tracker=None
+        self,
+        config: Dict[str, Any],
+        storage_client=None,
+        progress_tracker=None,
+        storage_service=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_client = storage_client
-        self.storage_service = StorageService()
+        self.storage_service = storage_service or StorageService()
 
         # Extract configuration
         self.ocr_strategy = config.get("ocr_strategy", "auto")
@@ -309,12 +313,18 @@ class PartitionStep(PipelineStep):
                 for page_num, page_info in extracted_pages.items():
                     try:
                         # Upload image to Supabase Storage with new structure
-                        upload_result = await self.storage_service.upload_extracted_page_image(
-                            image_path=page_info["filepath"],
-                            run_id=document_input.run_id,  # Use run_id from DocumentInput
-                            document_id=document_input.document_id,  # Use document_id from DocumentInput
-                            page_num=page_num,
-                            complexity=page_info["complexity"],
+                        upload_result = (
+                            await self.storage_service.upload_extracted_page_image(
+                                image_path=page_info["filepath"],
+                                document_id=document_input.document_id,
+                                page_num=page_num,
+                                complexity=page_info["complexity"],
+                                upload_type=document_input.upload_type,
+                                upload_id=document_input.upload_id,
+                                user_id=document_input.user_id,
+                                project_id=document_input.project_id,
+                                index_run_id=document_input.run_id,
+                            )
                         )
 
                         # Update page info with Supabase URL
@@ -351,11 +361,17 @@ class PartitionStep(PipelineStep):
 
                         if image_path and Path(image_path).exists():
                             # Upload table image to Supabase Storage with new structure
-                            upload_result = await self.storage_service.upload_table_image(
-                                image_path=image_path,
-                                run_id=document_input.run_id,  # Use run_id from DocumentInput
-                                document_id=document_input.document_id,  # Use document_id from DocumentInput
-                                table_id=table_id,
+                            upload_result = (
+                                await self.storage_service.upload_table_image(
+                                    image_path=image_path,
+                                    document_id=document_input.document_id,
+                                    table_id=table_id,
+                                    upload_type=document_input.upload_type,
+                                    upload_id=document_input.upload_id,
+                                    user_id=document_input.user_id,
+                                    project_id=document_input.project_id,
+                                    index_run_id=document_input.run_id,
+                                )
                             )
 
                             # Add Supabase URL to table metadata
@@ -680,30 +696,47 @@ class UnifiedPartitionerV2:
             # Get text blocks with detailed metadata
             text_dict = page.get_text("dict")
 
-            for block in text_dict["blocks"]:
+            # Process text blocks
+            for block in text_dict.get("blocks", []):
                 if "lines" in block:  # Text block
+                    block_text = ""
+                    block_bbox = block.get("bbox", [0, 0, 0, 0])
+
+                    # Combine all lines in the block
                     for line in block["lines"]:
-                        for span in line["spans"]:
-                            text = span["text"].strip()
-                            if text:
-                                # Create text element similar to unstructured format
-                                text_element = {
-                                    "id": f"text_page{page_index}_block{len(text_elements)}",
-                                    "category": self._determine_text_category(
-                                        text, span
-                                    ),
-                                    "page": page_index,
-                                    "text": text,
-                                    "metadata": {
-                                        "page_number": page_index,
-                                        "font_size": span["size"],
-                                        "font_name": span["font"],
-                                        "is_bold": "Bold" in span["font"],
-                                        "extraction_method": "pymupdf_text_dict",
-                                    },
-                                }
-                                text_elements.append(text_element)
-                                raw_elements.append(text_element)
+                        for span in line.get("spans", []):
+                            block_text += span.get("text", "")
+
+                    # Skip empty blocks
+                    if not block_text.strip():
+                        continue
+
+                    # Create element with metadata similar to unstructured format
+                    element_id = f"text_page{page_index}_block{len(text_elements)}"
+
+                    # Determine category based on text characteristics
+                    category = self._determine_text_category(block_text, block)
+
+                    # Create metadata similar to unstructured format (without coordinates)
+                    metadata = {
+                        "page_number": page_index,
+                        "font_size": self._get_font_size(block),
+                        "font_name": self._get_font_name(block),
+                        "is_bold": self._is_bold_text(block),
+                        "extraction_method": "pymupdf_text_dict",
+                    }
+
+                    # Create text element similar to unstructured format
+                    text_element = {
+                        "id": element_id,
+                        "category": category,
+                        "page": page_index,
+                        "text": block_text,
+                        "metadata": metadata,
+                    }
+
+                    text_elements.append(text_element)
+                    raw_elements.append(text_element)
 
         doc.close()
         logger.info(f"Found {len(text_elements)} text elements")
@@ -841,17 +874,57 @@ class UnifiedPartitionerV2:
         logger.info(f"Extracted {len(extracted_pages)} full pages")
         return extracted_pages
 
-    def _determine_text_category(self, text, span):
-        """Determine text category based on font size and content"""
-        font_size = span["size"]
-        is_bold = "Bold" in span["font"]
+    def _determine_text_category(self, text, block):
+        """Determine text category based on characteristics"""
+        text_upper = text.upper().strip()
 
-        if font_size > 15 or is_bold:
-            return "Title"
-        elif text.strip().startswith(("•", "-", "1.", "2.", "3.")):
+        # Check for titles/headers
+        if len(text.strip()) < 100 and any(char.isupper() for char in text):
+            # Check if it's likely a header based on font size or position
+            font_size = self._get_font_size(block)
+            if font_size > 12:  # Larger font likely indicates header
+                return "Title"
+
+        # Check for list items
+        if text.strip().startswith(("•", "-", "*", "1.", "2.", "3.", "a.", "b.", "c.")):
             return "ListItem"
-        else:
-            return "NarrativeText"
+
+        # Default to narrative text
+        return "NarrativeText"
+
+    def _get_font_size(self, block):
+        """Extract font size from block"""
+        try:
+            if "lines" in block and block["lines"]:
+                line = block["lines"][0]
+                if "spans" in line and line["spans"]:
+                    return line["spans"][0].get("size", 12)
+        except:
+            pass
+        return 12
+
+    def _get_font_name(self, block):
+        """Extract font name from block"""
+        try:
+            if "lines" in block and block["lines"]:
+                line = block["lines"][0]
+                if "spans" in line and line["spans"]:
+                    return line["spans"][0].get("font", "unknown")
+        except:
+            pass
+        return "unknown"
+
+    def _is_bold_text(self, block):
+        """Check if text is bold"""
+        try:
+            if "lines" in block and block["lines"]:
+                line = block["lines"][0]
+                if "spans" in line and line["spans"]:
+                    flags = line["spans"][0].get("flags", 0)
+                    return bool(flags & 2**4)  # Bold flag
+        except:
+            pass
+        return False
 
     def _table_to_html(self, table_data):
         """Convert PyMuPDF table to HTML"""

@@ -13,6 +13,7 @@ from supabase import Client
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import PipelineError
+from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ class EmbeddingStep(PipelineStep):
         progress_tracker=None,
         db: Client = None,
         pipeline_service=None,
+        storage_service=None,
     ):
         # Initialize embedding step
 
@@ -86,6 +88,7 @@ class EmbeddingStep(PipelineStep):
         self.storage_client = storage_client
         self.db = db
         self.pipeline_service = pipeline_service
+        self.storage_service = storage_service or StorageService()
 
         # Initialize Voyage client
         api_key = config.get("api_key")
