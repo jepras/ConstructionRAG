@@ -125,9 +125,6 @@ def show_auth_page():
         '<h1 class="main-header">🔐 Authentication</h1>', unsafe_allow_html=True
     )
 
-    # Initialize auth state
-    init_auth()
-
     # Check if user is already authenticated
     auth_manager = st.session_state.auth_manager
     if auth_manager.is_authenticated():
@@ -164,7 +161,6 @@ def show_auth_page():
 
 def show_auth_status():
     """Display authentication status in sidebar"""
-    init_auth()
     auth_manager = st.session_state.auth_manager
 
     st.markdown("### 🔐 Authentication")

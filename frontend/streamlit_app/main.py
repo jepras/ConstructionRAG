@@ -47,11 +47,21 @@ st.markdown(
 def main():
     """Main application"""
 
+    # Initialize authentication state ONCE at the start
+    init_auth()
+
     # Debug logging for environment variables
     import logging
 
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
+
+    # Debug authentication state
+    auth_manager = st.session_state.auth_manager
+    logger.info(
+        f"🔐 Auth initialized - Authenticated: {auth_manager.is_authenticated()}"
+    )
+    logger.info(f"🔐 Session state keys: {list(st.session_state.keys())}")
 
     logger.info("🚀 Starting ConstructionRAG Streamlit app...")
     logger.info(f"🌍 Environment: {os.getenv('ENVIRONMENT', 'development')}")
@@ -303,7 +313,7 @@ def show_query_page():
 
     # Check authentication first
     from components import require_auth_decorator
-    init_auth()
+
     auth_manager = st.session_state.auth_manager
 
     if not auth_manager.is_authenticated():
@@ -332,7 +342,7 @@ def show_query_page():
             # Prepare headers with authentication
             headers = {
                 "Authorization": f"Bearer {session.access_token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             response = requests.post(
