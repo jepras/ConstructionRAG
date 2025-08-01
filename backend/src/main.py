@@ -6,16 +6,10 @@ from datetime import datetime
 import os
 import sys
 
-print("DEBUG: Starting main.py import process")
-
 # Import configuration
 try:
-    print("DEBUG: Importing src.config.settings")
     from src.config.settings import get_settings
-
-    print("DEBUG: Successfully imported src.config.settings")
 except Exception as e:
-    print(f"DEBUG: Failed to import src.config.settings: {e}")
     raise
 
 # Create FastAPI app
@@ -66,30 +60,27 @@ async def api_health():
 
 # Include API routers
 try:
-    print("DEBUG: Importing src.api.auth_router")
     from src.api import auth_router
-
-    print("DEBUG: Successfully imported src.api.auth_router")
 except Exception as e:
-    print(f"DEBUG: Failed to import src.api.auth_router: {e}")
     raise
 
 try:
-    print("DEBUG: Importing src.api.pipeline")
     from src.api import pipeline
-
-    print("DEBUG: Successfully imported src.api.pipeline")
 except Exception as e:
-    print(f"DEBUG: Failed to import src.api.pipeline: {e}")
+    raise
+
+try:
+    from src.api import queries
+except Exception as e:
     raise
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])
+app.include_router(queries.router, prefix="/api", tags=["Queries"])
 
 # Additional routers (will be added later)
-# from api import documents, queries
+# from api import documents
 # app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
-# app.include_router(queries.router, prefix="/api/queries", tags=["Queries"])
 
 if __name__ == "__main__":
     settings = get_settings()

@@ -525,7 +525,6 @@ class ChunkingStep(PipelineStep):
 
         try:
             logger.info("Starting chunking step execution")
-            print("DEBUG: Starting chunking step execution")
 
             # Extract enriched data from input
             enriched_data = input_data
@@ -534,32 +533,26 @@ class ChunkingStep(PipelineStep):
             elif hasattr(input_data, "output_data"):
                 enriched_data = input_data.output_data
 
-            logger.info(f"DEBUG: Input data type: {type(input_data)}")
-            logger.info(f"DEBUG: Enriched data type: {type(enriched_data)}")
-            logger.info(
-                f"DEBUG: Enriched data keys: {list(enriched_data.keys()) if isinstance(enriched_data, dict) else 'Not a dict'}"
-            )
-
             # Combine all elements from enriched data
             all_elements = []
 
             # Add text elements
             text_elements = enriched_data.get("text_elements", [])
-            logger.info(f"DEBUG: Found {len(text_elements)} text elements")
+
             for element in text_elements:
                 element["element_type"] = "text"
             all_elements.extend(text_elements)
 
             # Add table elements
             table_elements = enriched_data.get("table_elements", [])
-            logger.info(f"DEBUG: Found {len(table_elements)} table elements")
+
             for element in table_elements:
                 element["element_type"] = "table"
             all_elements.extend(table_elements)
 
             # Add extracted pages (full page images)
             extracted_pages = enriched_data.get("extracted_pages", {})
-            logger.info(f"DEBUG: Found {len(extracted_pages)} extracted pages")
+
             for page_num, page_info in extracted_pages.items():
                 page_info["element_type"] = "full_page_image"
                 page_info["page_number"] = int(page_num)

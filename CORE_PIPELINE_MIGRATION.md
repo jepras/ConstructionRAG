@@ -14,7 +14,7 @@ The RAG system consists of two fundamentally different pipeline types:
 - **Processing**: Multiple documents in parallel, sequential steps per document
 - **Duration**: Minutes to hours
 - **User Interaction**: Progress tracking only
-- **Steps**: 01→02→03→04→05→06 (partition→metadata→enrich→chunk→embed→store)
+- **Steps**: 01→02→03→04→05 (partition→metadata→enrich→chunk→embed&store)
 
 #### 2. **QUERY PIPELINE** (Real-time Processing)
 - **Trigger**: User question
@@ -35,8 +35,7 @@ backend/src/pipeline/
 │   │   ├── metadata.py             # Step 02: Extract metadata
 │   │   ├── enrichment.py           # Step 03: Enrich with context
 │   │   ├── chunking.py             # Step 04: Text chunking
-│   │   ├── embedding.py            # Step 05: Voyage API → pgvector
-│   │   └── storage.py              # Step 06: Validation & indexing
+│   │   └── embedding.py            # Step 05: Voyage API → pgvector + storage validation
 │   └── config/
 │       └── indexing_config.yaml
 ├── querying/
@@ -102,8 +101,7 @@ Step 1: Partition     → partitioned elements in Supabase Storage (temp files)
 Step 2: Metadata      → document metadata in PostgreSQL  
 Step 3: Enrich        → enriched metadata in PostgreSQL
 Step 4: Chunk         → text chunks in PostgreSQL
-Step 5: Embed         → embeddings directly to pgvector (no temp storage)
-Step 6: Store         → validation + final indexing in pgvector
+Step 5: Embed & Store → embeddings + validation + final indexing in pgvector
 ```
 
 **Data Storage Strategy:**
@@ -156,10 +154,8 @@ steps:
     model: "voyage-large-2"
     dimensions: 1536
     batch_size: 100
-    
-  storage:
-    collection_prefix: "construction_docs"
     validation_sample_size: 50
+    collection_prefix: "construction_docs"
     
 orchestration:
   max_concurrent_documents: 5
@@ -640,9 +636,8 @@ DELETE /api/query/{id}             # Delete query from history
 ### Phase 2.3: Step Migration Continuation (Week 4-5) ✅
 1. **Enrichment Step** - Convert notebook 03 ✅
 2. **Chunking Step** - Convert notebook 04 ✅
-3. **Embedding Step** - Convert notebook 05 ✅
-4. **Storage Step** - Convert notebook 06
-5. **End-to-End Testing** - Complete indexing pipeline validation ✅
+3. **Embedding & Storage Step** - Convert notebook 05+06 ✅
+4. **End-to-End Testing** - Complete indexing pipeline validation ✅
 
 ### Phase 2.4: Query Pipeline (Week 5)
 1. **Query Processing Step** - Convert notebook 07
@@ -658,7 +653,7 @@ DELETE /api/query/{id}             # Delete query from history
 - [x] Each step provides detailed output for inspection
 - [x] Progress tracking works through API and logs  
 - [x] Failed documents stop processing immediately
-- [x] All notebook functionality preserved in production steps
+- [x] All notebook functionality preserved in production steps (including storage validation)
 - [x] **All I/O operations are async** for optimal performance
 - [x] **Dependency injection** provides clean separation of concerns
 - [x] **Pure functions** ensure testable and maintainable step logic

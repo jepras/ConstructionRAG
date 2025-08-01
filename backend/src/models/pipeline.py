@@ -22,7 +22,6 @@ class PipelineStep(str, Enum):
     ENRICHMENT = "enrichment"
     CHUNKING = "chunking"
     EMBEDDING = "embedding"
-    STORAGE = "storage"
     QUERY_PROCESSING = "query_processing"
     RETRIEVAL = "retrieval"
     GENERATION = "generation"
