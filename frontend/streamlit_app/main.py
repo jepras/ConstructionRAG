@@ -7,6 +7,14 @@ from utils.auth_utils import init_auth
 
 logger = logging.getLogger(__name__)
 
+
+def get_backend_url() -> str:
+    """Get backend URL based on environment"""
+    backend_url = os.getenv("BACKEND_API_URL", "http://localhost:8000")
+    logger.info(f"🔗 Using backend URL: {backend_url}")
+    return backend_url
+
+
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -348,18 +356,19 @@ def show_query_page():
                 "Content-Type": "application/json",
             }
 
+            # Get backend URL from environment
+            backend_url = get_backend_url()
+
             # Debug: Log the request details
             logger.info(f"🔍 Making query API request...")
-            logger.info(
-                f"📡 URL: https://constructionrag-production.up.railway.app/api/query"
-            )
+            logger.info(f"📡 URL: {backend_url}/api/query/")
             logger.info(f"📤 Headers: {headers}")
             logger.info(
                 f"📤 Payload: {{'query': 'What is this construction project about?'}}"
             )
 
             response = requests.post(
-                "https://constructionrag-production.up.railway.app/api/query",
+                f"{backend_url}/api/query/",
                 json={"query": "What is this construction project about?"},
                 headers=headers,
                 timeout=10,
