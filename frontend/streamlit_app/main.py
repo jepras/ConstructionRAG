@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import sys
 from datetime import datetime
+from utils.auth_utils import init_auth
 
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -300,15 +301,44 @@ def show_query_page():
         "Ask questions about your construction project and get AI-powered answers."
     )
 
+    # Check authentication first
+    from components import require_auth_decorator
+    init_auth()
+    auth_manager = st.session_state.auth_manager
+
+    if not auth_manager.is_authenticated():
+        st.error("🔐 Please sign in to access the query interface.")
+        st.info("Use the sidebar to navigate to the Authentication page.")
+        return
+
+    # Show user info
+    user_info = auth_manager.get_current_user()
+    if user_info and user_info.get("user"):
+        user = user_info["user"]
+        st.success(f"✅ Signed in as: {user.get('email', 'N/A')}")
+
     # Test Query API button
     st.markdown("### Test Backend Query API")
     if st.button("🧪 Test Query API", type="secondary"):
         import requests
 
         try:
+            # Get auth token
+            session = auth_manager.get_session()
+            if not session:
+                st.error("❌ No active session found. Please sign in again.")
+                return
+
+            # Prepare headers with authentication
+            headers = {
+                "Authorization": f"Bearer {session.access_token}",
+                "Content-Type": "application/json"
+            }
+
             response = requests.post(
                 "https://constructionrag-production.up.railway.app/api/query",
                 json={"query": "What is this construction project about?"},
+                headers=headers,
                 timeout=10,
             )
             if response.status_code == 200:
