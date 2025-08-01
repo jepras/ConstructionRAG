@@ -40,6 +40,7 @@ class EmailUploadResponse(BaseModel):
     """Response for email upload"""
 
     upload_id: str
+    index_run_id: str
     public_url: str
     status: str
     message: str
@@ -83,11 +84,19 @@ async def upload_email_pdf(
         raise HTTPException(400, "File size must be less than 50MB")
 
     upload_id = str(uuid4())
+    index_run_id = str(uuid4())
 
     try:
         # Initialize services
         db = get_supabase_admin_client()
         storage_service = StorageService()
+
+        # Create storage structure for the new index run
+        await storage_service.create_storage_structure(
+            upload_type=UploadType.EMAIL,
+            upload_id=upload_id,
+            index_run_id=UUID(index_run_id)
+        )
 
         # Create temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
@@ -96,11 +105,22 @@ async def upload_email_pdf(
             temp_file_path = temp_file.name
 
         try:
-            # Upload to Supabase Storage
-            storage_path = f"email-uploads/{upload_id}/original.pdf"
+            # Upload to Supabase Storage using new structure
+            storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
             public_url = await storage_service.upload_file(
                 file_path=temp_file_path, storage_path=storage_path
             )
+
+            # Create index run record
+            index_run_data = {
+                "id": index_run_id,
+                "upload_type": "email",
+                "upload_id": upload_id,
+                "status": "processing",
+                "created_at": "now()",
+            }
+            
+            db.table("indexing_runs").insert(index_run_data).execute()
 
             # Store in email_uploads table
             email_upload_data = {
@@ -110,6 +130,7 @@ async def upload_email_pdf(
                 "file_size": len(content),
                 "status": "processing",
                 "public_url": public_url,
+                "index_run_id": index_run_id,
             }
 
             result = db.table("email_uploads").insert(email_upload_data).execute()
@@ -121,6 +142,7 @@ async def upload_email_pdf(
             background_tasks.add_task(
                 process_email_upload_async,
                 upload_id=upload_id,
+                index_run_id=index_run_id,
                 email=email,
                 file_path=temp_file_path,
                 filename=file.filename,
@@ -128,6 +150,7 @@ async def upload_email_pdf(
 
             return EmailUploadResponse(
                 upload_id=upload_id,
+                index_run_id=index_run_id,
                 public_url=f"/email-uploads/{upload_id}",
                 status="processing",
                 message="PDF uploaded successfully. Processing started.",
@@ -163,6 +186,7 @@ async def get_email_upload_status(upload_id: str):
 
         return {
             "upload_id": upload_id,
+            "index_run_id": upload_data.get("index_run_id"),
             "email": upload_data["email"],
             "filename": upload_data["filename"],
             "status": upload_data["status"],
@@ -463,12 +487,12 @@ async def delete_project_document(
 
 
 async def process_email_upload_async(
-    upload_id: str, email: str, file_path: str, filename: str
+    upload_id: str, index_run_id: str, email: str, file_path: str, filename: str
 ):
     """Background processing for email uploads"""
 
     try:
-        logger.info(f"Starting email upload processing for {upload_id}")
+        logger.info(f"Starting email upload processing for {upload_id} (index run: {index_run_id})")
 
         # Initialize services
         storage_service = StorageService()
@@ -479,12 +503,13 @@ async def process_email_upload_async(
             document_id=UUID(
                 upload_id
             ),  # Use upload_id as document_id for email uploads
-            run_id=UUID(int=0),  # Placeholder - will be updated by orchestrator
+            run_id=UUID(index_run_id),  # Use the actual index run ID
             user_id=None,  # No user for email uploads
             file_path=file_path,
             filename=filename,
             upload_type=UploadType.EMAIL,
             upload_id=upload_id,
+            index_run_id=UUID(index_run_id),
             metadata={"email": email},
         )
 
@@ -498,12 +523,22 @@ async def process_email_upload_async(
                 {"status": "completed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
 
+            # Update indexing_runs table
+            db.table("indexing_runs").update(
+                {"status": "completed", "completed_at": "now()"}
+            ).eq("id", index_run_id).execute()
+
             logger.info(f"Email upload processing completed for {upload_id}")
         else:
             # Update email_uploads table with error
             db.table("email_uploads").update(
                 {"status": "failed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
+
+            # Update indexing_runs table with error
+            db.table("indexing_runs").update(
+                {"status": "failed", "completed_at": "now()"}
+            ).eq("id", index_run_id).execute()
 
             logger.error(f"Email upload processing failed for {upload_id}")
 
@@ -516,6 +551,11 @@ async def process_email_upload_async(
             db.table("email_uploads").update(
                 {"status": "failed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
+            
+            # Update indexing_runs table with error
+            db.table("indexing_runs").update(
+                {"status": "failed", "completed_at": "now()"}
+            ).eq("id", index_run_id).execute()
         except:
             pass
 

@@ -130,7 +130,7 @@ class StorageService:
 
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/processing/{document_id}/extracted-pages/{filename}"
+                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
 
@@ -169,7 +169,7 @@ class StorageService:
 
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/processing/{document_id}/table-images/{filename}"
+                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
 
@@ -205,7 +205,7 @@ class StorageService:
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/generated/{filename}"
+                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/generated/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{filename}"
 
@@ -238,7 +238,7 @@ class StorageService:
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/original.pdf"
+                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}"
 
@@ -273,7 +273,7 @@ class StorageService:
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/temp/{step}/{filename}"
+                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/temp/{step}/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/temp/{step}/{filename}"
 
@@ -304,13 +304,17 @@ class StorageService:
         """Create the storage folder structure for the upload type."""
         try:
             if upload_type == UploadType.EMAIL:
-                # Create email upload structure
-                base_path = f"email-uploads/{upload_id}"
+                # Create email upload structure (consistent with user projects)
+                base_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}"
                 folders = [
-                    f"{base_path}/processing",
-                    f"{base_path}/processing/extracted-pages",
-                    f"{base_path}/processing/table-images",
+                    f"{base_path}/pdfs",
                     f"{base_path}/generated",
+                    f"{base_path}/generated/markdown",
+                    f"{base_path}/generated/pages",
+                    f"{base_path}/generated/assets",
+                    f"{base_path}/generated/assets/images",
+                    f"{base_path}/generated/assets/css",
+                    f"{base_path}/generated/assets/js",
                     f"{base_path}/temp",
                     f"{base_path}/temp/partition",
                     f"{base_path}/temp/metadata",
