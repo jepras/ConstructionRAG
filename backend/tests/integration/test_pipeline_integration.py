@@ -17,6 +17,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+# Also add the backend directory to handle relative imports
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.config.database import get_supabase_admin_client
 from src.pipeline.indexing.orchestrator import IndexingOrchestrator
@@ -39,7 +41,7 @@ async def test_pipeline_integration():
         document_id = "550e8400-e29b-41d4-a716-446655440000"
         user_id = "123e4567-e89b-12d3-a456-426614174000"
         test_pdf_path = Path(
-            "../data/external/construction_pdfs/test-with-little-variety.pdf"
+            "data/external/construction_pdfs/test-with-little-variety.pdf"
         )
 
         if not test_pdf_path.exists():

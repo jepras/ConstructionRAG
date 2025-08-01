@@ -14,8 +14,6 @@ import logging
 # PDF processing
 import fitz  # PyMuPDF
 
-# from unstructured.partition.pdf import partition_pdf  # TEMPORARILY DISABLED - using PyMuPDF only
-
 # Storage
 from src.services.storage_service import StorageService
 
@@ -382,7 +380,7 @@ class PartitionStep(PipelineStep):
 
             # 6. Prepare metadata
             metadata = {
-                "processing_strategy": "unified_v2_pymupdf_fast",
+                "processing_strategy": "pymupdf_only",
                 "timestamp": datetime.now().isoformat(),
                 "source_file": os.path.basename(filepath),
                 "text_count": len(filtered_text_elements),
@@ -668,125 +666,117 @@ class UnifiedPartitionerV2:
         }
 
     def stage2_fast_text_extraction(self, filepath):
-        """Stage 2: Fast unstructured extraction for text content with language support"""
-        logger.info("Stage 2: Fast text extraction with unstructured...")
-        logger.warning(
-            "TEMPORARILY DISABLED - unstructured partition_pdf not available"
-        )
+        """Stage 2: PyMuPDF text extraction (replacing unstructured)"""
+        logger.info("Stage 2: PyMuPDF text extraction...")
 
-        # TEMPORARILY DISABLED - using PyMuPDF only for now
-        # Fast extraction to get text content
-        # fast_elements = partition_pdf(
-        #     filename=filepath,
-        #     strategy="fast",
-        #     languages=["dan"],  # Danish language support
-        #     max_characters=50000,
-        #     combine_text_under_n_chars=200,
-        #     include_metadata=True,
-        #     include_page_breaks=True,
-        # )
-
-        # Placeholder - return empty results for now
-        fast_elements = []
+        doc = fitz.open(filepath)
         text_elements = []
         raw_elements = []
 
-        logger.info(f"Found {len(fast_elements)} text elements (DISABLED)")
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            page_index = page_num + 1  # 1-indexed
+
+            # Get text blocks with detailed metadata
+            text_dict = page.get_text("dict")
+
+            for block in text_dict["blocks"]:
+                if "lines" in block:  # Text block
+                    for line in block["lines"]:
+                        for span in line["spans"]:
+                            text = span["text"].strip()
+                            if text:
+                                # Create text element similar to unstructured format
+                                text_element = {
+                                    "id": f"text_page{page_index}_block{len(text_elements)}",
+                                    "category": self._determine_text_category(
+                                        text, span
+                                    ),
+                                    "page": page_index,
+                                    "text": text,
+                                    "metadata": {
+                                        "page_number": page_index,
+                                        "font_size": span["size"],
+                                        "font_name": span["font"],
+                                        "is_bold": "Bold" in span["font"],
+                                        "extraction_method": "pymupdf_text_dict",
+                                    },
+                                }
+                                text_elements.append(text_element)
+                                raw_elements.append(text_element)
+
+        doc.close()
+        logger.info(f"Found {len(text_elements)} text elements")
         logger.info(f"Processed {len(text_elements)} text elements")
         return text_elements, raw_elements
 
     def stage3_targeted_table_processing(self, filepath, table_locations):
-        """Stage 3: Targeted vision processing for detected tables"""
+        """Stage 3: PyMuPDF table processing (replacing unstructured)"""
         if not table_locations:
-            logger.info("No tables detected, skipping vision processing")
+            logger.info("No tables detected, skipping table processing")
             return []
 
         logger.info(
-            f"Stage 3: Targeted table processing ({len(table_locations)} tables)..."
-        )
-        logger.warning(
-            "TEMPORARILY DISABLED - unstructured partition_pdf not available"
+            f"Stage 3: PyMuPDF table processing ({len(table_locations)} tables)..."
         )
 
-        # TEMPORARILY DISABLED - using PyMuPDF only for now
-        # Process tables with vision capabilities
-        # table_elements = partition_pdf(
-        #     filename=filepath,
-        #     strategy="hi_res",
-        #     languages=["dan"],
-        #     extract_images_in_pdf=True,
-        #     extract_image_block_types=["Table"],
-        #     extract_image_block_output_dir=str(self.tables_dir),
-        #     extract_image_block_to_payload=False,
-        #     infer_table_structure=True,
-        #     pdf_infer_table_structure=True,
-        # )
-
-        # Placeholder - return empty results for now
-        table_elements = []
-
-        # Filter to keep only table elements and enhance with metadata
+        doc = fitz.open(filepath)
         enhanced_tables = []
-        table_image_files = list(self.tables_dir.glob("table-*.png")) + list(
-            self.tables_dir.glob("table-*.jpg")
-        )
-        table_image_index = 0
+        pdf_basename = Path(filepath).stem
 
-        for i, element in enumerate(table_elements):
-            if getattr(element, "category", "") == "Table":
-                # Create enhanced table element with metadata
+        for i, table_info in enumerate(table_locations):
+            try:
+                page_num = table_info["page"]
+                table_data = table_info["table_data"]
+
+                # Get the page
+                page = doc[page_num - 1]  # PyMuPDF is 0-indexed
+
+                # Extract table as image
+                table_bbox = table_data.bbox
+                table_rect = fitz.Rect(table_bbox)
+                matrix = fitz.Matrix(2, 2)  # 200 DPI for tables
+                pixmap = page.get_pixmap(matrix=matrix, clip=table_rect)
+
+                # Save table image
                 table_id = f"table_{i+1}"
+                filename = f"{pdf_basename}_page{page_num:02d}_{table_id}.png"
+                save_path = self.tables_dir / filename
+                pixmap.save(str(save_path))
 
-                # Extract table metadata
-                metadata_dict = getattr(element, "metadata", {})
-                if hasattr(metadata_dict, "to_dict"):
-                    metadata_dict = metadata_dict.to_dict()
+                # Extract table text and HTML
+                table_text = table_data.to_markdown()
+                table_html = self._table_to_html(table_data)
 
-                page_num = metadata_dict.get("page_number", 1)
-
-                # Get table HTML if available
-                table_html = getattr(element, "html", "")
-                if not table_html:
-                    # Try to get table as HTML from text
-                    table_text = getattr(element, "text", "")
-                    if table_text:
-                        # Simple HTML conversion for table text
-                        table_html = f"<table><tr><td>{table_text.replace(chr(10), '</td></tr><tr><td>')}</td></tr></table>"
-
-                # Assign table image file if available
-                table_image_path = None
-                if table_image_index < len(table_image_files):
-                    table_image_path = str(table_image_files[table_image_index])
-                    table_image_index += 1
-                    logger.info(
-                        f"Assigned table image {table_image_path} to {table_id}"
-                    )
-                else:
-                    logger.warning(f"No table image file available for {table_id}")
-
+                # Create enhanced table element
                 enhanced_table = {
                     "id": table_id,
                     "category": "Table",
                     "page": page_num,
-                    "text": getattr(element, "text", ""),
+                    "text": table_text,
                     "metadata": {
                         "page_number": page_num,
                         "table_id": table_id,
                         "has_html": bool(table_html),
                         "html_length": len(table_html) if table_html else 0,
-                        "extraction_method": "hi_res_vision",
-                        "text_as_html": table_html,  # Store HTML here for enrichment step
-                        "image_path": table_image_path,  # Local path for VLM processing
+                        "extraction_method": "pymupdf_table_image",
+                        "text_as_html": table_html,  # This is what enrichment step expects
+                        "image_path": str(save_path),
+                        "width": pixmap.width,
+                        "height": pixmap.height,
+                        "dpi": int(matrix.a * 72),
                     },
                 }
 
                 enhanced_tables.append(enhanced_table)
+                logger.info(f"Processed table {i+1}: {filename}")
 
-        # Clean up extracted files (keep only tables, remove figures)
-        self._cleanup_extracted_files()
+            except Exception as e:
+                logger.error(f"Error processing table {i+1}: {e}")
 
+        doc.close()
         logger.info(
-            f"Enhanced {len(enhanced_tables)} tables with vision processing and metadata"
+            f"Enhanced {len(enhanced_tables)} tables with PyMuPDF processing and metadata"
         )
         return enhanced_tables
 
@@ -850,6 +840,41 @@ class UnifiedPartitionerV2:
         doc.close()
         logger.info(f"Extracted {len(extracted_pages)} full pages")
         return extracted_pages
+
+    def _determine_text_category(self, text, span):
+        """Determine text category based on font size and content"""
+        font_size = span["size"]
+        is_bold = "Bold" in span["font"]
+
+        if font_size > 15 or is_bold:
+            return "Title"
+        elif text.strip().startswith(("•", "-", "1.", "2.", "3.")):
+            return "ListItem"
+        else:
+            return "NarrativeText"
+
+    def _table_to_html(self, table_data):
+        """Convert PyMuPDF table to HTML"""
+        try:
+            # Convert to pandas DataFrame and then to HTML
+            df = table_data.to_pandas()
+            if not df.empty:
+                html = df.to_html(
+                    index=False, header=True, classes="table table-striped"
+                )
+                return html
+        except Exception as e:
+            logger.warning(f"Pandas HTML conversion failed: {e}")
+
+        # Fallback: simple text-to-HTML
+        try:
+            text = table_data.extract()
+            if text:
+                return f"<table><tr><td>{text.replace(chr(10), '</td></tr><tr><td>')}</td></tr></table>"
+        except:
+            pass
+
+        return ""
 
     def _cleanup_extracted_files(self):
         """Clean up extracted files, keeping only table images"""
