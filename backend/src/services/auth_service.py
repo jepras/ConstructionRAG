@@ -171,9 +171,10 @@ class AuthService:
 
                 return {
                     "success": True,
+                    "message": "Token refreshed successfully",
                     "access_token": response.session.access_token,
                     "refresh_token": response.session.refresh_token,
-                    "expires_at": response.session.expires_at,
+                    "expires_at": str(response.session.expires_at),
                 }
             else:
                 raise HTTPException(
