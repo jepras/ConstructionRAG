@@ -115,7 +115,10 @@ class QueryPipelineOrchestrator:
         start_time = datetime.utcnow()
         query_run_id = str(uuid4())
 
-        logger.info(f"Starting query pipeline for query: {request.query[:50]}...")
+        logger.info(f"🔍 Starting query pipeline for query: {request.query[:50]}...")
+        logger.info(f"🔍 Request user_id: {request.user_id}")
+        logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
+        logger.info(f"🔍 Request type: {type(request)}")
 
         try:
             # Step 1: Query Processing
@@ -230,6 +233,9 @@ class QueryPipelineOrchestrator:
         """Store query run in the database"""
 
         try:
+            logger.info(f"🔍 Storing query run with ID: {query_run_id}")
+            logger.info(f"🔍 Request user_id: {request.user_id}")
+            logger.info(f"🔍 Request type: {type(request)}")
             query_run_data = {
                 "id": query_run_id,
                 "user_id": request.user_id,

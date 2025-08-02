@@ -78,17 +78,28 @@ async def process_query(
     3. Returns the complete response with metadata
     """
     try:
+        # Debug: Check what current_user contains
+        logger.info(f"🔍 current_user type: {type(current_user)}")
+        logger.info(f"🔍 current_user content: {current_user}")
+        logger.info(
+            f"🔍 current_user keys: {current_user.keys() if isinstance(current_user, dict) else 'Not a dict'}"
+        )
+
         # Set user_id from authenticated user
-        request.user_id = current_user.id
+        request.user_id = current_user["id"]
 
         logger.info(
-            f"Processing query for user {current_user.id}: {request.query[:50]}..."
+            f"Processing query for user {current_user['id']}: {request.query[:50]}..."
         )
 
         # Process query through pipeline
+        logger.info(f"🔍 About to process query through orchestrator...")
+        logger.info(f"🔍 Request object: {request}")
+        logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
+
         response = await orchestrator.process_query(request)
 
-        logger.info(f"Query processed successfully in {response.response_time_ms}ms")
+        logger.info(f"Query processed successfully")
         return response
 
     except Exception as e:

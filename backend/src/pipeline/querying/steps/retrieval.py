@@ -5,11 +5,12 @@ import time
 import logging
 from typing import List, Dict, Any, Optional
 from uuid import UUID
+from datetime import datetime
 import httpx
 from supabase import Client
 
 from ..models import SearchResult, QueryVariations
-from ...shared.base_step import PipelineStep
+from ...shared.base_step import PipelineStep, StepResult
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 
@@ -90,10 +91,8 @@ class DocumentRetriever(PipelineStep):
 
     async def execute(
         self, input_data: QueryVariations, indexing_run_id: Optional[str] = None
-    ) -> "StepResult":
+    ) -> StepResult:
         """Execute the retrieval step"""
-        from ...shared.base_step import StepResult
-
         start_time = datetime.utcnow()
 
         try:
