@@ -210,14 +210,12 @@ class PipelineService:
                 status=status,
                 error_message=error_message,
                 completed_at=(
-                    datetime.utcnow().isoformat()
-                    if status in ["completed", "failed"]
-                    else None
+                    datetime.utcnow() if status in ["completed", "failed"] else None
                 ),
             )
 
             # Convert UUIDs to strings for JSON serialization
-            data_dict = update_data.model_dump(exclude_unset=True)
+            data_dict = update_data.model_dump(exclude_unset=True, mode="json")
 
             result = (
                 self.supabase.table("indexing_runs")

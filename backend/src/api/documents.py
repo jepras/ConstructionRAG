@@ -127,12 +127,12 @@ async def upload_email_pdf(
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
 
-            # Create index run record
+            # Create index run record for foreign key constraint
             index_run_data = {
                 "id": index_run_id,
                 "upload_type": "email",
                 "upload_id": upload_id,
-                "status": "processing",
+                "status": "pending",
                 "created_at": "now()",
             }
 
@@ -549,7 +549,9 @@ async def process_email_upload_async(
 
         # Get orchestrator and process
         orchestrator = await get_indexing_orchestrator()
-        success = await orchestrator.process_document_async(document_input)
+        success = await orchestrator.process_document_async(
+            document_input, existing_indexing_run_id=UUID(index_run_id)
+        )
 
         if success:
             # Update email_uploads table
@@ -557,10 +559,7 @@ async def process_email_upload_async(
                 {"status": "completed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
 
-            # Update indexing_runs table
-            db.table("indexing_runs").update(
-                {"status": "completed", "completed_at": "now()"}
-            ).eq("id", index_run_id).execute()
+            # Note: Indexing run status is updated by the orchestrator, no need to update here
 
             logger.info(f"Email upload processing completed for {upload_id}")
         else:
@@ -569,10 +568,7 @@ async def process_email_upload_async(
                 {"status": "failed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
 
-            # Update indexing_runs table with error
-            db.table("indexing_runs").update(
-                {"status": "failed", "completed_at": "now()"}
-            ).eq("id", index_run_id).execute()
+            # Note: Indexing run status is updated by the orchestrator, no need to update here
 
             logger.error(f"Email upload processing failed for {upload_id}")
 
@@ -586,10 +582,7 @@ async def process_email_upload_async(
                 {"status": "failed", "completed_at": "now()"}
             ).eq("id", upload_id).execute()
 
-            # Update indexing_runs table with error
-            db.table("indexing_runs").update(
-                {"status": "failed", "completed_at": "now()"}
-            ).eq("id", index_run_id).execute()
+            # Note: Indexing run status is updated by the orchestrator, no need to update here
         except:
             pass
     # No file cleanup needed since we're using storage URLs

@@ -90,6 +90,12 @@ class EmbeddingStep(PipelineStep):
         self.pipeline_service = pipeline_service
         self.storage_service = storage_service or StorageService()
 
+        # Create database client if not provided
+        if self.db is None:
+            from src.config.database import get_supabase_admin_client
+
+            self.db = get_supabase_admin_client()
+
         # Initialize Voyage client
         api_key = config.get("api_key")
         if not api_key:

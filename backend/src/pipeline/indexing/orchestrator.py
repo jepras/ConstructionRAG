@@ -221,7 +221,11 @@ class IndexingOrchestrator:
 
         return PlaceholderStep(step_name, config)
 
-    async def process_document_async(self, document_input: DocumentInput) -> bool:
+    async def process_document_async(
+        self,
+        document_input: DocumentInput,
+        existing_indexing_run_id: Optional[UUID] = None,
+    ) -> bool:
         """Process a single document through all indexing steps sequentially"""
         indexing_run = None
         try:
@@ -229,12 +233,22 @@ class IndexingOrchestrator:
             if not self.steps:
                 await self.initialize_steps(document_input.user_id)
 
-            # Create indexing run in database
-            indexing_run = await self.pipeline_service.create_indexing_run(
-                upload_type=document_input.upload_type,
-                upload_id=document_input.upload_id,
-                project_id=document_input.project_id,
-            )
+            # Create or get indexing run in database
+            if existing_indexing_run_id:
+                indexing_run = await self.pipeline_service.get_indexing_run(
+                    existing_indexing_run_id
+                )
+                if not indexing_run:
+                    raise ValueError(
+                        f"Indexing run {existing_indexing_run_id} not found"
+                    )
+                logger.info(f"Using existing indexing run: {existing_indexing_run_id}")
+            else:
+                indexing_run = await self.pipeline_service.create_indexing_run(
+                    upload_type=document_input.upload_type,
+                    upload_id=document_input.upload_id,
+                    project_id=document_input.project_id,
+                )
 
             # Link document to indexing run
             if document_input.document_id:

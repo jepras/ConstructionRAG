@@ -112,7 +112,7 @@ class QueryPipelineOrchestrator:
     async def process_query(self, request: QueryRequest) -> QueryResponse:
         """Process a complete query through the entire pipeline"""
 
-        start_time = time.time()
+        start_time = datetime.utcnow()
         query_run_id = str(uuid4())
 
         logger.info(f"Starting query pipeline for query: {request.query[:50]}...")
@@ -156,7 +156,9 @@ class QueryPipelineOrchestrator:
             response = QueryResponse(**response_data)
 
             # Calculate total response time
-            response_time_ms = int((time.time() - start_time) * 1000)
+            response_time_ms = int(
+                (datetime.utcnow() - start_time).total_seconds() * 1000
+            )
 
             # Store query run in database
             await self._store_query_run(
@@ -182,7 +184,9 @@ class QueryPipelineOrchestrator:
                 query_run_id=query_run_id,
                 request=request,
                 error_message=str(e),
-                response_time_ms=int((time.time() - start_time) * 1000),
+                response_time_ms=int(
+                    (datetime.utcnow() - start_time).total_seconds() * 1000
+                ),
             )
 
             # Return error response

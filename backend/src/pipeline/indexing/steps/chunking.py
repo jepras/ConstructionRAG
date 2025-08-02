@@ -516,6 +516,12 @@ class ChunkingStep(PipelineStep):
         self.pipeline_service = pipeline_service
         self.storage_service = storage_service or StorageService()
 
+        # Create database client if not provided
+        if self.db is None:
+            from src.config.database import get_supabase_admin_client
+
+            self.db = get_supabase_admin_client()
+
         # Initialize chunking engine
         chunking_config = config.get("chunking", {})
         self.chunker = IntelligentChunker(chunking_config)
