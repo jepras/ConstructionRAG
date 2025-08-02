@@ -88,7 +88,9 @@ class DocumentRetriever(PipelineStep):
             api_key=api_key, model=self.config.embedding_model
         )
 
-    async def execute(self, input_data: QueryVariations) -> "StepResult":
+    async def execute(
+        self, input_data: QueryVariations, indexing_run_id: Optional[str] = None
+    ) -> "StepResult":
         """Execute the retrieval step"""
         from ...shared.base_step import StepResult
 
@@ -96,7 +98,7 @@ class DocumentRetriever(PipelineStep):
 
         try:
             # Search documents using query variations
-            results = await self.search(input_data)
+            results = await self.search(input_data, indexing_run_id)
 
             return StepResult(
                 step="retrieval",
@@ -126,7 +128,9 @@ class DocumentRetriever(PipelineStep):
                 completed_at=datetime.utcnow(),
             )
 
-    async def search(self, variations: QueryVariations) -> List[SearchResult]:
+    async def search(
+        self, variations: QueryVariations, indexing_run_id: Optional[str] = None
+    ) -> List[SearchResult]:
         """Search documents using best query variation"""
 
         logger.info(f"Searching documents with {len(variations.dict())} variations")
@@ -139,7 +143,7 @@ class DocumentRetriever(PipelineStep):
         query_embedding = await self.embed_query(best_query)
 
         # Search pgvector using embedding_1024 column
-        results = await self.search_pgvector(query_embedding)
+        results = await self.search_pgvector(query_embedding, indexing_run_id)
 
         # Filter by similarity threshold
         filtered_results = self.filter_by_similarity(results)
@@ -159,7 +163,7 @@ class DocumentRetriever(PipelineStep):
         return await self.voyage_client.get_embedding(query)
 
     async def search_pgvector(
-        self, query_embedding: List[float]
+        self, query_embedding: List[float], indexing_run_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Search pgvector using cosine distance"""
 
@@ -197,12 +201,20 @@ class DocumentRetriever(PipelineStep):
 
             # Get all chunks and calculate similarity in Python
             # (RPC function doesn't exist, so we use direct query)
-            response = (
+            query = (
                 self.db.table("document_chunks")
-                .select("id,content,metadata,embedding_1024,document_id")
+                .select(
+                    "id,content,metadata,embedding_1024,document_id,indexing_run_id"
+                )
                 .not_.is_("embedding_1024", "null")
-                .execute()
             )
+
+            # Filter by indexing_run_id if provided
+            if indexing_run_id:
+                query = query.eq("indexing_run_id", indexing_run_id)
+                logger.info(f"Filtering search to indexing run: {indexing_run_id}")
+
+            response = query.execute()
 
             chunks = response.data
             results_with_scores = []

@@ -380,3 +380,19 @@ class PipelineService:
             raise DatabaseError(
                 f"Failed to get latest successful indexing run: {str(e)}"
             )
+
+    async def get_all_indexing_runs(self) -> List[IndexingRun]:
+        """Get all indexing runs, sorted by latest first."""
+        try:
+            result = (
+                self.supabase.table("indexing_runs")
+                .select("*")
+                .order("started_at", desc=True)
+                .execute()
+            )
+
+            return [IndexingRun(**run) for run in result.data]
+
+        except Exception as e:
+            logger.error(f"Error getting all indexing runs: {e}")
+            raise DatabaseError(f"Failed to get all indexing runs: {str(e)}")

@@ -134,7 +134,16 @@ class QueryPipelineOrchestrator:
             # Step 2: Document Retrieval
             logger.info("Step 2: Retrieving relevant documents...")
 
-            retrieval_result = await self.retriever.execute(variations)
+            # Pass indexing_run_id to retrieval step if provided
+            if request.indexing_run_id:
+                logger.info(
+                    f"Querying specific indexing run: {request.indexing_run_id}"
+                )
+                retrieval_result = await self.retriever.execute(
+                    variations, str(request.indexing_run_id)
+                )
+            else:
+                retrieval_result = await self.retriever.execute(variations)
             if retrieval_result.status != "completed":
                 raise Exception(f"Retrieval failed: {retrieval_result.error_message}")
 

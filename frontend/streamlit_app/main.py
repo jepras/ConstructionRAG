@@ -501,74 +501,184 @@ def show_query_page():
         user = user_info["user"]
         st.success(f"✅ Signed in as: {user.get('email', 'N/A')}")
 
-    # Test Query API button
-    st.markdown("### Test Backend Query API")
-    if st.button("🧪 Test Query API", type="secondary"):
-        import requests
+    # Load available indexing runs
+    try:
+        backend_url = get_backend_url()
+        access_token = st.session_state.get("access_token")
 
-        try:
-            # Get auth token from session state
-            access_token = st.session_state.get("access_token")
-            if not access_token:
-                st.error("❌ No access token found. Please sign in again.")
-                return
+        if not access_token:
+            st.error("❌ No access token found. Please sign in again.")
+            return
 
-            # Prepare headers with authentication
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            }
+        headers = {"Authorization": f"Bearer {access_token}"}
 
-            # Get backend URL from environment
-            backend_url = get_backend_url()
+        # Get all indexing runs
+        response = requests.get(
+            f"{backend_url}/api/pipeline/indexing/runs", headers=headers, timeout=10
+        )
 
-            # Debug: Log the request details
-            logger.info(f"🔍 Making query API request...")
-            logger.info(f"📡 URL: {backend_url}/api/query/")
-            logger.info(f"📤 Headers: {headers}")
-            logger.info(
-                f"📤 Payload: {{'query': 'What is this construction project about?'}}"
-            )
+        if response.status_code == 200:
+            indexing_runs = response.json()
 
-            response = requests.post(
-                f"{backend_url}/api/query/",
-                json={"query": "What is this construction project about?"},
-                headers=headers,
-                timeout=10,
-            )
+            # Show all runs for debugging (not just completed ones)
+            all_runs = indexing_runs
 
-            # Debug: Log the response details
-            logger.info(f"📥 Response status: {response.status_code}")
-            logger.info(f"📥 Response headers: {dict(response.headers)}")
-            logger.info(f"📥 Response content: {response.text}")
+            if all_runs:
+                st.markdown("### 📄 Available Processed Documents")
 
-            if response.status_code == 200:
-                st.success("✅ Query API working!")
-                st.json(response.json())
+                # Create dropdown for indexing run selection
+                run_options = []
+                for run in all_runs:
+                    upload_type = run.get("upload_type", "unknown")
+                    upload_id = run.get("upload_id", "N/A")
+                    started_at = run.get("started_at", "Unknown")
+
+                    # Format the display name
+                    if upload_type == "email":
+                        display_name = (
+                            f"Email Upload ({upload_id[:8]}...) - {started_at[:10]}"
+                        )
+                    else:
+                        display_name = f"Project Document - {started_at[:10]}"
+
+                    run_options.append((display_name, run["id"]))
+
+                if run_options:
+                    selected_run_display, selected_run_id = st.selectbox(
+                        "Choose a processed document to query:",
+                        options=run_options,
+                        format_func=lambda x: x[0],
+                        help="Select a document that has been processed and is ready for querying",
+                    )
+
+                    st.success(f"✅ Selected: {selected_run_display}")
+
+                    # Query input
+                    st.markdown("---")
+                    query = st.text_area(
+                        "Ask a question about this document:",
+                        placeholder="e.g., What are the electrical requirements for the main building?",
+                        height=100,
+                    )
+
+                    if st.button("🔍 Search", type="primary"):
+                        if query:
+                            with st.spinner("Searching for answers..."):
+                                try:
+                                    # Make query request with indexing run ID
+                                    query_response = requests.post(
+                                        f"{backend_url}/api/query/",
+                                        json={
+                                            "query": query,
+                                            "indexing_run_id": selected_run_id,
+                                        },
+                                        headers=headers,
+                                        timeout=30,
+                                    )
+
+                                    if query_response.status_code == 200:
+                                        result = query_response.json()
+                                        st.success("✅ Answer found!")
+
+                                        # Display the response
+                                        st.markdown("### Answer:")
+                                        st.write(
+                                            result.get(
+                                                "response", "No response received"
+                                            )
+                                        )
+
+                                        # Display metadata if available
+                                        if result.get("search_results"):
+                                            st.markdown("### Sources:")
+                                            for i, source in enumerate(
+                                                result["search_results"][:3], 1
+                                            ):
+                                                st.markdown(
+                                                    f"**Source {i}:** {source.get('content', '')[:200]}..."
+                                                )
+
+                                        if result.get("performance_metrics"):
+                                            st.markdown("### Performance:")
+                                            st.json(result["performance_metrics"])
+
+                                    else:
+                                        st.error(
+                                            f"❌ Query failed: {query_response.status_code}"
+                                        )
+                                        st.text(f"Response: {query_response.text}")
+
+                                except Exception as e:
+                                    st.error(f"❌ Query failed: {str(e)}")
+                        else:
+                            st.warning("Please enter a question.")
+                else:
+                    st.info("No completed indexing runs found.")
             else:
-                st.error(f"❌ Query API error: {response.status_code}")
-                st.text(f"Response: {response.text}")
-        except Exception as e:
-            st.error(f"❌ Query API failed: {str(e)}")
-
-    st.markdown("---")
-
-    # Query input
-    query = st.text_area(
-        "Ask a question about your construction project:",
-        placeholder="e.g., What are the electrical requirements for the main building?",
-        height=100,
-    )
-
-    if st.button("🔍 Search", type="primary"):
-        if query:
-            with st.spinner("Searching for answers..."):
-                # TODO: Implement actual query logic
                 st.info(
-                    "Query functionality will be implemented once documents are processed."
+                    "📄 No processed documents found. Upload and process documents first."
                 )
+
         else:
-            st.warning("Please enter a question.")
+            st.error(f"❌ Failed to load indexing runs: {response.status_code}")
+
+    except Exception as e:
+        logger.error(f"❌ Error loading indexing runs: {str(e)}")
+        st.error(f"❌ Error loading indexing runs: {str(e)}")
+
+    # Test buttons for debugging
+    st.markdown("---")
+    st.markdown("### 🧪 Debug: Test APIs")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Test Indexing Runs API", type="secondary"):
+            try:
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                }
+
+                response = requests.get(
+                    f"{backend_url}/api/pipeline/indexing/runs",
+                    headers=headers,
+                    timeout=10,
+                )
+
+                if response.status_code == 200:
+                    runs = response.json()
+                    st.success(f"✅ Indexing Runs API working! Found {len(runs)} runs")
+                    st.json(runs[:2])  # Show first 2 runs
+                else:
+                    st.error(f"❌ Indexing Runs API error: {response.status_code}")
+                    st.text(f"Response: {response.text}")
+            except Exception as e:
+                st.error(f"❌ Indexing Runs API failed: {str(e)}")
+
+    with col2:
+        if st.button("Test Query API", type="secondary"):
+            try:
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                }
+
+                response = requests.post(
+                    f"{backend_url}/api/query/",
+                    json={"query": "What is this construction project about?"},
+                    headers=headers,
+                    timeout=10,
+                )
+
+                if response.status_code == 200:
+                    st.success("✅ Query API working!")
+                    st.json(response.json())
+                else:
+                    st.error(f"❌ Query API error: {response.status_code}")
+                    st.text(f"Response: {response.text}")
+            except Exception as e:
+                st.error(f"❌ Query API failed: {str(e)}")
 
 
 def show_settings_page():

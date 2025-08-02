@@ -78,6 +78,42 @@ async def start_indexing_pipeline(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/indexing/runs", response_model=List[Dict[str, Any]])
+async def get_all_indexing_runs(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    pipeline_service: PipelineService = Depends(
+        lambda: PipelineService(use_admin_client=True)
+    ),
+):
+    """Get all indexing runs, sorted by latest first."""
+    try:
+        runs = await pipeline_service.get_all_indexing_runs()
+
+        return [
+            {
+                "id": str(run.id),
+                "upload_type": run.upload_type,
+                "upload_id": run.upload_id,
+                "project_id": str(run.project_id) if run.project_id else None,
+                "status": run.status,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "completed_at": (
+                    run.completed_at.isoformat() if run.completed_at else None
+                ),
+                "error_message": run.error_message,
+                "step_results": run.step_results,
+            }
+            for run in runs
+        ]
+
+    except DatabaseError as e:
+        logger.error(f"Database error getting all indexing runs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get all indexing runs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/indexing/runs/{document_id}", response_model=List[Dict[str, Any]])
 async def get_indexing_runs(
     document_id: UUID,

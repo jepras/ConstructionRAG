@@ -9,17 +9,26 @@ This document outlines the storage structure for the ConstructionRAG system, sup
 pipeline-assets/
 ├── email-uploads/                    # Anonymous email-based uploads
 │   ├── {upload-id}/
-│   │   ├── original.pdf              # Original uploaded PDF
-│   │   ├── generated-page.html       # Public HTML page
-│   │   ├── processing/               # Pipeline processing files
-│   │   │   ├── extracted-pages/      # Page images for VLM
-│   │   │   │   ├── page_1.png
-│   │   │   │   ├── page_2.png
-│   │   │   │   └── ...
-│   │   │   └── table-images/         # Table images for VLM
-│   │   │       ├── table_1.png
-│   │   │       └── ...
-│   │   └── metadata.json             # Processing metadata
+│   │   ├── index-runs/
+│   │   │   ├── {index-run-id}/       # Single index run per email upload
+│   │   │   │   ├── pdfs/             # Original PDFs for this run
+│   │   │   │   │   ├── document-1.pdf
+│   │   │   │   │   └── ...
+│   │   │   │   ├── {document-id-1}/  # Processing outputs per document
+│   │   │   │   │   ├── extracted-pages/
+│   │   │   │   │   │   ├── page_1.png
+│   │   │   │   │   │   └── ...
+│   │   │   │   │   └── table-images/
+│   │   │   │   │       ├── table_1.png
+│   │   │   │   │       └── ...
+│   │   │   │   ├── {document-id-2}/
+│   │   │   │   │   └── ...
+│   │   │   │   ├── generated/        # Generated content
+│   │   │   │   │   ├── markdown/
+│   │   │   │   │   │   ├── summary.md
+│   │   │   │   │   │   └── ...
+│   │   │   └── ...
+│   │   └── ...
 │   └── ...
 ├── users/
 │   ├── {user-id}/
@@ -91,9 +100,9 @@ pipeline-assets/
 
 ### Email Upload Lifecycle
 ```
-1. Upload: original.pdf → email-uploads/{upload-id}/original.pdf
-2. Processing: Temporary files → email-uploads/{upload-id}/processing/
-3. Generation: HTML page → email-uploads/{upload-id}/generated-page.html
+1. Upload: original.pdf → email-uploads/{upload-id}/index-runs/{index-run-id}/pdfs/{filename}
+2. Processing: Document outputs → email-uploads/{upload-id}/index-runs/{index-run-id}/{document-id}/
+3. Generation: Generated content → email-uploads/{upload-id}/index-runs/{index-run-id}/generated/
 4. Cleanup: After 30 days → Delete entire {upload-id} folder
 ```
 
@@ -110,7 +119,7 @@ pipeline-assets/
 ### Email Uploads
 ```sql
 CREATE TABLE email_uploads (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY, -- upload_id from storage path
     email TEXT NOT NULL,
     filename TEXT NOT NULL,
     file_size INTEGER,
@@ -119,7 +128,8 @@ CREATE TABLE email_uploads (
     processing_results JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
-    expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 days')
+    expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 days'),
+    index_run_id TEXT  -- References indexing_runs table
 );
 ```
 
@@ -174,18 +184,20 @@ CREATE TABLE index_run_documents (
 
 ### Email Upload Methods
 ```python
-async def upload_email_pdf(self, file_path: str, upload_id: UUID) -> str
-async def save_email_processing_output(self, upload_id: UUID, step: str, data: Dict) -> str
-async def upload_email_page_image(self, upload_id: UUID, page_num: int, image_path: str) -> str
-async def generate_email_public_page(self, upload_id: UUID, html_content: str) -> str
+async def upload_original_pdf(self, file_path: str, filename: str, upload_type: UploadType.EMAIL, upload_id: str, index_run_id: UUID) -> Dict[str, Any]
+async def upload_extracted_page_image(self, image_path: str, document_id: UUID, page_num: int, complexity: str, upload_type: UploadType.EMAIL, upload_id: str, index_run_id: UUID) -> Dict[str, Any]
+async def upload_table_image(self, image_path: str, document_id: UUID, table_id: str, upload_type: UploadType.EMAIL, upload_id: str, index_run_id: UUID) -> Dict[str, Any]
+async def upload_generated_file(self, file_path: str, filename: str, upload_type: UploadType.EMAIL, upload_id: str, index_run_id: UUID) -> Dict[str, Any]
+async def upload_temp_file(self, file_path: str, filename: str, step: str, upload_type: UploadType.EMAIL, upload_id: str, index_run_id: UUID) -> Dict[str, Any]
 ```
 
 ### User Project Methods
 ```python
-async def upload_project_pdf(self, file_path: str, user_id: UUID, project_id: UUID, index_run_id: UUID, filename: str) -> str
-async def save_document_processing_output(self, document_id: UUID, step: str, data: Dict) -> str
-async def upload_document_page_image(self, document_id: UUID, page_num: int, image_path: str) -> str
-async def generate_project_content(self, index_run_id: UUID, content_type: str, content: str) -> str
+async def upload_original_pdf(self, file_path: str, filename: str, upload_type: UploadType.USER_PROJECT, user_id: UUID, project_id: UUID, index_run_id: UUID) -> Dict[str, Any]
+async def upload_extracted_page_image(self, image_path: str, document_id: UUID, page_num: int, complexity: str, upload_type: UploadType.USER_PROJECT, user_id: UUID, project_id: UUID, index_run_id: UUID) -> Dict[str, Any]
+async def upload_table_image(self, image_path: str, document_id: UUID, table_id: str, upload_type: UploadType.USER_PROJECT, user_id: UUID, project_id: UUID, index_run_id: UUID) -> Dict[str, Any]
+async def upload_generated_file(self, file_path: str, filename: str, upload_type: UploadType.USER_PROJECT, user_id: UUID, project_id: UUID, index_run_id: UUID) -> Dict[str, Any]
+async def upload_temp_file(self, file_path: str, filename: str, step: str, upload_type: UploadType.USER_PROJECT, user_id: UUID, project_id: UUID, index_run_id: UUID) -> Dict[str, Any]
 ```
 
 ### Cleanup Methods
@@ -197,16 +209,18 @@ async def delete_index_run(self, index_run_id: UUID) -> bool
 
 ## Benefits
 
-1. **Version Control**: Each index run is a complete snapshot
-2. **Project Organization**: Clear project boundaries
-3. **Scalability**: Easy to add new versions without affecting old ones
-4. **Cleanup**: Can delete old versions while keeping current
-5. **Collaboration**: Future organization support built-in
-6. **Debugging**: Temp files available for troubleshooting
-7. **Generated Content**: Markdown and pages organized by run
-8. **Simple Anonymous Uploads**: Email-based system for quick trials
-9. **Security**: Proper access controls for each type
-10. **Efficiency**: Temporary files cleaned up automatically
+1. **Unified Structure**: Email uploads and user projects use identical storage organization
+2. **Version Control**: Each index run is a complete snapshot
+3. **Project Organization**: Clear project boundaries
+4. **Scalability**: Easy to add new versions without affecting old ones
+5. **Cleanup**: Can delete old versions while keeping current
+6. **Collaboration**: Future organization support built-in
+7. **Debugging**: Temp files available for troubleshooting
+8. **Generated Content**: Markdown and pages organized by run
+9. **Simple Anonymous Uploads**: Email-based system for quick trials with same structure as projects
+10. **Security**: Proper access controls for each type
+11. **Efficiency**: Temporary files cleaned up automatically
+12. **Consistency**: Same storage service methods work for both upload types
 
 ## Test Storage Strategy
 
@@ -215,9 +229,16 @@ async def delete_index_run(self, index_run_id: UUID) -> bool
 pipeline-assets-test/                    # Separate test bucket
 ├── email-uploads/
 │   ├── test-upload-789/
-│   │   ├── original.pdf
-│   │   ├── generated-page.html
-│   │   └── processing/
+│   │   └── index-runs/
+│   │       ├── test-index-run-123/
+│   │       │   ├── pdfs/
+│   │       │   │   └── test-document.pdf
+│   │       │   ├── test-document-456/
+│   │       │   │   ├── extracted-pages/
+│   │       │   │   └── table-images/
+│   │       │   ├── generated/
+│   │       │   └── temp/
+│   │       └── ...
 │   └── ...
 ├── users/
 │   ├── test-user-123/
@@ -245,19 +266,33 @@ pipeline-assets-test/                    # Separate test bucket
 ### Test Storage Methods
 ```python
 # Email upload testing
-await test_storage.upload_test_email_pdf(pdf_path, upload_id="test-upload-789")
+await test_storage.upload_original_pdf(
+    pdf_path, 
+    filename="test-document.pdf",
+    upload_type=UploadType.EMAIL,
+    upload_id="test-upload-789",
+    index_run_id=UUID("test-index-run-123")
+)
 
 # User project testing
-await test_storage.upload_test_user_pdf(
+await test_storage.upload_original_pdf(
     pdf_path, 
-    user_id="test-user-123",
-    project_id="test-project-456",
-    index_run_id="test-index-run-123",
-    document_id="test-document-456"
+    filename="test-document.pdf",
+    upload_type=UploadType.USER_PROJECT,
+    user_id=UUID("test-user-123"),
+    project_id=UUID("test-project-456"),
+    index_run_id=UUID("test-index-run-123")
 )
 
 # Processing output testing
-await test_storage.upload_test_processing_output(data, upload_type="email")
+await test_storage.upload_temp_file(
+    temp_file_path,
+    filename="test-output.json",
+    step="partition",
+    upload_type=UploadType.EMAIL,
+    upload_id="test-upload-789",
+    index_run_id=UUID("test-index-run-123")
+)
 
 # Cleanup
 await test_storage.cleanup_test_data()

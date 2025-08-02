@@ -74,6 +74,9 @@ class QueryRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000)
     user_id: Optional[str] = None
+    indexing_run_id: Optional[UUID] = Field(
+        None, description="Specific indexing run to query against"
+    )
 
 
 class QueryFeedback(BaseModel):
