@@ -212,30 +212,39 @@ Svar kun med det omskrevne spørgsmål:"""
 
     async def execute(self, input_data: str) -> StepResult:
         """Execute the query processing step"""
-
         start_time = datetime.utcnow()
 
         try:
+            logger.info(f"Processing query: {input_data[:50]}...")
+
+            # Generate query variations
             variations = await self.process(input_data)
 
+            # Create sample outputs for debugging
+            sample_outputs = {
+                "variations": variations.dict(),
+                "original_query": input_data,
+            }
+
             return StepResult(
-                step="query_processing",
+                step=self.get_step_name(),
                 status="completed",
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
-                    "original_query": variations.original,
-                    "variations_generated": 3,
-                    "has_semantic": variations.semantic is not None,
-                    "has_hyde": variations.hyde is not None,
-                    "has_formal": variations.formal is not None,
+                    "variations_generated": len(
+                        [v for v in variations.dict().values() if v]
+                    ),
+                    "original_query_length": len(input_data),
                 },
-                sample_outputs={"variations": variations.dict()},
+                sample_outputs=sample_outputs,
                 started_at=start_time,
                 completed_at=datetime.utcnow(),
             )
+
         except Exception as e:
+            logger.error(f"Error in query processing step: {e}")
             return StepResult(
-                step="query_processing",
+                step=self.get_step_name(),
                 status="failed",
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),

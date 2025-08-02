@@ -99,26 +99,37 @@ class DocumentRetriever(PipelineStep):
             # Search documents using query variations
             results = await self.search(input_data, indexing_run_id)
 
+            # Create sample outputs for debugging
+            sample_outputs = {
+                "search_results": [result.dict() for result in results],
+                "results_count": len(results),
+                "top_similarity": results[0].similarity_score if results else 0.0,
+            }
+
             return StepResult(
-                step="retrieval",
+                step=self.get_step_name(),
                 status="completed",
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
-                    "total_results": len(results),
-                    "query_variations": 3,
-                    "embedding_model": self.config.embedding_model,
-                    "similarity_metric": self.config.similarity_metric,
-                    "top_k": self.config.top_k,
+                    "results_retrieved": len(results),
+                    "top_similarity_score": (
+                        results[0].similarity_score if results else 0.0
+                    ),
+                    "avg_similarity_score": (
+                        sum(r.similarity_score for r in results) / len(results)
+                        if results
+                        else 0.0
+                    ),
                 },
-                sample_outputs={
-                    "search_results": [result.dict() for result in results]
-                },
+                sample_outputs=sample_outputs,
                 started_at=start_time,
                 completed_at=datetime.utcnow(),
             )
+
         except Exception as e:
+            logger.error(f"Error in retrieval step: {e}")
             return StepResult(
-                step="retrieval",
+                step=self.get_step_name(),
                 status="failed",
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),

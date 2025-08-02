@@ -54,8 +54,8 @@ class QueryPipelineOrchestrator:
         return {
             "query_processing": {
                 "provider": "openrouter",
-                "model": "openai/gpt-3.5-turbo",
-                "fallback_models": ["anthropic/claude-3-haiku"],
+                "model": "google/gemini-2.5-flash",
+                "fallback_models": ["anthropic/claude-3.5-haiku"],
                 "timeout_seconds": 1.0,
                 "max_tokens": 200,
                 "temperature": 0.1,
@@ -86,8 +86,11 @@ class QueryPipelineOrchestrator:
             },
             "generation": {
                 "provider": "openrouter",
-                "model": "anthropic/claude-3.5-sonnet",
-                "fallback_models": ["openai/gpt-4", "meta-llama/llama-3.1-8b-instruct"],
+                "model": "google/gemini-2.5-flash",
+                "fallback_models": [
+                    "anthropic/claude-3.5-haiku",
+                    "meta-llama/llama-3.1-8b-instruct",
+                ],
                 "timeout_seconds": 5.0,
                 "max_tokens": 1000,
                 "temperature": 0.1,
@@ -115,6 +118,9 @@ class QueryPipelineOrchestrator:
         start_time = datetime.utcnow()
         query_run_id = str(uuid4())
 
+        # Track step timings
+        step_timings = {}
+
         logger.info(f"🔍 Starting query pipeline for query: {request.query[:50]}...")
         logger.info(f"🔍 Request user_id: {request.user_id}")
         logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
@@ -123,6 +129,7 @@ class QueryPipelineOrchestrator:
         try:
             # Step 1: Query Processing
             logger.info("Step 1: Processing query variations...")
+            step1_start = datetime.utcnow()
 
             query_result = await self.query_processor.execute(request.query)
             if query_result.status != "completed":
@@ -130,12 +137,17 @@ class QueryPipelineOrchestrator:
                     f"Query processing failed: {query_result.error_message}"
                 )
 
+            step1_duration = (datetime.utcnow() - step1_start).total_seconds()
+            step_timings["query_processing"] = step1_duration
+            logger.info(f"Query processing completed in {step1_duration:.2f}s")
+
             # Get variations from sample_outputs
             variations_data = query_result.sample_outputs.get("variations", {})
             variations = QueryVariations(**variations_data)
 
             # Step 2: Document Retrieval
             logger.info("Step 2: Retrieving relevant documents...")
+            step2_start = datetime.utcnow()
 
             # Pass indexing_run_id to retrieval step if provided
             if request.indexing_run_id:
@@ -150,6 +162,10 @@ class QueryPipelineOrchestrator:
             if retrieval_result.status != "completed":
                 raise Exception(f"Retrieval failed: {retrieval_result.error_message}")
 
+            step2_duration = (datetime.utcnow() - step2_start).total_seconds()
+            step_timings["retrieval"] = step2_duration
+            logger.info(f"Retrieval completed in {step2_duration:.2f}s")
+
             # Get search results from sample_outputs and convert to SearchResult objects
             search_results_data = retrieval_result.sample_outputs.get(
                 "search_results", []
@@ -158,14 +174,22 @@ class QueryPipelineOrchestrator:
 
             # Step 3: Response Generation
             logger.info("Step 3: Generating response...")
+            step3_start = datetime.utcnow()
 
             generation_result = await self.generator.execute(search_results)
             if generation_result.status != "completed":
                 raise Exception(f"Generation failed: {generation_result.error_message}")
 
+            step3_duration = (datetime.utcnow() - step3_start).total_seconds()
+            step_timings["generation"] = step3_duration
+            logger.info(f"Generation completed in {step3_duration:.2f}s")
+
             # Get response from sample_outputs
             response_data = generation_result.sample_outputs.get("response", {})
             response = QueryResponse(**response_data)
+
+            # Add step timings to the response
+            response.step_timings = step_timings
 
             # Calculate total response time
             response_time_ms = int(
@@ -180,11 +204,13 @@ class QueryPipelineOrchestrator:
                 search_results=search_results,
                 response=response,
                 response_time_ms=response_time_ms,
+                step_timings=step_timings,
             )
 
             logger.info(
                 f"Query pipeline completed successfully in {response_time_ms}ms"
             )
+            logger.info(f"Step timings: {step_timings}")
 
             return response
 
@@ -229,6 +255,7 @@ class QueryPipelineOrchestrator:
         response: Optional[QueryResponse] = None,
         error_message: Optional[str] = None,
         response_time_ms: int = 0,
+        step_timings: Optional[Dict[str, float]] = None,
     ):
         """Store query run in the database"""
 
@@ -257,6 +284,7 @@ class QueryPipelineOrchestrator:
                 ),
                 "response_time_ms": response_time_ms,
                 "error_message": error_message,
+                "step_timings": step_timings,
                 "created_at": datetime.utcnow().isoformat(),
             }
 

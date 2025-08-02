@@ -67,6 +67,7 @@ class QueryResponse(BaseModel):
     performance_metrics: Dict[str, Any]
     quality_metrics: Optional[QualityMetrics] = None
     quality_decision: Optional[QualityDecision] = None
+    step_timings: Optional[Dict[str, float]] = None
 
 
 class QueryRequest(BaseModel):

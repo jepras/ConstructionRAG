@@ -44,6 +44,8 @@ class ResponseGenerator(PipelineStep):
 
     async def execute(self, input_data: List[SearchResult]) -> StepResult:
         """Execute the generation step"""
+        start_time = datetime.utcnow()
+
         try:
             logger.info(
                 f"Generating response for {len(input_data)} retrieved documents"
@@ -58,7 +60,7 @@ class ResponseGenerator(PipelineStep):
             return StepResult(
                 step=self.get_step_name(),
                 status="completed",
-                duration_seconds=0.0,  # Will be set by executor
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
                     "model_used": response.performance_metrics["model_used"],
                     "tokens_used": response.performance_metrics["tokens_used"],
@@ -69,7 +71,7 @@ class ResponseGenerator(PipelineStep):
                     "sources_count": len(response.search_results),
                     "response": response.dict(),
                 },
-                started_at=datetime.utcnow(),
+                started_at=start_time,
                 completed_at=datetime.utcnow(),
             )
 
@@ -78,10 +80,10 @@ class ResponseGenerator(PipelineStep):
             return StepResult(
                 step=self.get_step_name(),
                 status="failed",
-                duration_seconds=0.0,
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 error_message=str(e),
                 error_details={"exception_type": type(e).__name__},
-                started_at=datetime.utcnow(),
+                started_at=start_time,
                 completed_at=datetime.utcnow(),
             )
 
@@ -122,7 +124,7 @@ class ResponseGenerator(PipelineStep):
                 "page": result.page_number,
                 "similarity": result.similarity_score,
             }
-            for result in search_results[:3]  # Top 3 sources
+            for result in search_results  # Use all search results, not just top 3
         ]
 
         # Calculate confidence based on similarity scores
@@ -138,7 +140,9 @@ class ResponseGenerator(PipelineStep):
                 "model_used": model_used,
                 "tokens_used": tokens_used,
                 "confidence": confidence,
-                "sources_count": len(sources),
+                "sources_count": len(
+                    search_results
+                ),  # Use actual number of search results
             },
             quality_metrics=quality_metrics,
         )

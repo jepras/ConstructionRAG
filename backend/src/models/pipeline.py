@@ -120,6 +120,9 @@ class QueryRun(BaseModel):
     response_time_ms: Optional[int] = Field(
         None, description="Response time in milliseconds"
     )
+    step_timings: Optional[Dict[str, float]] = Field(
+        None, description="Individual step execution times in seconds"
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow, description="Query creation timestamp"
     )

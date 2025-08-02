@@ -592,7 +592,8 @@ def show_query_page():
                                         if result.get("search_results"):
                                             st.markdown("### Sources:")
                                             for i, source in enumerate(
-                                                result["search_results"][:3], 1
+                                                result["search_results"],
+                                                1,  # Show all sources, not just first 3
                                             ):
                                                 st.markdown(
                                                     f"**Source {i}:** {source.get('content', '')[:200]}..."
@@ -601,6 +602,37 @@ def show_query_page():
                                         if result.get("performance_metrics"):
                                             st.markdown("### Performance:")
                                             st.json(result["performance_metrics"])
+
+                                            # Display step timings if available
+                                            if result.get("step_timings"):
+                                                st.markdown("### Step Timings:")
+                                                step_timings = result["step_timings"]
+                                                for (
+                                                    step,
+                                                    duration,
+                                                ) in step_timings.items():
+                                                    st.text(
+                                                        f"• {step.replace('_', ' ').title()}: {duration:.2f}s"
+                                                    )
+
+                                                # Calculate total from step timings
+                                                total_steps = sum(step_timings.values())
+                                                st.text(
+                                                    f"• Total Pipeline Steps: {total_steps:.2f}s"
+                                                )
+
+                                                # Show overhead (difference between total and step sum)
+                                                total_time = (
+                                                    result["performance_metrics"].get(
+                                                        "response_time_ms", 0
+                                                    )
+                                                    / 1000
+                                                )
+                                                overhead = total_time - total_steps
+                                                if overhead > 0:
+                                                    st.text(
+                                                        f"• Overhead (DB, network, etc.): {overhead:.2f}s"
+                                                    )
 
                                     else:
                                         st.error(
