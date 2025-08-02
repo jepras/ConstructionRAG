@@ -745,7 +745,6 @@ class MetadataStep(PipelineStep):
         for elem in text_elements:
             cat = elem.get("category", "Unknown")
             categories[cat] = categories.get(cat, 0) + 1
-        print(f"📊 Category distribution: {categories}")
         logger.info(f"Category distribution: {categories}")
 
         # Sort text elements by page number for proper inheritance
@@ -834,14 +833,11 @@ class MetadataStep(PipelineStep):
             for elem in enriched_elements
             if elem.get("structural_metadata", {}).get("section_title_inherited")
         )
-        print(
-            f"📊 Elements with section inheritance: {elements_with_sections}/{len(enriched_elements)}"
-        )
         logger.info(
             f"Elements with section inheritance: {elements_with_sections}/{len(enriched_elements)}"
         )
 
-        # Show section inheritance summary
+        # Show section inheritance summary (reduced verbosity)
         section_summary = {}
         for elem in enriched_elements:
             inherited = elem.get("structural_metadata", {}).get(
@@ -850,11 +846,9 @@ class MetadataStep(PipelineStep):
             if inherited:
                 section_summary[inherited] = section_summary.get(inherited, 0) + 1
 
-        print("📋 Section Inheritance Summary:")
-        for section, count in section_summary.items():
-            print(f"   '{section}': {count} elements")
-
-        logger.info("Section inheritance summary: " + str(section_summary))
+        logger.info(
+            f"Section inheritance summary: {len(section_summary)} unique sections"
+        )
 
         return enriched_elements
 

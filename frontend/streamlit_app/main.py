@@ -595,9 +595,76 @@ def show_query_page():
                                                 result["search_results"],
                                                 1,  # Show all sources, not just first 3
                                             ):
-                                                st.markdown(
-                                                    f"**Source {i}:** {source.get('content', '')[:200]}..."
+                                                # Extract source information
+                                                content = source.get("content", "")
+                                                page_number = source.get(
+                                                    "page_number", "N/A"
                                                 )
+                                                source_filename = source.get(
+                                                    "source_filename", "Unknown"
+                                                )
+                                                similarity_score = source.get(
+                                                    "similarity_score", 0.0
+                                                )
+
+                                                # Determine content type based on metadata
+                                                content_type = "Text"
+                                                if (
+                                                    source.get("metadata", {}).get(
+                                                        "element_category"
+                                                    )
+                                                    == "ExtractedPage"
+                                                ):
+                                                    content_type = "Image"
+                                                elif (
+                                                    source.get("metadata", {}).get(
+                                                        "element_category"
+                                                    )
+                                                    == "List"
+                                                ):
+                                                    content_type = "List"
+
+                                                # Create a snippet (first line + next 50 chars)
+                                                lines = content.split("\n")
+                                                first_line = lines[0] if lines else ""
+                                                snippet = first_line
+                                                if len(content) > len(first_line) + 50:
+                                                    snippet += (
+                                                        " "
+                                                        + content[
+                                                            len(first_line) : len(
+                                                                first_line
+                                                            )
+                                                            + 50
+                                                        ].strip()
+                                                        + "..."
+                                                    )
+
+                                                # Format similarity score as percentage
+                                                similarity_percent = (
+                                                    f"{similarity_score * 100:.1f}%"
+                                                )
+
+                                                # Calculate content length
+                                                content_length = len(content)
+                                                content_length_str = (
+                                                    f"{content_length:,} chars"
+                                                )
+
+                                                # Create expandable source with summary
+                                                with st.expander(
+                                                    f"📄 **{page_number}** | **{content_type}** | **{similarity_percent}** | **{content_length_str}** | {snippet}",
+                                                    expanded=False,
+                                                ):
+                                                    # Show full content
+                                                    st.markdown("**Full Content:**")
+                                                    st.text_area(
+                                                        f"Source {i} Content",
+                                                        value=content,
+                                                        height=200,
+                                                        key=f"source_content_{i}",
+                                                        disabled=True,
+                                                    )
 
                                         if result.get("performance_metrics"):
                                             st.markdown("### Performance:")
