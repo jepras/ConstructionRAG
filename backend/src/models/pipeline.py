@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 from uuid import UUID
@@ -101,6 +101,26 @@ class IndexingRun(BaseModel):
     pipeline_config: Optional[Dict[str, Any]] = Field(
         None, description="Pipeline configuration used for this run"
     )
+
+    # Computed properties for timing data
+    @property
+    def step_timings(self) -> Dict[str, float]:
+        """Extract step timings from step_results"""
+        if not self.step_results:
+            return {}
+
+        timings = {}
+        for step_name, step_result in self.step_results.items():
+            if hasattr(step_result, "duration_seconds"):
+                timings[step_name] = step_result.duration_seconds
+            elif isinstance(step_result, dict) and "duration_seconds" in step_result:
+                timings[step_name] = step_result["duration_seconds"]
+        return timings
+
+    @property
+    def total_processing_time(self) -> float:
+        """Calculate total processing time across all steps"""
+        return sum(self.step_timings.values())
 
     class Config:
         from_attributes = True

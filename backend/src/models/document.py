@@ -1,8 +1,12 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 from pydantic import BaseModel, Field
 from uuid import UUID
 from enum import Enum
+
+# Handle StepResult import to avoid circular dependency
+if TYPE_CHECKING:
+    from src.models.pipeline import StepResult
 
 
 class DocumentStatus(str, Enum):
@@ -18,7 +22,9 @@ class Document(BaseModel):
     """Document model matching the documents table"""
 
     id: UUID = Field(description="Document unique identifier")
-    user_id: UUID = Field(description="Owner user ID from Supabase Auth")
+    user_id: Optional[UUID] = Field(
+        None, description="Owner user ID from Supabase Auth"
+    )
     filename: str = Field(description="Original filename")
     file_size: Optional[int] = Field(None, description="File size in bytes")
     file_path: Optional[str] = Field(None, description="Supabase Storage path")
@@ -32,12 +38,78 @@ class Document(BaseModel):
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata"
     )
+    # Step results from indexing pipeline
+    step_results: Dict[str, Any] = Field(
+        default_factory=dict, description="Step results from indexing pipeline"
+    )
+    indexing_status: Optional[str] = Field(
+        None,
+        description="Current indexing status (pending, running, completed, failed)",
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow, description="Document creation timestamp"
     )
     updated_at: datetime = Field(
         default_factory=datetime.utcnow, description="Document last update timestamp"
     )
+
+    # Computed properties for timing data
+    @property
+    def step_timings(self) -> Dict[str, float]:
+        """Extract step timings from step_results"""
+        if not self.step_results:
+            return {}
+
+        timings = {}
+        for step_name, step_data in self.step_results.items():
+            if isinstance(step_data, dict) and "duration_seconds" in step_data:
+                timings[step_name] = step_data["duration_seconds"]
+        return timings
+
+    @property
+    def total_processing_time(self) -> float:
+        """Calculate total processing time across all steps"""
+        return sum(self.step_timings.values())
+
+    @property
+    def current_step(self) -> Optional[str]:
+        """Get the current step being processed (last incomplete step)"""
+        if not self.step_results:
+            return "partition"  # First step
+
+        # Define step order (both class names and simple names)
+        step_order_full = [
+            "PartitionStep",
+            "MetadataStep",
+            "EnrichmentStep",
+            "ChunkingStep",
+            "EmbeddingStep",
+        ]
+        step_order_simple = [
+            "partition",
+            "metadata",
+            "enrichment",
+            "chunking",
+            "embedding",
+        ]
+
+        # Find the first step that is not completed or is failed
+        for i, (full_name, simple_name) in enumerate(
+            zip(step_order_full, step_order_simple)
+        ):
+            # Check if step exists in either naming convention
+            step_data = self.step_results.get(full_name) or self.step_results.get(
+                simple_name
+            )
+
+            if not step_data:
+                return simple_name  # Next step to run
+
+            status = step_data.get("status") if isinstance(step_data, dict) else None
+            if status not in ["completed"]:
+                return simple_name  # This step needs attention (running, failed, etc.)
+
+        return None  # All steps completed
 
     class Config:
         from_attributes = True
