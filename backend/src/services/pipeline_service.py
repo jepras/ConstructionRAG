@@ -434,7 +434,40 @@ class PipelineService:
 
     async def get_indexing_run(self, indexing_run_id: UUID) -> Optional[IndexingRun]:
         """Get a complete indexing run with all step results."""
+        logger.info(
+            f"🔍 PipelineService.get_indexing_run called with: {indexing_run_id}"
+        )
+        logger.info(f"🔍 Indexing run ID type: {type(indexing_run_id)}")
+
         try:
+            # First, let's see what indexing runs exist in the database
+            logger.info("🔍 Checking what indexing runs exist in database...")
+            all_runs_result = (
+                self.supabase.table("indexing_runs")
+                .select("id, status, started_at")
+                .execute()
+            )
+            logger.info(f"📊 All indexing runs in database: {all_runs_result.data}")
+            logger.info(
+                f"📊 Total indexing runs found: {len(all_runs_result.data) if all_runs_result.data else 0}"
+            )
+
+            # Check if our specific run ID exists
+            if all_runs_result.data:
+                existing_ids = [run.get("id") for run in all_runs_result.data]
+                logger.info(f"📊 Existing run IDs: {existing_ids}")
+                if str(indexing_run_id) in existing_ids:
+                    logger.info(f"✅ Run ID {indexing_run_id} found in existing runs")
+                else:
+                    logger.warning(
+                        f"❌ Run ID {indexing_run_id} NOT found in existing runs"
+                    )
+                    logger.warning(f"❌ Looking for: {str(indexing_run_id)}")
+                    logger.warning(f"❌ Available: {existing_ids}")
+
+            logger.info(
+                f"📡 Executing database query for indexing run: {indexing_run_id}"
+            )
             result = (
                 self.supabase.table("indexing_runs")
                 .select("*")
@@ -442,13 +475,51 @@ class PipelineService:
                 .execute()
             )
 
+            logger.info(f"📊 Database query result: {result}")
+            logger.info(
+                f"📊 Result data length: {len(result.data) if result.data else 0}"
+            )
+
             if not result.data:
+                logger.warning(f"❌ No indexing run found for ID: {indexing_run_id}")
                 return None
 
-            return IndexingRun(**result.data[0])
+            raw_data = result.data[0]
+            logger.info(f"📊 Raw database data: {raw_data}")
+            logger.info(f"📊 Raw data keys: {list(raw_data.keys())}")
+            logger.info(
+                f"📊 Raw data types: {[(k, type(v)) for k, v in raw_data.items()]}"
+            )
+
+            # Check for pipeline_config field specifically
+            if "pipeline_config" in raw_data:
+                logger.info(
+                    f"✅ pipeline_config found in database: {raw_data['pipeline_config']}"
+                )
+                logger.info(
+                    f"✅ pipeline_config type: {type(raw_data['pipeline_config'])}"
+                )
+            else:
+                logger.warning(f"⚠️ pipeline_config NOT found in database data")
+
+            logger.info(f"🔧 Creating IndexingRun object from raw data...")
+            indexing_run = IndexingRun(**raw_data)
+            logger.info(
+                f"✅ Successfully created IndexingRun object: {indexing_run.id}"
+            )
+            logger.info(
+                f"✅ IndexingRun pipeline_config: {indexing_run.pipeline_config}"
+            )
+
+            return indexing_run
 
         except Exception as e:
-            logger.error(f"Error getting indexing run: {e}")
+            logger.error(f"❌ Error getting indexing run: {e}")
+            logger.error(f"❌ Error type: {type(e)}")
+            logger.error(f"❌ Error details: {str(e)}")
+            import traceback
+
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             raise DatabaseError(f"Failed to get indexing run: {str(e)}")
 
     async def get_document_indexing_runs(self, document_id: UUID) -> List[IndexingRun]:
@@ -496,6 +567,8 @@ class PipelineService:
 
     async def get_all_indexing_runs(self) -> List[IndexingRun]:
         """Get all indexing runs, sorted by latest first."""
+        logger.info("🔍 Getting all indexing runs from database...")
+
         try:
             result = (
                 self.supabase.table("indexing_runs")
@@ -504,7 +577,23 @@ class PipelineService:
                 .execute()
             )
 
-            return [IndexingRun(**run) for run in result.data]
+            logger.info(f"📊 Raw database result: {result.data}")
+            logger.info(
+                f"📊 Number of runs found: {len(result.data) if result.data else 0}"
+            )
+
+            if result.data:
+                for i, run in enumerate(result.data):
+                    logger.info(
+                        f"📊 Run {i+1}: ID={run.get('id')}, upload_type={run.get('upload_type')}, status={run.get('status')}"
+                    )
+
+            indexing_runs = [IndexingRun(**run) for run in result.data]
+            logger.info(
+                f"✅ Successfully created {len(indexing_runs)} IndexingRun objects"
+            )
+
+            return indexing_runs
 
         except Exception as e:
             logger.error(f"Error getting all indexing runs: {e}")

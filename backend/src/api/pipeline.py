@@ -86,10 +86,15 @@ async def get_all_indexing_runs(
     ),
 ):
     """Get all indexing runs, sorted by latest first."""
+    logger.info(
+        f"🔍 Getting all indexing runs for user: {current_user.get('id', 'unknown')}"
+    )
+
     try:
         runs = await pipeline_service.get_all_indexing_runs()
+        logger.info(f"📊 Found {len(runs)} indexing runs")
 
-        return [
+        result = [
             {
                 "id": str(run.id),
                 "upload_type": run.upload_type,
@@ -105,6 +110,11 @@ async def get_all_indexing_runs(
             }
             for run in runs
         ]
+
+        logger.info(f"📊 Returning {len(result)} indexing runs")
+        logger.info(f"📊 Run IDs being returned: {[run['id'] for run in result]}")
+
+        return result
 
     except DatabaseError as e:
         logger.error(f"Database error getting all indexing runs: {e}")
@@ -150,29 +160,129 @@ async def get_indexing_runs(
 async def get_indexing_run_status(
     run_id: UUID,
     current_user: Dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(lambda: PipelineService()),
+    pipeline_service: PipelineService = Depends(
+        lambda: PipelineService(use_admin_client=True)
+    ),
 ):
     """Get the status of a specific indexing run."""
+    logger.info(f"🔍 Getting indexing run status for run_id: {run_id}")
+    logger.info(f"👤 Current user: {current_user.get('id', 'unknown')}")
+
     try:
+        logger.info(f"📡 Calling pipeline_service.get_indexing_run({run_id})")
         run = await pipeline_service.get_indexing_run(run_id)
+
         if not run:
+            logger.warning(f"❌ Indexing run not found: {run_id}")
             raise HTTPException(status_code=404, detail="Indexing run not found")
 
-        return {
-            "id": str(run.id),
-            "document_id": str(run.document_id),
-            "status": run.status,
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-            "error_message": run.error_message,
-            "step_results": run.step_results,
-        }
+        logger.info(f"✅ Indexing run found: {run.id}")
+        logger.info(f"📊 Run status: {run.status}")
+        logger.info(f"📊 Run upload_type: {run.upload_type}")
+        logger.info(f"📊 Run upload_id: {run.upload_id}")
+        logger.info(f"📊 Run project_id: {run.project_id}")
+        logger.info(f"📊 Run pipeline_config type: {type(run.pipeline_config)}")
+        logger.info(f"📊 Run pipeline_config: {run.pipeline_config}")
+
+        # Build response step by step to catch any issues
+        response_data = {}
+
+        try:
+            response_data["id"] = str(run.id)
+            logger.info(f"✅ Added id: {response_data['id']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding id: {e}")
+            raise
+
+        # Note: document_id was removed from indexing_runs table in favor of junction table
+        # We'll get document information through the junction table if needed
+
+        try:
+            response_data["upload_type"] = run.upload_type
+            logger.info(f"✅ Added upload_type: {response_data['upload_type']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding upload_type: {e}")
+            raise
+
+        try:
+            response_data["upload_id"] = run.upload_id
+            logger.info(f"✅ Added upload_id: {response_data['upload_id']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding upload_id: {e}")
+            raise
+
+        try:
+            response_data["project_id"] = (
+                str(run.project_id) if run.project_id else None
+            )
+            logger.info(f"✅ Added project_id: {response_data['project_id']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding project_id: {e}")
+            raise
+
+        try:
+            response_data["status"] = run.status
+            logger.info(f"✅ Added status: {response_data['status']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding status: {e}")
+            raise
+
+        try:
+            response_data["started_at"] = (
+                run.started_at.isoformat() if run.started_at else None
+            )
+            logger.info(f"✅ Added started_at: {response_data['started_at']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding started_at: {e}")
+            raise
+
+        try:
+            response_data["completed_at"] = (
+                run.completed_at.isoformat() if run.completed_at else None
+            )
+            logger.info(f"✅ Added completed_at: {response_data['completed_at']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding completed_at: {e}")
+            raise
+
+        try:
+            response_data["error_message"] = run.error_message
+            logger.info(f"✅ Added error_message: {response_data['error_message']}")
+        except Exception as e:
+            logger.error(f"❌ Error adding error_message: {e}")
+            raise
+
+        try:
+            response_data["step_results"] = run.step_results
+            logger.info(f"✅ Added step_results: {type(response_data['step_results'])}")
+        except Exception as e:
+            logger.error(f"❌ Error adding step_results: {e}")
+            raise
+
+        try:
+            response_data["pipeline_config"] = run.pipeline_config
+            logger.info(
+                f"✅ Added pipeline_config: {type(response_data['pipeline_config'])}"
+            )
+        except Exception as e:
+            logger.error(f"❌ Error adding pipeline_config: {e}")
+            raise
+
+        logger.info(f"🎉 Successfully built response for run {run_id}")
+        return response_data
 
     except DatabaseError as e:
-        logger.error(f"Database error getting indexing run status: {e}")
+        logger.error(f"❌ Database error getting indexing run status: {e}")
+        logger.error(f"❌ Database error type: {type(e)}")
+        logger.error(f"❌ Database error details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to get indexing run status: {e}")
+        logger.error(f"❌ Failed to get indexing run status: {e}")
+        logger.error(f"❌ Error type: {type(e)}")
+        logger.error(f"❌ Error details: {str(e)}")
+        import traceback
+
+        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

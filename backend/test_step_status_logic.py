@@ -27,7 +27,7 @@ async def test_step_status_logic():
         step="ChunkingStep",
         status="completed",
         duration_seconds=30.5,
-        summary_stats={"chunks_created": 15},
+        summary_stats={"total_chunks_created": 15},
         sample_outputs={"chunk_count": 15},
         started_at=datetime.utcnow(),
         completed_at=datetime.utcnow(),

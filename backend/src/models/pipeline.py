@@ -98,6 +98,9 @@ class IndexingRun(BaseModel):
     error_message: Optional[str] = Field(
         None, description="Error message if indexing failed"
     )
+    pipeline_config: Optional[Dict[str, Any]] = Field(
+        None, description="Pipeline configuration used for this run"
+    )
 
     class Config:
         from_attributes = True
@@ -228,6 +231,7 @@ class IndexingRunUpdate(BaseModel):
     upload_type: Optional[UploadType] = None
     upload_id: Optional[str] = None
     project_id: Optional[UUID] = None
+    pipeline_config: Optional[Dict[str, Any]] = None
 
 
 class QueryRunCreate(BaseModel):

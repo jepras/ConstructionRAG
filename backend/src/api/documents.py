@@ -793,6 +793,89 @@ async def delete_project_document(
 # Background processing functions
 
 
+@router.get(
+    "/documents/by-index-run/{index_run_id}", response_model=List[Dict[str, Any]]
+)
+async def get_documents_by_index_run(
+    index_run_id: UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Get all documents for a specific indexing run using the junction table"""
+    logger.info(f"🔍 Getting documents for indexing run: {index_run_id}")
+
+    try:
+        db = get_supabase_admin_client()
+        logger.info(f"✅ Using admin client")
+
+        # First, get document IDs from the junction table
+        logger.info(f"🔗 Querying junction table for indexing_run_id: {index_run_id}")
+        junction_result = (
+            db.table("indexing_run_documents")
+            .select("document_id")
+            .eq("indexing_run_id", str(index_run_id))
+            .execute()
+        )
+
+        logger.info(f"📊 Junction query result: {junction_result}")
+        logger.info(
+            f"📊 Junction data length: {len(junction_result.data) if junction_result.data else 0}"
+        )
+
+        if not junction_result.data:
+            logger.warning(
+                f"❌ No junction records found for indexing run {index_run_id}"
+            )
+            return []
+
+        # Extract document IDs
+        document_ids = [row["document_id"] for row in junction_result.data]
+        logger.info(f"📄 Document IDs found: {document_ids}")
+
+        # Get the actual documents
+        logger.info(f"📄 Querying documents table for IDs: {document_ids}")
+        documents_result = (
+            db.table("documents").select("*").in_("id", document_ids).execute()
+        )
+
+        logger.info(f"📊 Documents query result: {documents_result}")
+        logger.info(
+            f"📊 Documents data length: {len(documents_result.data) if documents_result.data else 0}"
+        )
+
+        if not documents_result.data:
+            logger.warning(f"❌ No documents found for IDs: {document_ids}")
+            return []
+
+        # Log details about each document
+        for i, doc in enumerate(documents_result.data):
+            logger.info(
+                f"📄 Document {i+1}: ID={doc.get('id')}, filename={doc.get('filename')}"
+            )
+            step_results = doc.get("step_results", {})
+            logger.info(f"  Step results keys: {list(step_results.keys())}")
+            logger.info(f"  Step results count: {len(step_results)}")
+
+            # Log specific step data
+            for step_name, step_data in step_results.items():
+                if isinstance(step_data, dict):
+                    logger.info(
+                        f"    {step_name}: status={step_data.get('status')}, keys={list(step_data.keys())}"
+                    )
+                else:
+                    logger.info(f"    {step_name}: {type(step_data)}")
+
+        logger.info(f"✅ Returning {len(documents_result.data)} documents")
+        return documents_result.data
+
+    except Exception as e:
+        logger.error(f"❌ Error getting documents for indexing run {index_run_id}: {e}")
+        logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+
+        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def process_email_upload_async(
     upload_id: str, index_run_id: str, email: str, storage_url: str, filename: str
 ):
