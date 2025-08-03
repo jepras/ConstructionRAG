@@ -246,10 +246,21 @@ class EnrichmentStep(PipelineStep):
             logger.info("Starting enrichment step for metadata output")
 
             # Handle input data - could be StepResult from metadata step or raw data
-            if hasattr(input_data, "data") and input_data.data is not None:
-                # Input is a StepResult from metadata step
+            if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
+                # Input is a StepResult from metadata step (unified processing)
+                # Check data field first, then fall back to sample_outputs
+                metadata_output = (
+                    input_data.data
+                    if hasattr(input_data, "data") and input_data.data
+                    else input_data.sample_outputs.get("metadata_data", {})
+                )
+                logger.info(
+                    f"Processing metadata output from StepResult ({input_data.step})"
+                )
+            elif hasattr(input_data, "data") and input_data.data is not None:
+                # Input is a StepResult from metadata step (legacy)
                 metadata_output = input_data.data
-                logger.info("Processing metadata output from StepResult")
+                logger.info("Processing metadata output from StepResult (legacy)")
             elif isinstance(input_data, dict):
                 # Input is raw metadata output
                 metadata_output = input_data
@@ -364,48 +375,108 @@ class EnrichmentStep(PipelineStep):
     async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate enrichment step prerequisites"""
         try:
-            # Check if input_data contains metadata step results
-            if not isinstance(input_data, dict):
-                logger.error("Input data is not a dictionary")
-                return False
+            # Debug logging to see what we're receiving
+            logger.info(
+                f"🔍 EnrichmentStep validate_prerequisites_async received input_data type: {type(input_data)}"
+            )
 
-            # Check for required keys from metadata step
-            required_keys = [
-                "text_elements",
-                "table_elements",
-                "extracted_pages",
-                "page_sections",
-            ]
-            missing_keys = [key for key in required_keys if key not in input_data]
-
-            if missing_keys:
-                logger.error(
-                    f"Missing required keys in metadata output: {missing_keys}"
+            # Handle StepResult objects (from unified processing)
+            if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
+                # This is a StepResult from a previous step
+                logger.info(
+                    f"EnrichmentStep received StepResult from {input_data.step}"
                 )
-                return False
 
-            # Check that elements have structural_metadata (added by metadata step)
-            for element in input_data.get("text_elements", []):
-                if "structural_metadata" not in element:
+                # Extract metadata data from StepResult - check both data and sample_outputs
+                metadata_data = (
+                    input_data.data
+                    if hasattr(input_data, "data") and input_data.data
+                    else input_data.sample_outputs.get("metadata_data", {})
+                )
+
+                # Check for required keys from metadata step
+                required_keys = [
+                    "text_elements",
+                    "table_elements",
+                    "extracted_pages",
+                    "page_sections",
+                ]
+                missing_keys = [
+                    key for key in required_keys if key not in metadata_data
+                ]
+
+                if missing_keys:
                     logger.error(
-                        f"Text element missing structural_metadata: {element.get('id', 'unknown')}"
+                        f"Missing required keys in metadata output: {missing_keys}"
                     )
                     return False
 
-            for element in input_data.get("table_elements", []):
-                if "structural_metadata" not in element:
+                # Check that elements have structural_metadata (added by metadata step)
+                for element in metadata_data.get("text_elements", []):
+                    if "structural_metadata" not in element:
+                        logger.error(
+                            f"Text element missing structural_metadata: {element.get('id', 'unknown')}"
+                        )
+                        return False
+
+                for element in metadata_data.get("table_elements", []):
+                    if "structural_metadata" not in element:
+                        logger.error(
+                            f"Table element missing structural_metadata: {element.get('id', 'unknown')}"
+                        )
+                        return False
+
+                for page_info in metadata_data.get("extracted_pages", {}).values():
+                    if "structural_metadata" not in page_info:
+                        logger.error("Extracted page missing structural_metadata")
+                        return False
+
+                logger.info("Prerequisites validated for enrichment step (StepResult)")
+                return True
+
+            # Handle dict objects (legacy single PDF processing)
+            elif isinstance(input_data, dict):
+                # Check for required keys from metadata step
+                required_keys = [
+                    "text_elements",
+                    "table_elements",
+                    "extracted_pages",
+                    "page_sections",
+                ]
+                missing_keys = [key for key in required_keys if key not in input_data]
+
+                if missing_keys:
                     logger.error(
-                        f"Table element missing structural_metadata: {element.get('id', 'unknown')}"
+                        f"Missing required keys in metadata output: {missing_keys}"
                     )
                     return False
 
-            for page_info in input_data.get("extracted_pages", {}).values():
-                if "structural_metadata" not in page_info:
-                    logger.error("Extracted page missing structural_metadata")
-                    return False
+                # Check that elements have structural_metadata (added by metadata step)
+                for element in input_data.get("text_elements", []):
+                    if "structural_metadata" not in element:
+                        logger.error(
+                            f"Text element missing structural_metadata: {element.get('id', 'unknown')}"
+                        )
+                        return False
 
-            logger.info("Prerequisites validated for enrichment step")
-            return True
+                for element in input_data.get("table_elements", []):
+                    if "structural_metadata" not in element:
+                        logger.error(
+                            f"Table element missing structural_metadata: {element.get('id', 'unknown')}"
+                        )
+                        return False
+
+                for page_info in input_data.get("extracted_pages", {}).values():
+                    if "structural_metadata" not in page_info:
+                        logger.error("Extracted page missing structural_metadata")
+                        return False
+
+                logger.info("Prerequisites validated for enrichment step (dict)")
+                return True
+
+            # Unknown input type
+            logger.error(f"Unknown input type for enrichment step: {type(input_data)}")
+            return False
 
         except Exception as e:
             logger.error(f"Prerequisites validation failed: {e}")

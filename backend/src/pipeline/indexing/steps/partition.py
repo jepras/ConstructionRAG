@@ -86,29 +86,45 @@ class PartitionStep(PipelineStep):
             # Already a local file path
             return file_path_or_url
 
-    async def execute(self, input_data: DocumentInput) -> StepResult:
+    async def execute(self, input_data: Any) -> StepResult:
         """Execute the partition step with async operations"""
         start_time = datetime.utcnow()
         downloaded_file_path = None
 
         try:
-            logger.info(f"Starting partition step for document: {input_data.filename}")
+            # Handle StepResult objects (from unified processing)
+            if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
+                # This is a StepResult from a previous step - pass it through
+                logger.info(
+                    f"PartitionStep received StepResult from {input_data.step}, passing through"
+                )
+                return input_data
 
-            # Validate input
-            if not await self.validate_prerequisites_async(input_data):
-                raise PipelineError("Prerequisites not met for partition step")
+            # Handle DocumentInput objects (single PDF processing)
+            if hasattr(input_data, "filename") and hasattr(input_data, "file_path"):
+                logger.info(
+                    f"Starting partition step for document: {input_data.filename}"
+                )
 
-            # Handle URL or file path
-            file_path = await self._get_local_file_path(input_data.file_path)
+                # Validate input
+                if not await self.validate_prerequisites_async(input_data):
+                    raise PipelineError("Prerequisites not met for partition step")
 
-            # Track if we downloaded a file
-            if file_path != input_data.file_path:
-                downloaded_file_path = file_path
+                # Handle URL or file path
+                file_path = await self._get_local_file_path(input_data.file_path)
 
-            # Execute partitioning pipeline
-            partition_result = await self._partition_document_async(
-                file_path, input_data
-            )
+                # Track if we downloaded a file
+                if file_path != input_data.file_path:
+                    downloaded_file_path = file_path
+
+                # Execute partitioning pipeline
+                partition_result = await self._partition_document_async(
+                    file_path, input_data
+                )
+            else:
+                raise PipelineError(
+                    f"Unknown input type for partition step: {type(input_data)}"
+                )
 
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
@@ -228,63 +244,75 @@ class PartitionStep(PipelineStep):
                 except Exception as cleanup_error:
                     logger.error(f"Error cleaning up downloaded file: {cleanup_error}")
 
-    async def validate_prerequisites_async(self, input_data: DocumentInput) -> bool:
+    async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate partition step prerequisites"""
         try:
-            # Check if file is a PDF
-            if not input_data.filename.lower().endswith(".pdf"):
-                logger.error(f"File is not a PDF: {input_data.filename}")
-                return False
+            # Handle StepResult objects (from unified processing)
+            if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
+                # This is a StepResult from a previous step
+                logger.info(f"PartitionStep received StepResult from {input_data.step}")
+                return True
 
-            # Handle URLs vs local files
-            if input_data.file_path.startswith(("http://", "https://")):
-                # For URLs, we'll validate by attempting a HEAD request
-                try:
-                    response = requests.head(input_data.file_path, timeout=10)
-                    if response.status_code != 200:
-                        logger.error(
-                            f"URL not accessible: {input_data.file_path} (status: {response.status_code})"
-                        )
-                        return False
+            # Handle DocumentInput objects (single PDF processing)
+            if hasattr(input_data, "filename") and hasattr(input_data, "file_path"):
+                # Check if file is a PDF
+                if not input_data.filename.lower().endswith(".pdf"):
+                    logger.error(f"File is not a PDF: {input_data.filename}")
+                    return False
 
-                    # Check content type
-                    content_type = response.headers.get("content-type", "")
-                    if "pdf" not in content_type.lower():
-                        logger.error(f"URL does not point to a PDF: {content_type}")
-                        return False
-
-                    # Check file size from headers (if available)
-                    content_length = response.headers.get("content-length")
-                    if content_length:
-                        file_size_mb = int(content_length) / (1024 * 1024)
-                        if file_size_mb > 100:  # 100MB limit
-                            logger.error(f"File too large: {file_size_mb:.2f}MB")
+                # Handle URLs vs local files
+                if input_data.file_path.startswith(("http://", "https://")):
+                    # For URLs, we'll validate by attempting a HEAD request
+                    try:
+                        response = requests.head(input_data.file_path, timeout=10)
+                        if response.status_code != 200:
+                            logger.error(
+                                f"URL not accessible: {input_data.file_path} (status: {response.status_code})"
+                            )
                             return False
 
+                        # Check content type
+                        content_type = response.headers.get("content-type", "")
+                        if "pdf" not in content_type.lower():
+                            logger.error(f"URL does not point to a PDF: {content_type}")
+                            return False
+
+                        # Check file size from headers (if available)
+                        content_length = response.headers.get("content-length")
+                        if content_length:
+                            file_size_mb = int(content_length) / (1024 * 1024)
+                            if file_size_mb > 100:  # 100MB limit
+                                logger.error(f"File too large: {file_size_mb:.2f}MB")
+                                return False
+
+                        logger.info(
+                            f"URL prerequisites validated for: {input_data.filename}"
+                        )
+                        return True
+
+                    except Exception as e:
+                        logger.error(f"URL validation failed: {e}")
+                        return False
+                else:
+                    # Local file validation
+                    if not os.path.exists(input_data.file_path):
+                        logger.error(f"File not found: {input_data.file_path}")
+                        return False
+
+                    # Check file size
+                    file_size_mb = os.path.getsize(input_data.file_path) / (1024 * 1024)
+                    if file_size_mb > 100:  # 100MB limit
+                        logger.error(f"File too large: {file_size_mb:.2f}MB")
+                        return False
+
                     logger.info(
-                        f"URL prerequisites validated for: {input_data.filename}"
+                        f"Local file prerequisites validated for: {input_data.filename}"
                     )
                     return True
 
-                except Exception as e:
-                    logger.error(f"URL validation failed: {e}")
-                    return False
-            else:
-                # Local file validation
-                if not os.path.exists(input_data.file_path):
-                    logger.error(f"File not found: {input_data.file_path}")
-                    return False
-
-                # Check file size
-                file_size_mb = os.path.getsize(input_data.file_path) / (1024 * 1024)
-                if file_size_mb > 100:  # 100MB limit
-                    logger.error(f"File too large: {file_size_mb:.2f}MB")
-                    return False
-
-                logger.info(
-                    f"Local file prerequisites validated for: {input_data.filename}"
-                )
-                return True
+            # Unknown input type
+            logger.error(f"Unknown input type for partition step: {type(input_data)}")
+            return False
 
         except Exception as e:
             logger.error(f"Prerequisites validation failed: {e}")

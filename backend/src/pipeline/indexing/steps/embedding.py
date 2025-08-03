@@ -124,12 +124,17 @@ class EmbeddingStep(PipelineStep):
         start_time = datetime.now()
 
         try:
-            logger.info("Starting embedding step execution")
-
-            if not indexing_run_id or not document_id:
-                raise ValueError(
-                    "indexing_run_id and document_id are required for embedding step"
+            if document_id:
+                logger.info(
+                    f"Starting embedding step execution for document {document_id}"
                 )
+            else:
+                logger.info(
+                    f"Starting batch embedding step execution for index run {indexing_run_id}"
+                )
+
+            if not indexing_run_id:
+                raise ValueError("indexing_run_id is required for embedding step")
 
             # Get chunks that need embedding from database
             chunks_to_embed = await self.get_chunks_for_embedding(
@@ -232,7 +237,7 @@ class EmbeddingStep(PipelineStep):
             )
 
     async def get_chunks_for_embedding(
-        self, indexing_run_id: UUID, document_id: UUID
+        self, indexing_run_id: UUID, document_id: UUID = None
     ) -> List[Dict[str, Any]]:
         """Get chunks from database that need embedding"""
         try:
@@ -242,6 +247,10 @@ class EmbeddingStep(PipelineStep):
                 .select("*")
                 .eq("indexing_run_id", str(indexing_run_id))
             )
+
+            # If document_id is provided, filter by specific document
+            if document_id:
+                query = query.eq("document_id", str(document_id))
 
             if self.resume_capability:
                 # Only get chunks without embeddings for resume capability

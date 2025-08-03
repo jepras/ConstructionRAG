@@ -319,6 +319,119 @@ class PipelineService:
             logger.error(f"Error getting step result: {e}")
             raise DatabaseError(f"Failed to get step result: {str(e)}")
 
+    async def store_document_step_result(
+        self, document_id: UUID, step_name: str, step_result: StepResult
+    ) -> bool:
+        """Store a step result in the document's step_results JSONB field."""
+        try:
+            # First, get the current step_results
+            result = (
+                self.supabase.table("documents")
+                .select("step_results")
+                .eq("id", str(document_id))
+                .execute()
+            )
+
+            if not result.data:
+                raise DatabaseError("Document not found")
+
+            current_step_results = result.data[0].get("step_results", {})
+
+            # Add the new step result with custom serialization
+            current_step_results[step_name] = self._serialize_step_result(step_result)
+
+            # Determine indexing status based on step result
+            indexing_status = "running"
+            if step_result.status == "failed":
+                indexing_status = "failed"
+            elif step_name == "ChunkingStep" and step_result.status == "completed":
+                # Document is completed after chunking (embedding happens in batch)
+                indexing_status = "completed"
+            elif step_name == "EmbeddingStep" and step_result.status == "completed":
+                # For single document processing, embedding completes the document
+                indexing_status = "completed"
+
+            # Debug logging
+            logger.info(
+                f"📊 Document {document_id} - Step: {step_name}, Status: {step_result.status}, Setting indexing_status: {indexing_status}"
+            )
+
+            # Update the step_results field and indexing_status
+            update_result = (
+                self.supabase.table("documents")
+                .update(
+                    {
+                        "step_results": current_step_results,
+                        "indexing_status": indexing_status,
+                    }
+                )
+                .eq("id", str(document_id))
+                .execute()
+            )
+
+            if not update_result.data:
+                raise DatabaseError("Failed to store document step result")
+
+            logger.info(f"Stored step result for {step_name} in document {document_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error storing document step result: {e}")
+            raise DatabaseError(f"Failed to store document step result: {str(e)}")
+
+    async def get_document_step_result(
+        self, document_id: UUID, step_name: str
+    ) -> Optional[StepResult]:
+        """Get a specific step result from a document's step_results field."""
+        try:
+            result = (
+                self.supabase.table("documents")
+                .select("step_results")
+                .eq("id", str(document_id))
+                .execute()
+            )
+
+            if not result.data:
+                return None
+
+            step_results = result.data[0].get("step_results", {})
+            step_data = step_results.get(step_name)
+
+            if not step_data:
+                return None
+
+            return StepResult(**step_data)
+
+        except Exception as e:
+            logger.error(f"Error getting document step result: {e}")
+            raise DatabaseError(f"Failed to get document step result: {str(e)}")
+
+    async def get_document_step_results(
+        self, document_id: UUID
+    ) -> Dict[str, StepResult]:
+        """Get all step results for a document."""
+        try:
+            result = (
+                self.supabase.table("documents")
+                .select("step_results")
+                .eq("id", str(document_id))
+                .execute()
+            )
+
+            if not result.data:
+                return {}
+
+            step_results = result.data[0].get("step_results", {})
+
+            return {
+                step_name: StepResult(**step_data)
+                for step_name, step_data in step_results.items()
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting document step results: {e}")
+            raise DatabaseError(f"Failed to get document step results: {str(e)}")
+
     async def get_indexing_run(self, indexing_run_id: UUID) -> Optional[IndexingRun]:
         """Get a complete indexing run with all step results."""
         try:

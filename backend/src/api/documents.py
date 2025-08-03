@@ -41,6 +41,8 @@ class EmailUploadResponse(BaseModel):
 
     upload_id: str
     index_run_id: str
+    document_count: int
+    document_ids: List[str]
     public_url: str
     status: str
     message: str
@@ -53,6 +55,17 @@ class DocumentUploadResponse(BaseModel):
     document_id: str
     project_id: str
     index_run_id: str
+    status: str
+    message: str
+
+
+class MultiDocumentUploadResponse(BaseModel):
+    """Response for multi-document project upload"""
+
+    project_id: str
+    index_run_id: str
+    document_count: int
+    document_ids: List[str]
     status: str
     message: str
 
@@ -70,18 +83,27 @@ class DocumentListResponse(BaseModel):
 
 @router.post("/email-uploads", response_model=EmailUploadResponse)
 async def upload_email_pdf(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     email: str = Form(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    """Upload PDF for anonymous email-based processing"""
+    """Upload one or more PDFs for anonymous email-based processing"""
 
-    # Validate file
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files are supported")
+    # Validate files
+    if not files:
+        raise HTTPException(400, "At least one PDF file is required")
 
-    if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit
-        raise HTTPException(400, "File size must be less than 50MB")
+    if len(files) > 10:  # Limit to 10 files per upload
+        raise HTTPException(400, "Maximum 10 PDF files allowed per upload")
+
+    for file in files:
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                400, f"Only PDF files are supported. Found: {file.filename}"
+            )
+
+        if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit per file
+            raise HTTPException(400, f"File {file.filename} must be less than 50MB")
 
     upload_id = str(uuid4())
     index_run_id = str(uuid4())
@@ -98,49 +120,81 @@ async def upload_email_pdf(
             index_run_id=UUID(index_run_id),
         )
 
-        # Get file content
-        content = await file.read()
+        # Create index run record first
+        index_run_data = {
+            "id": index_run_id,
+            "upload_type": "email",
+            "upload_id": upload_id,
+            "status": "pending",
+            "created_at": "now()",
+        }
 
-        # Upload to Supabase Storage using new structure
-        storage_path = (
-            f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
-        )
+        db.table("indexing_runs").insert(index_run_data).execute()
 
-        # Create a temporary file just for upload (will be cleaned up immediately)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(content)
-            temp_file_path = temp_file.name
+        # Process each file
+        document_ids = []
+        total_file_size = 0
+        filenames = []
+        document_data = []  # Collect document data for unified processing
 
-        try:
-            upload_result = await storage_service.upload_file(
-                file_path=temp_file_path, storage_path=storage_path
-            )
-            # Extract the signed URL from the response
-            if isinstance(upload_result, dict) and "signedURL" in upload_result:
-                public_url = upload_result["signedURL"]
-            elif isinstance(upload_result, dict) and "signedUrl" in upload_result:
-                public_url = upload_result["signedUrl"]
-            else:
-                public_url = str(upload_result)
-        finally:
-            # Clean up temp file immediately after upload
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+        for file in files:
+            # Get file content
+            content = await file.read()
+            total_file_size += len(content)
+            filenames.append(file.filename)
 
-            # Create index run record for foreign key constraint
-            index_run_data = {
-                "id": index_run_id,
-                "upload_type": "email",
-                "upload_id": upload_id,
-                "status": "pending",
-                "created_at": "now()",
+            # Create document record
+            document_id = str(uuid4())
+            document_ids.append(document_id)
+
+            # Upload to Supabase Storage using new structure
+            storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
+
+            # Create a temporary file just for upload (will be cleaned up immediately)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+
+            try:
+                upload_result = await storage_service.upload_file(
+                    file_path=temp_file_path, storage_path=storage_path
+                )
+                # Extract the signed URL from the response
+                if isinstance(upload_result, dict) and "signedURL" in upload_result:
+                    public_url = upload_result["signedURL"]
+                elif isinstance(upload_result, dict) and "signedUrl" in upload_result:
+                    public_url = upload_result["signedUrl"]
+                else:
+                    public_url = str(upload_result)
+            finally:
+                # Clean up temp file immediately after upload
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+
+            # Store in documents table (required for foreign key constraints)
+            document_data_for_db = {
+                "id": document_id,  # Use the generated document_id
+                "user_id": None,  # No user for email uploads
+                "filename": file.filename,
+                "file_size": len(content),
+                "file_path": public_url,
+                "status": "processing",
+                "upload_type": "email",  # Set correct upload type for email uploads
+                "index_run_id": index_run_id,  # Link to indexing run
+                "upload_id": upload_id,  # Link to upload
+                "metadata": {"email": email, "upload_id": upload_id},
             }
 
-            db.table("indexing_runs").insert(index_run_data).execute()
+            doc_result = db.table("documents").insert(document_data_for_db).execute()
 
-            # Store in email_uploads table
+            if not doc_result.data:
+                raise HTTPException(
+                    500, f"Failed to store document record for {file.filename}"
+                )
+
+            # Store in email_uploads table (one record per file)
             email_upload_data = {
-                "id": upload_id,
+                "id": f"{upload_id}_{document_id}",  # Unique ID for each file
                 "email": email,
                 "filename": file.filename,
                 "file_size": len(content),
@@ -152,26 +206,39 @@ async def upload_email_pdf(
             result = db.table("email_uploads").insert(email_upload_data).execute()
 
             if not result.data:
-                raise HTTPException(500, "Failed to store email upload record")
+                raise HTTPException(
+                    500, f"Failed to store email upload record for {file.filename}"
+                )
 
-            # Start processing pipeline in background
-            background_tasks.add_task(
-                process_email_upload_async,
-                upload_id=upload_id,
-                index_run_id=index_run_id,
-                email=email,
-                storage_url=public_url,  # Pass storage URL instead of file path
-                filename=file.filename,
+            # Collect document data for unified processing
+            document_data.append(
+                {
+                    "document_id": document_id,
+                    "filename": file.filename,
+                    "storage_url": public_url,
+                }
             )
 
-            return EmailUploadResponse(
-                upload_id=upload_id,
-                index_run_id=index_run_id,
-                public_url=f"/email-uploads/{upload_id}",
-                status="processing",
-                message="PDF uploaded successfully. Processing started.",
-                expires_at=result.data[0]["expires_at"],
-            )
+        # Start unified processing pipeline in background
+        background_tasks.add_task(
+            process_multi_document_email_upload_async,
+            upload_id=upload_id,
+            index_run_id=index_run_id,
+            email=email,
+            document_data=document_data,
+        )
+
+        # Return response with multi-file information
+        return EmailUploadResponse(
+            upload_id=upload_id,
+            index_run_id=index_run_id,
+            document_count=len(files),
+            document_ids=document_ids,
+            public_url=f"/email-uploads/{upload_id}",
+            status="processing",
+            message=f"{len(files)} PDF(s) uploaded successfully. Processing started.",
+            expires_at=result.data[0]["expires_at"],
+        )
 
     except StorageError as e:
         logger.error(f"Storage error during email upload: {e}")
@@ -188,25 +255,82 @@ async def get_email_upload_status(upload_id: str):
     try:
         db = get_supabase_admin_client()
 
+        # First, try to find a single email upload record
         result = db.table("email_uploads").select("*").eq("id", upload_id).execute()
 
-        if not result.data:
-            raise HTTPException(404, "Email upload not found")
+        if result.data:
+            # Single file upload (legacy)
+            upload_data = result.data[0]
+            return {
+                "upload_id": upload_id,
+                "index_run_id": upload_data.get("index_run_id"),
+                "email": upload_data["email"],
+                "filename": upload_data["filename"],
+                "status": upload_data["status"],
+                "public_url": upload_data["public_url"],
+                "created_at": upload_data["created_at"],
+                "completed_at": upload_data["completed_at"],
+                "expires_at": upload_data["expires_at"],
+                "processing_results": upload_data.get("processing_results", {}),
+            }
 
-        upload_data = result.data[0]
+        # If not found, check if it's a multi-document upload (upload_id without suffix)
+        # Look for records that start with the upload_id
+        result = (
+            db.table("email_uploads").select("*").like("id", f"{upload_id}_%").execute()
+        )
 
-        return {
-            "upload_id": upload_id,
-            "index_run_id": upload_data.get("index_run_id"),
-            "email": upload_data["email"],
-            "filename": upload_data["filename"],
-            "status": upload_data["status"],
-            "public_url": upload_data["public_url"],
-            "created_at": upload_data["created_at"],
-            "completed_at": upload_data["completed_at"],
-            "expires_at": upload_data["expires_at"],
-            "processing_results": upload_data.get("processing_results", {}),
-        }
+        if result.data:
+            # Multi-document upload
+            uploads = result.data
+
+            # Get the index run status
+            index_run_id = uploads[0].get("index_run_id")
+            index_run_status = "unknown"
+
+            if index_run_id:
+                index_run_result = (
+                    db.table("indexing_runs")
+                    .select("*")
+                    .eq("id", index_run_id)
+                    .execute()
+                )
+                if index_run_result.data:
+                    index_run_status = index_run_result.data[0]["status"]
+
+            # Aggregate status from all uploads
+            all_completed = all(upload["status"] == "completed" for upload in uploads)
+            any_failed = any(upload["status"] == "failed" for upload in uploads)
+
+            if all_completed:
+                overall_status = "completed"
+            elif any_failed:
+                overall_status = "completed_with_errors"
+            else:
+                overall_status = "processing"
+
+            return {
+                "upload_id": upload_id,
+                "index_run_id": index_run_id,
+                "email": uploads[0]["email"],
+                "document_count": len(uploads),
+                "filenames": [upload["filename"] for upload in uploads],
+                "status": overall_status,
+                "index_run_status": index_run_status,
+                "created_at": uploads[0]["created_at"],
+                "expires_at": uploads[0]["expires_at"],
+                "individual_uploads": [
+                    {
+                        "filename": upload["filename"],
+                        "status": upload["status"],
+                        "public_url": upload["public_url"],
+                    }
+                    for upload in uploads
+                ],
+            }
+
+        # Not found
+        raise HTTPException(404, "Email upload not found")
 
     except Exception as e:
         logger.error(f"Error getting email upload status: {e}")
@@ -223,7 +347,7 @@ async def upload_project_document(
     current_user: Dict[str, Any] = Depends(get_current_user),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
-    """Upload PDF to user's project"""
+    """Upload single PDF to user's project (legacy endpoint)"""
 
     # Validate file
     if not file.filename.lower().endswith(".pdf"):
@@ -302,6 +426,9 @@ async def upload_project_document(
             "upload_type": "user_project",
             "project_id": str(project_id),
             "index_run_id": index_run_id,
+            "upload_id": str(
+                uuid4()
+            ),  # Generate unique upload ID for project documents
         }
 
         document_result = db.table("documents").insert(document_data).execute()
@@ -350,6 +477,167 @@ async def upload_project_document(
             # Clean up temporary file
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
+
+    except StorageError as e:
+        logger.error(f"Storage error during project upload: {e}")
+        raise HTTPException(500, f"Storage error: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error during project upload: {e}")
+        raise HTTPException(500, f"Upload failed: {str(e)}")
+
+
+@router.post(
+    "/projects/{project_id}/documents/multi", response_model=MultiDocumentUploadResponse
+)
+async def upload_project_documents(
+    project_id: UUID,
+    files: List[UploadFile] = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+):
+    """Upload multiple PDFs to user's project"""
+
+    # Validate file count
+    if len(files) < 1:
+        raise HTTPException(400, "At least one file must be uploaded")
+    if len(files) > 10:
+        raise HTTPException(400, "Maximum 10 files can be uploaded at once")
+
+    # Validate all files
+    for file in files:
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                400, f"Only PDF files are supported. Invalid file: {file.filename}"
+            )
+        if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit
+            raise HTTPException(
+                400, f"File size must be less than 50MB. Invalid file: {file.filename}"
+            )
+
+    try:
+        # Initialize services
+        from src.config.database import get_supabase_client
+
+        db = get_supabase_client()
+        storage_service = StorageService()
+
+        # Verify user owns project
+        project_result = (
+            db.table("projects")
+            .select("*")
+            .eq("id", str(project_id))
+            .eq("user_id", current_user["id"])
+            .execute()
+        )
+
+        if not project_result.data:
+            raise HTTPException(404, "Project not found or access denied")
+
+        project = project_result.data[0]
+
+        # Create new index run for multi-document upload
+        index_run_result = (
+            db.table("indexing_runs")
+            .select("*")
+            .eq("project_id", str(project_id))
+            .order("version", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        new_version = (
+            (index_run_result.data[0]["version"] + 1) if index_run_result.data else 1
+        )
+
+        index_run_data = {
+            "project_id": str(project_id),
+            "version": new_version,
+            "status": "pending",
+            "upload_type": "user_project",
+        }
+
+        index_run_result = db.table("indexing_runs").insert(index_run_data).execute()
+        index_run_id = index_run_result.data[0]["id"]
+
+        # Process each file
+        document_ids = []
+        document_data = []  # Collect document data for unified processing
+
+        for file in files:
+            # Create document record
+            document_id = str(uuid4())
+            document_ids.append(document_id)
+
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                content = await file.read()
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Upload to Supabase Storage
+                storage_path = f"users/{current_user['id']}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
+                public_url = await storage_service.upload_file(
+                    file_path=temp_file_path, storage_path=storage_path
+                )
+
+                # Store in documents table
+                document_data_for_db = {
+                    "id": document_id,
+                    "user_id": current_user["id"],
+                    "filename": file.filename,
+                    "file_size": len(content),
+                    "file_path": public_url,
+                    "status": "processing",
+                    "upload_type": "user_project",
+                    "project_id": str(project_id),
+                    "index_run_id": index_run_id,
+                    "upload_id": str(
+                        uuid4()
+                    ),  # Generate unique upload ID for each document
+                }
+
+                doc_result = (
+                    db.table("documents").insert(document_data_for_db).execute()
+                )
+
+                if not doc_result.data:
+                    raise HTTPException(
+                        500, f"Failed to store document record for {file.filename}"
+                    )
+
+                # Collect document data for unified processing
+                document_data.append(
+                    {
+                        "document_id": document_id,
+                        "filename": file.filename,
+                        "storage_url": public_url,
+                    }
+                )
+
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+
+        # Start unified processing pipeline in background
+        background_tasks.add_task(
+            process_multi_document_project_upload_async,
+            project_id=project_id,
+            index_run_id=index_run_id,
+            user_id=current_user["id"],
+            document_data=document_data,
+        )
+
+        # Return response with multi-file information
+        return MultiDocumentUploadResponse(
+            project_id=str(project_id),
+            index_run_id=index_run_id,
+            document_count=len(files),
+            document_ids=document_ids,
+            status="processing",
+            message=f"{len(files)} PDF(s) uploaded successfully. Processing started.",
+        )
 
     except StorageError as e:
         logger.error(f"Storage error during project upload: {e}")
@@ -586,6 +874,142 @@ async def process_email_upload_async(
         except:
             pass
     # No file cleanup needed since we're using storage URLs
+
+
+async def process_multi_document_email_upload_async(
+    upload_id: str, index_run_id: str, email: str, document_data: List[Dict[str, Any]]
+):
+    """Background processing for multi-document email uploads using unified processing"""
+
+    try:
+        logger.info(
+            f"Starting multi-document email upload processing for {upload_id} (index run: {index_run_id})"
+        )
+
+        # Initialize services
+        storage_service = StorageService()
+        db = get_supabase_admin_client()
+
+        # Create document inputs for pipeline
+        document_inputs = []
+
+        for doc_data in document_data:
+            document_id = doc_data["document_id"]
+            filename = doc_data["filename"]
+            storage_url = doc_data["storage_url"]
+
+            # Create document input for pipeline
+            document_input = DocumentInput(
+                document_id=UUID(document_id),
+                run_id=UUID(index_run_id),
+                user_id=None,  # No user for email uploads
+                file_path=storage_url,
+                filename=filename,
+                upload_type=UploadType.EMAIL,
+                upload_id=upload_id,
+                index_run_id=UUID(index_run_id),
+                metadata={"email": email},
+            )
+            document_inputs.append(document_input)
+
+        # Get orchestrator and process using unified method
+        orchestrator = await get_indexing_orchestrator()
+        success = await orchestrator.process_documents(
+            document_inputs, existing_indexing_run_id=UUID(index_run_id)
+        )
+
+        if success:
+            # Update all email_uploads records for this upload_id
+            db.table("email_uploads").update(
+                {"status": "completed", "completed_at": "now()"}
+            ).like("id", f"{upload_id}_%").execute()
+
+            logger.info(
+                f"Multi-document email upload processing completed for {upload_id}"
+            )
+        else:
+            # Update all email_uploads records for this upload_id with error
+            db.table("email_uploads").update(
+                {"status": "failed", "completed_at": "now()"}
+            ).like("id", f"{upload_id}_%").execute()
+
+            logger.error(
+                f"Multi-document email upload processing failed for {upload_id}"
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Error in multi-document email upload processing for {upload_id}: {e}"
+        )
+
+        # Update all email_uploads records for this upload_id with error
+        try:
+            db = get_supabase_admin_client()
+            db.table("email_uploads").update(
+                {"status": "failed", "completed_at": "now()"}
+            ).like("id", f"{upload_id}_%").execute()
+        except:
+            pass
+
+
+async def process_multi_document_project_upload_async(
+    project_id: UUID,
+    index_run_id: str,
+    user_id: str,
+    document_data: List[Dict[str, Any]],
+):
+    """Background processing for multi-document project uploads using unified processing"""
+
+    try:
+        logger.info(
+            f"Starting multi-document project upload processing for project {project_id} (index run: {index_run_id})"
+        )
+
+        # Initialize services
+        storage_service = StorageService()
+        db = get_supabase_admin_client()
+
+        # Create document inputs for pipeline
+        document_inputs = []
+
+        for doc_data in document_data:
+            document_id = doc_data["document_id"]
+            filename = doc_data["filename"]
+            storage_url = doc_data["storage_url"]
+
+            # Create document input for pipeline
+            document_input = DocumentInput(
+                document_id=UUID(document_id),
+                run_id=UUID(index_run_id),
+                user_id=UUID(user_id),
+                file_path=storage_url,
+                filename=filename,
+                upload_type=UploadType.USER_PROJECT,
+                project_id=UUID(project_id),
+                index_run_id=UUID(index_run_id),
+                metadata={"project_id": str(project_id)},
+            )
+            document_inputs.append(document_input)
+
+        # Get orchestrator and process using unified method
+        orchestrator = await get_indexing_orchestrator()
+        success = await orchestrator.process_documents(
+            document_inputs, existing_indexing_run_id=UUID(index_run_id)
+        )
+
+        if success:
+            logger.info(
+                f"Multi-document project upload processing completed for project {project_id}"
+            )
+        else:
+            logger.error(
+                f"Multi-document project upload processing failed for project {project_id}"
+            )
+
+    except Exception as e:
+        logger.error(
+            f"Error in multi-document project upload processing for project {project_id}: {e}"
+        )
 
 
 async def process_project_document_async(

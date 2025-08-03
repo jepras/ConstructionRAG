@@ -239,3 +239,53 @@ class ConfigManager:
     def get_orchestration_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Get orchestration configuration"""
         return config.get("orchestration", {})
+
+    async def store_run_config(self, run_id: UUID, config: Dict[str, Any]) -> bool:
+        """Store configuration used for a specific indexing run"""
+        if not self.db:
+            logger.warning("No database connection available for storing run config")
+            return False
+
+        try:
+            # Update the indexing run with the pipeline configuration
+            result = (
+                self.db.table("indexing_runs")
+                .update({"pipeline_config": config})
+                .eq("id", str(run_id))
+                .execute()
+            )
+
+            if result.data:
+                logger.info(f"Stored pipeline configuration for run {run_id}")
+                return True
+            else:
+                logger.error(f"Failed to store pipeline configuration for run {run_id}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error storing run configuration for {run_id}: {e}")
+            return False
+
+    async def get_run_config(self, run_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get configuration used for a specific indexing run"""
+        if not self.db:
+            logger.warning("No database connection available for retrieving run config")
+            return None
+
+        try:
+            result = (
+                self.db.table("indexing_runs")
+                .select("pipeline_config")
+                .eq("id", str(run_id))
+                .execute()
+            )
+
+            if result.data and result.data[0].get("pipeline_config"):
+                return result.data[0]["pipeline_config"]
+            else:
+                logger.info(f"No pipeline configuration found for run {run_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error retrieving run configuration for {run_id}: {e}")
+            return None

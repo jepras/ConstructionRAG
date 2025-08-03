@@ -269,6 +269,14 @@ class IndexingOrchestrator:
                 index_run_id=indexing_run.id,
             )
 
+            # Store the configuration used for this run
+            config = await self.config_manager.get_indexing_config(
+                document_input.user_id
+            )
+            await self.config_manager.store_run_config(
+                indexing_run.id, config.model_dump()
+            )
+
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(
                 indexing_run_id=indexing_run.id, status="running"
@@ -366,6 +374,288 @@ class IndexingOrchestrator:
                     status="failed",
                     error_message=str(e),
                 )
+            return False
+
+    async def process_documents(
+        self,
+        document_inputs: List[DocumentInput],
+        existing_indexing_run_id: Optional[UUID] = None,
+    ) -> bool:
+        """
+        Process multiple documents in a single index run with intelligent batching.
+
+        This method provides a unified interface for processing 1→N documents,
+        with optimized parallel processing for individual steps and batch embedding.
+        """
+        if not document_inputs:
+            logger.warning("No documents provided for processing")
+            return False
+
+        indexing_run = None
+        try:
+            # Initialize steps if not already done
+            if not self.steps:
+                await self.initialize_steps(document_inputs[0].user_id)
+
+            # Create or get indexing run in database
+            if existing_indexing_run_id:
+                indexing_run = await self.pipeline_service.get_indexing_run(
+                    existing_indexing_run_id
+                )
+                if not indexing_run:
+                    raise ValueError(
+                        f"Indexing run {existing_indexing_run_id} not found"
+                    )
+                logger.info(f"Using existing indexing run: {existing_indexing_run_id}")
+            else:
+                indexing_run = await self.pipeline_service.create_indexing_run(
+                    upload_type=document_inputs[0].upload_type,
+                    upload_id=document_inputs[0].upload_id,
+                    project_id=document_inputs[0].project_id,
+                )
+
+            # Link all documents to indexing run
+            for doc_input in document_inputs:
+                if doc_input.document_id:
+                    await self.pipeline_service.link_document_to_indexing_run(
+                        indexing_run_id=indexing_run.id,
+                        document_id=doc_input.document_id,
+                    )
+                # Update DocumentInput with run_id for storage operations
+                doc_input.run_id = indexing_run.id
+
+            # Create storage structure for the upload type
+            await self.storage_service.create_storage_structure(
+                upload_type=document_inputs[0].upload_type,
+                upload_id=document_inputs[0].upload_id,
+                user_id=document_inputs[0].user_id,
+                project_id=document_inputs[0].project_id,
+                index_run_id=indexing_run.id,
+            )
+
+            # Store the configuration used for this run
+            config = await self.config_manager.get_indexing_config(
+                document_inputs[0].user_id
+            )
+            await self.config_manager.store_run_config(
+                indexing_run.id, config.model_dump()
+            )
+
+            # Update status to running
+            await self.pipeline_service.update_indexing_run_status(
+                indexing_run_id=indexing_run.id, status="running"
+            )
+
+            # Create progress tracker for this run
+            progress_tracker = ProgressTracker(indexing_run.id, self.db)
+
+            logger.info(
+                f"Starting unified indexing pipeline for {len(document_inputs)} documents (run: {indexing_run.id})"
+            )
+
+            # Phase 1: Process each document through individual steps (partition → metadata → enrichment → chunking)
+            document_results = await self._process_documents_individual_steps(
+                document_inputs, indexing_run.id, progress_tracker
+            )
+
+            # Check if any documents failed
+            failed_document_ids = [
+                doc_id for doc_id, result in document_results.items() if not result
+            ]
+            successful_document_ids = [
+                doc_id for doc_id, result in document_results.items() if result
+            ]
+
+            if not successful_document_ids:
+                logger.error("All documents failed processing")
+                await self.pipeline_service.update_indexing_run_status(
+                    indexing_run_id=indexing_run.id,
+                    status="failed",
+                    error_message="All documents failed during individual step processing",
+                )
+                return False
+
+            # Phase 2: Batch embed all chunks from successful documents
+            if successful_document_ids:
+                await self._batch_embed_all_chunks(indexing_run.id, progress_tracker)
+
+            # Update final status
+            if failed_document_ids:
+                logger.warning(
+                    f"{len(failed_document_ids)} documents failed, but {len(successful_document_ids)} succeeded"
+                )
+                await self.pipeline_service.update_indexing_run_status(
+                    indexing_run_id=indexing_run.id,
+                    status="failed",
+                    error_message=f"Completed with {len(failed_document_ids)} failed documents",
+                )
+            else:
+                logger.info(
+                    f"Successfully completed processing all {len(document_inputs)} documents"
+                )
+                await self.pipeline_service.update_indexing_run_status(
+                    indexing_run_id=indexing_run.id, status="completed"
+                )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Unified indexing pipeline failed: {e}")
+            if indexing_run:
+                await self.pipeline_service.update_indexing_run_status(
+                    indexing_run_id=indexing_run.id,
+                    status="failed",
+                    error_message=str(e),
+                )
+            return False
+
+    async def _process_documents_individual_steps(
+        self,
+        document_inputs: List[DocumentInput],
+        indexing_run_id: UUID,
+        progress_tracker: ProgressTracker,
+    ) -> Dict[UUID, bool]:
+        """
+        Process each document through individual pipeline steps (partition → metadata → enrichment → chunking).
+        Uses conservative parallel processing to avoid resource exhaustion.
+        """
+        results = {}
+
+        # Conservative parallel processing - process documents in small batches
+        max_concurrent = min(
+            3, len(document_inputs)
+        )  # Start with max 3 concurrent documents
+
+        for i in range(0, len(document_inputs), max_concurrent):
+            batch = document_inputs[i : i + max_concurrent]
+            logger.info(
+                f"Processing batch {i//max_concurrent + 1}: {len(batch)} documents"
+            )
+
+            # Process batch in parallel
+            tasks = []
+            for doc_input in batch:
+                task = asyncio.create_task(
+                    self._process_single_document_steps(
+                        doc_input, indexing_run_id, progress_tracker
+                    )
+                )
+                tasks.append((doc_input.document_id, task))
+
+            # Wait for batch to complete
+            for doc_id, task in tasks:
+                try:
+                    result = await task
+                    results[doc_id] = result
+                except Exception as e:
+                    logger.error(f"Document {doc_id} failed: {e}")
+                    results[doc_id] = False
+
+        return results
+
+    async def _process_single_document_steps(
+        self,
+        document_input: DocumentInput,
+        indexing_run_id: UUID,
+        progress_tracker: ProgressTracker,
+    ) -> bool:
+        """
+        Process a single document through individual pipeline steps.
+        Stops before embedding step - that's handled separately in batch.
+        """
+        try:
+            current_data = document_input
+
+            # Process through individual steps (partition → metadata → enrichment → chunking)
+            for step in self.steps[:-1]:  # Exclude embedding step
+                step_executor = StepExecutor(step, progress_tracker)
+
+                logger.info(
+                    f"Processing {step.get_step_name()} for document {document_input.document_id}"
+                )
+
+                # Special handling for steps that need run information
+                if isinstance(step, ChunkingStep):
+                    result = await step.execute(
+                        current_data, indexing_run_id, document_input.document_id
+                    )
+                else:
+                    result = await step_executor.execute_with_tracking(current_data)
+
+                # Store step result in document's metadata (for individual document processing)
+                await self.pipeline_service.store_document_step_result(
+                    document_id=document_input.document_id,
+                    step_name=step.get_step_name(),
+                    step_result=result,
+                )
+
+                if result.status == "failed":
+                    logger.error(
+                        f"Step {step.get_step_name()} failed for document {document_input.document_id}: {result.error_message}"
+                    )
+                    return False
+
+                current_data = result
+
+            logger.info(
+                f"Successfully completed individual steps for document {document_input.document_id}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Individual step processing failed for document {document_input.document_id}: {e}"
+            )
+            return False
+
+    async def _batch_embed_all_chunks(
+        self,
+        indexing_run_id: UUID,
+        progress_tracker: ProgressTracker,
+    ) -> bool:
+        """
+        Batch embed all chunks from all documents in the index run.
+        This is the optimization that reduces API calls and improves efficiency.
+        """
+        try:
+            logger.info(f"Starting batch embedding for index run {indexing_run_id}")
+
+            # Get the embedding step
+            embedding_step = None
+            for step in self.steps:
+                if isinstance(step, EmbeddingStep):
+                    embedding_step = step
+                    break
+
+            if not embedding_step:
+                logger.error("Embedding step not found")
+                return False
+
+            # Execute batch embedding
+            result = await embedding_step.execute(
+                None,  # No input data needed for batch embedding
+                indexing_run_id=indexing_run_id,
+                document_id=None,  # Process all documents
+            )
+
+            # Store embedding step result
+            await self.pipeline_service.store_step_result(
+                indexing_run_id=indexing_run_id,
+                step_name="embedding",
+                step_result=result,
+            )
+
+            if result.status == "failed":
+                logger.error(f"Batch embedding failed: {result.error_message}")
+                return False
+
+            logger.info(
+                f"Successfully completed batch embedding for index run {indexing_run_id}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Batch embedding failed: {e}")
             return False
 
     async def process_multiple_documents_async(

@@ -437,10 +437,17 @@ class MetadataStep(PipelineStep):
             logger.info("Starting metadata step for partition data")
 
             # Handle input data - could be StepResult from partition step, raw data, or indexing run ID
-            if hasattr(input_data, "data") and input_data.data is not None:
-                # Input is a StepResult from partition step
+            if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
+                # Input is a StepResult from partition step (unified processing)
+                # Check data field first, then fall back to sample_outputs
+                partition_data = input_data.data if hasattr(input_data, "data") and input_data.data else input_data.sample_outputs.get("partition_data", {})
+                logger.info(
+                    f"Processing partition data from StepResult ({input_data.step})"
+                )
+            elif hasattr(input_data, "data") and input_data.data is not None:
+                # Input is a StepResult from partition step (legacy)
                 partition_data = input_data.data
-                logger.info("Processing partition data from StepResult")
+                logger.info("Processing partition data from StepResult (legacy)")
             elif isinstance(input_data, dict):
                 # Input is raw partition data
                 partition_data = input_data
@@ -669,28 +676,48 @@ class MetadataStep(PipelineStep):
             logger.info(
                 f"🔍 MetadataStep validate_prerequisites_async received input_data type: {type(input_data)}"
             )
-            logger.info(
-                f"🔍 MetadataStep validate_prerequisites_async received input_data: {input_data}"
-            )
 
-            # Check if input_data contains partition results
-            if not isinstance(input_data, dict):
-                logger.error("Input data is not a dictionary")
-                logger.error(
-                    f"Expected dict, got {type(input_data)} with value: {input_data}"
-                )
-                return False
+            # Handle StepResult objects (from unified processing)
+            if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
+                # This is a StepResult from a previous step
+                logger.info(f"MetadataStep received StepResult from {input_data.step}")
 
-            # Check for required keys from partition step
-            required_keys = ["text_elements", "table_elements", "extracted_pages"]
-            missing_keys = [key for key in required_keys if key not in input_data]
+                # Extract partition data from StepResult - check both data and sample_outputs
+                partition_data = input_data.data if hasattr(input_data, "data") and input_data.data else input_data.sample_outputs.get("partition_data", {})
 
-            if missing_keys:
-                logger.error(f"Missing required keys in partition data: {missing_keys}")
-                return False
+                # Check for required keys from partition step
+                required_keys = ["text_elements", "table_elements", "extracted_pages"]
+                missing_keys = [
+                    key for key in required_keys if key not in partition_data
+                ]
 
-            logger.info("Prerequisites validated for metadata step")
-            return True
+                if missing_keys:
+                    logger.error(
+                        f"Missing required keys in partition data: {missing_keys}"
+                    )
+                    return False
+
+                logger.info("Prerequisites validated for metadata step (StepResult)")
+                return True
+
+            # Handle dict objects (legacy single PDF processing)
+            if isinstance(input_data, dict):
+                # Check for required keys from partition step
+                required_keys = ["text_elements", "table_elements", "extracted_pages"]
+                missing_keys = [key for key in required_keys if key not in input_data]
+
+                if missing_keys:
+                    logger.error(
+                        f"Missing required keys in partition data: {missing_keys}"
+                    )
+                    return False
+
+                logger.info("Prerequisites validated for metadata step (dict)")
+                return True
+
+            # Unknown input type
+            logger.error(f"Unknown input type for metadata step: {type(input_data)}")
+            return False
 
         except Exception as e:
             logger.error(f"Prerequisites validation failed: {e}")
