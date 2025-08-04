@@ -202,13 +202,29 @@ async def upload_email_pdf(
                 }
             )
 
-        # Start unified processing pipeline in background
-        background_tasks.add_task(
-            process_email_upload_async,
-            index_run_id=index_run_id,
-            email=email,
-            document_data=document_data,
-        )
+        # Trigger Beam task for document processing
+        try:
+            from src.services.beam_service import BeamService
+
+            beam_service = BeamService()
+            beam_result = await beam_service.trigger_indexing_pipeline(
+                indexing_run_id=index_run_id,
+                document_ids=document_ids,
+                # No user_id or project_id for email uploads
+            )
+
+            if beam_result["status"] == "triggered":
+                logger.info(
+                    f"Beam task triggered successfully: {beam_result['task_id']}"
+                )
+                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started on Beam. Use Index Run ID: {index_run_id} to track progress."
+            else:
+                logger.error(f"Failed to trigger Beam task: {beam_result}")
+                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam trigger failed). Use Index Run ID: {index_run_id} to track progress."
+
+        except Exception as e:
+            logger.error(f"Error triggering Beam task: {e}")
+            processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam error). Use Index Run ID: {index_run_id} to track progress."
 
         # Return response with multi-file information
         return EmailUploadResponse(
@@ -217,7 +233,7 @@ async def upload_email_pdf(
             document_ids=document_ids,
             public_url=f"/pipeline/indexing/runs/{index_run_id}/status",  # Updated to use unified endpoint
             status="processing",
-            message=f"{len(files)} PDF(s) uploaded successfully. Processing started. Use Index Run ID: {index_run_id} to track progress.",
+            message=processing_message,
             expires_at=(datetime.utcnow() + timedelta(days=30)).isoformat(),
         )
 
