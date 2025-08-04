@@ -16,14 +16,14 @@ websockets==15.0.1
 httpx==0.28.1
 
 # PDF processing (for pipeline) - Moved to Beam
-# pypdf==5.8.0
-# pdf2image==1.17.0
-# PyMuPDF==1.26.3
+pypdf==5.8.0
+pdf2image==1.17.0
+PyMuPDF==1.26.3
 
 # Scientific computing - Moved to Beam
-# numpy==1.26.4
-# scipy==1.16.0
-# pandas==2.3.1
+numpy==1.26.4
+scipy==1.16.0
+pandas==2.3.1
 
 # AI/ML (for query processing - Railway still needs this)
 openai==1.97.0
