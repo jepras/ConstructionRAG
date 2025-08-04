@@ -40,8 +40,8 @@ aiofiles==24.1.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# Beam client for Railway to call Beam tasks
-beam-client
+# Beam client for Railway to call Beam tasks -- not needed though
+# beam-client 
 
 # Logging and monitoring
 structlog==23.2.0
