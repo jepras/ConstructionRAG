@@ -21,6 +21,7 @@ from src.services.storage_service import StorageService
 
 
 async def run_indexing_pipeline_on_beam(
+    indexing_run_id: str,
     document_ids: List[str],
     user_id: str = None,
     project_id: str = None,
@@ -32,6 +33,7 @@ async def run_indexing_pipeline_on_beam(
     It handles both single and batch document processing with unified embedding.
 
     Args:
+        indexing_run_id: Unique identifier for this indexing run
         document_ids: List of document IDs to process
         user_id: User ID who uploaded the documents (optional for email uploads)
         project_id: Project ID the documents belong to (optional for email uploads)
@@ -40,7 +42,7 @@ async def run_indexing_pipeline_on_beam(
         Dict containing processing results and statistics
     """
     try:
-        print(f"🚀 Starting Beam indexing pipeline")
+        print(f"🚀 Starting Beam indexing pipeline for run: {indexing_run_id}")
         print(f"📄 Processing {len(document_ids)} documents")
         print(f"🔍 Input parameters - user_id: {user_id}, project_id: {project_id}")
         print(f"🔍 Document IDs: {document_ids}")
@@ -61,6 +63,7 @@ async def run_indexing_pipeline_on_beam(
             print(f"❌ Database connection failed: {db_error}")
             return {
                 "status": "failed",
+                "indexing_run_id": indexing_run_id,
                 "error": f"Database connection failed: {str(db_error)}",
             }
 
@@ -95,13 +98,14 @@ async def run_indexing_pipeline_on_beam(
                 # Validate UUIDs before creating DocumentInput
                 print(f"🔍 Validating UUIDs...")
                 print(f"  - doc_id: {doc_id} (type: {type(doc_id)})")
+                print(f"  - indexing_run_id: {indexing_run_id} (type: {type(indexing_run_id)})")
                 print(f"  - user_id: {user_id} (type: {type(user_id)})")
                 print(f"  - project_id: {project_id} (type: {type(project_id)})")
 
                 # Create document input for pipeline - let the orchestrator handle validation
                 document_input = DocumentInput(
                     document_id=UUID(doc_id),
-                    run_id=None,  # Will be set by orchestrator
+                    run_id=UUID(indexing_run_id),
                     user_id=UUID(user_id) if user_id else None,
                     file_path=doc_data.get("file_path", ""),
                     filename=doc_data.get("filename", ""),
@@ -109,7 +113,7 @@ async def run_indexing_pipeline_on_beam(
                         UploadType.EMAIL if not user_id else UploadType.USER_PROJECT
                     ),
                     project_id=UUID(project_id) if project_id else None,
-                    index_run_id=None,  # Will be set by orchestrator
+                    index_run_id=UUID(indexing_run_id),
                     metadata={"project_id": str(project_id)} if project_id else {},
                 )
                 document_inputs.append(document_input)
@@ -125,6 +129,7 @@ async def run_indexing_pipeline_on_beam(
             return {
                 "status": "failed",
                 "error": "No valid documents found",
+                "indexing_run_id": indexing_run_id,
             }
 
         print(f"✅ Successfully created {len(document_inputs)} DocumentInput objects")
@@ -139,14 +144,16 @@ async def run_indexing_pipeline_on_beam(
         )
         print("✅ IndexingOrchestrator initialized")
 
-        # Process documents using the unified method - let orchestrator create its own indexing run
+        # Process documents using the unified method - use existing indexing run
         print(
             f"🔄 Starting unified document processing for {len(document_inputs)} documents"
         )
-        print("🔄 Calling orchestrator.process_documents (will create indexing run)")
+        print(f"🔄 Calling orchestrator.process_documents with existing_indexing_run_id: {indexing_run_id}")
 
         try:
-            success = await orchestrator.process_documents(document_inputs)
+            success = await orchestrator.process_documents(
+                document_inputs, existing_indexing_run_id=UUID(indexing_run_id)
+            )
             print(
                 f"🔄 Orchestrator.process_documents completed with success: {success}"
             )
@@ -155,20 +162,23 @@ async def run_indexing_pipeline_on_beam(
             print(f"❌ Error type: {type(orchestrator_error)}")
             return {
                 "status": "failed",
+                "indexing_run_id": indexing_run_id,
                 "error": f"Orchestrator error: {str(orchestrator_error)}",
             }
 
         if success:
-            print("✅ Indexing pipeline completed successfully")
+            print(f"✅ Indexing pipeline completed successfully for run: {indexing_run_id}")
             return {
                 "status": "completed",
+                "indexing_run_id": indexing_run_id,
                 "document_count": len(document_inputs),
                 "message": "Indexing pipeline completed successfully",
             }
         else:
-            print("❌ Indexing pipeline failed")
+            print(f"❌ Indexing pipeline failed for run: {indexing_run_id}")
             return {
                 "status": "failed",
+                "indexing_run_id": indexing_run_id,
                 "document_count": len(document_inputs),
                 "error": "Indexing pipeline failed during processing",
             }
@@ -195,6 +205,7 @@ async def run_indexing_pipeline_on_beam(
     timeout=1800,
 )
 def process_documents(
+    indexing_run_id: str,
     document_ids: list,
     user_id: str = None,
     project_id: str = None,
@@ -206,6 +217,7 @@ def process_documents(
     It runs the complete 5-step indexing pipeline on Beam's GPU instances.
 
     Args:
+        indexing_run_id: Unique identifier for this indexing run
         document_ids: List of document IDs to process
         user_id: User ID who uploaded the documents (optional for email uploads)
         project_id: Project ID the documents belong to (optional for email uploads)
@@ -213,7 +225,7 @@ def process_documents(
     if env.is_remote():
         # Run the async function in an event loop
         return asyncio.run(
-            run_indexing_pipeline_on_beam(document_ids, user_id, project_id)
+            run_indexing_pipeline_on_beam(indexing_run_id, document_ids, user_id, project_id)
         )
     else:
         # Local development - just return success

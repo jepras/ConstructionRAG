@@ -208,6 +208,7 @@ async def upload_email_pdf(
 
             beam_service = BeamService()
             beam_result = await beam_service.trigger_indexing_pipeline(
+                indexing_run_id=index_run_id,
                 document_ids=document_ids,
                 # No user_id or project_id for email uploads
             )
@@ -216,14 +217,14 @@ async def upload_email_pdf(
                 logger.info(
                     f"Beam task triggered successfully: {beam_result['task_id']}"
                 )
-                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started on Beam. Beam will create indexing run automatically."
+                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started on Beam. Use Index Run ID: {index_run_id} to track progress."
             else:
                 logger.error(f"Failed to trigger Beam task: {beam_result}")
-                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam trigger failed)."
+                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam trigger failed). Use Index Run ID: {index_run_id} to track progress."
 
         except Exception as e:
             logger.error(f"Error triggering Beam task: {e}")
-            processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam error)."
+            processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam error). Use Index Run ID: {index_run_id} to track progress."
 
         # Return response with multi-file information
         return EmailUploadResponse(
