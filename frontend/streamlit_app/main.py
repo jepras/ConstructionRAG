@@ -147,10 +147,12 @@ def main():
         def nav_button(label, page_name, icon):
             is_active = current_page == page_name
             button_style = "primary" if is_active else "secondary"
-            if st.button(f"{icon} {label}", use_container_width=True, type=button_style):
+            if st.button(
+                f"{icon} {label}", use_container_width=True, type=button_style
+            ):
                 st.session_state.current_page = page_name
                 st.rerun()
-        
+
         nav_button("Home", "Home", "🏠")
         nav_button("Authentication", "Authentication", "🔐")
         nav_button("Upload Documents", "Upload Documents", "📤")

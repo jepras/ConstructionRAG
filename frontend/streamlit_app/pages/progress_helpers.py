@@ -227,13 +227,19 @@ def display_image_table_grid(documents, step_name):
                         )
 
                     if url:
-                        caption = table.get("enrichment_metadata", {}).get(
+                        enrichment_meta = table.get("enrichment_metadata", {})
+                        caption = enrichment_meta.get(
                             "table_image_caption", "No caption available"
                         )
+                        prompt = enrichment_meta.get("prompt_used")
+                        prompt_template = enrichment_meta.get("prompt_template")
+
                         all_tables.append(
                             {
                                 "url": url,
                                 "caption": caption,
+                                "prompt": prompt,
+                                "prompt_template": prompt_template,
                                 "id": table.get("id", "Unknown"),
                                 "filename": doc.get("filename", "Unknown"),
                             }
@@ -253,13 +259,19 @@ def display_image_table_grid(documents, step_name):
                         )
 
                     if url:
-                        caption = page_info.get("enrichment_metadata", {}).get(
+                        enrichment_meta = page_info.get("enrichment_metadata", {})
+                        caption = enrichment_meta.get(
                             "full_page_image_caption", "No caption available"
                         )
+                        prompt = enrichment_meta.get("prompt_used")
+                        prompt_template = enrichment_meta.get("prompt_template")
+
                         all_images.append(
                             {
                                 "url": url,
                                 "caption": caption,
+                                "prompt": prompt,
+                                "prompt_template": prompt_template,
                                 "page": page_info.get("structural_metadata", {}).get(
                                     "page_number", "Unknown"
                                 ),
@@ -303,6 +315,16 @@ def display_image_table_grid(documents, step_name):
                             width=200,
                             caption=f"Table {table['id']} from {table['filename']} (click expander above for full size)",
                         )
+
+                        # Show prompt if available (underneath the image)
+                        if table.get("prompt"):
+                            with st.expander("🔍 View Prompt Used", expanded=False):
+                                st.markdown(
+                                    "**Prompt Template:** "
+                                    + table.get("prompt_template", "Unknown")
+                                )
+                                st.markdown("**Full Prompt:**")
+                                st.code(table["prompt"], language="text")
                     else:
                         st.markdown(f"❌ Could not load table image: {table['id']}")
                 except Exception as e:
@@ -342,6 +364,16 @@ def display_image_table_grid(documents, step_name):
                             width=200,
                             caption=f"Page {image_data['page']} from {image_data['filename']} (click expander above for full size)",
                         )
+
+                        # Show prompt if available (underneath the image)
+                        if image_data.get("prompt"):
+                            with st.expander("🔍 View Prompt Used", expanded=False):
+                                st.markdown(
+                                    "**Prompt Template:** "
+                                    + image_data.get("prompt_template", "Unknown")
+                                )
+                                st.markdown("**Full Prompt:**")
+                                st.code(image_data["prompt"], language="text")
                     else:
                         st.markdown(
                             f"❌ Could not load page image: Page {image_data['page']}"

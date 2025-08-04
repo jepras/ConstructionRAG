@@ -61,7 +61,7 @@ class ConstructionVLMCaptioner:
 
     async def caption_table_html_async(
         self, table_html: str, element_context: dict
-    ) -> str:
+    ) -> dict:
         """Generate caption for table using HTML representation"""
 
         page_num = element_context.get("page_number", "unknown")
@@ -84,15 +84,24 @@ IMPORTANT: Please provide your detailed, technical caption in {self.caption_lang
 
         try:
             response = await self.vlm_client.ainvoke([HumanMessage(content=prompt)])
-            return response.content.strip()
+            return {
+                "caption": response.content.strip(),
+                "prompt": prompt,
+                "prompt_template": "table_html_caption_v1",
+            }
         except Exception as e:
             logger.error(f"Error captioning table HTML: {e}")
-            return f"Error generating caption: {str(e)}"
+            return {
+                "caption": f"Error generating caption: {str(e)}",
+                "prompt": prompt,
+                "prompt_template": "table_html_caption_v1",
+                "error": str(e),
+            }
 
     async def caption_table_image_async(
         self, image_url: str, element_context: dict
-    ) -> str:
-        """Generate caption for table using image URL"""
+    ) -> dict:
+        """Generate caption for table using extracted image"""
 
         page_num = element_context.get("page_number", "unknown")
         source_file = element_context.get("source_filename", "unknown")
@@ -121,18 +130,25 @@ IMPORTANT: Please provide your detailed description in {self.caption_language}."
                     },
                 ]
             )
-
-            response = await self.vlm_client.ainvoke([message])
-
-            return response.content.strip()
+            response = self.vlm_client.invoke([message])
+            return {
+                "caption": response.content.strip(),
+                "prompt": prompt,
+                "prompt_template": "table_image_caption_v1",
+            }
         except Exception as e:
-            logger.error(f"Error captioning table image: {e}")
-            return f"Error generating caption: {str(e)}"
+            logger.error(f"    ❌ Error captioning table image: {e}")
+            return {
+                "caption": f"Error generating caption: {str(e)}",
+                "prompt": prompt,
+                "prompt_template": "table_image_caption_v1",
+                "error": str(e),
+            }
 
     async def caption_full_page_image_async(
         self, image_url: str, page_context: dict, page_text_context: str = ""
-    ) -> str:
-        """Generate caption for full page image with surrounding text context"""
+    ) -> dict:
+        """Generate caption for full-page image with context"""
 
         page_num = page_context.get("page_number", "unknown")
         source_file = page_context.get("source_filename", "unknown")
@@ -146,7 +162,7 @@ IMPORTANT: Please provide your detailed description in {self.caption_language}."
 **Text Context from this page:**
 {page_text_context[:1500]}"""  # Configurable context limit
 
-        prompt = f"""You are analyzing a full-page technical drawing/image from page {page_num} of a construction document ({source_file}). This page has {complexity} visual complexity.
+        prompt = f"""You are analyzing a full-page image from page {page_num} of a construction/technical document ({source_file}). This page has {complexity} visual complexity.
 
 Please provide an EXTREMELY DETAILED description that captures:
 
@@ -199,10 +215,19 @@ IMPORTANT: Please provide your comprehensive description in {self.caption_langua
 
             response = await self.vlm_client.ainvoke([message])
 
-            return response.content.strip()
+            return {
+                "caption": response.content.strip(),
+                "prompt": prompt,
+                "prompt_template": "full_page_image_caption_v1",
+            }
         except Exception as e:
             logger.error(f"Error captioning full page image: {e}")
-            return f"Error generating caption: {str(e)}"
+            return {
+                "caption": f"Error generating caption: {str(e)}",
+                "prompt": prompt,
+                "prompt_template": "full_page_image_caption_v1",
+                "error": str(e),
+            }
 
 
 class EnrichmentStep(PipelineStep):
@@ -545,6 +570,17 @@ class EnrichmentStep(PipelineStep):
             "table_image_filepath": None,
             "caption_word_count": 0,
             "processing_duration_seconds": None,
+            "prompt_used": None,
+            "prompt_template": None,
+            "input_context": {
+                "page_number": table_element["structural_metadata"].get(
+                    "page_number", "unknown"
+                ),
+                "source_filename": table_element["structural_metadata"].get(
+                    "source_filename", "unknown"
+                ),
+                "element_type": "table",
+            },
         }
 
         start_time = datetime.utcnow()
@@ -554,11 +590,12 @@ class EnrichmentStep(PipelineStep):
             table_html = table_element.get("metadata", {}).get("text_as_html", "")
             if table_html and table_html.strip():
                 logger.debug(f"Captioning table HTML ({len(table_html)} chars)...")
-                enrichment_metadata["table_html_caption"] = (
-                    await self.vlm_captioner.caption_table_html_async(
-                        table_html, table_element["structural_metadata"]
-                    )
+                vlm_result = await self.vlm_captioner.caption_table_html_async(
+                    table_html, table_element["structural_metadata"]
                 )
+                enrichment_metadata["table_html_caption"] = vlm_result["caption"]
+                enrichment_metadata["prompt_used"] = vlm_result["prompt"]
+                enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
                 logger.debug(
                     f"HTML caption generated ({len(enrichment_metadata['table_html_caption'])} chars)"
                 )
@@ -571,11 +608,12 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning table image: {image_url}")
-                enrichment_metadata["table_image_caption"] = (
-                    await self.vlm_captioner.caption_table_image_async(
-                        image_url, table_element["structural_metadata"]
-                    )
+                vlm_result = await self.vlm_captioner.caption_table_image_async(
+                    image_url, table_element["structural_metadata"]
                 )
+                enrichment_metadata["table_image_caption"] = vlm_result["caption"]
+                enrichment_metadata["prompt_used"] = vlm_result["prompt"]
+                enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
                 enrichment_metadata["table_image_filepath"] = image_url
                 logger.debug(
                     f"Image caption generated ({len(enrichment_metadata['table_image_caption'])} chars)"
@@ -623,6 +661,17 @@ class EnrichmentStep(PipelineStep):
             "page_text_context": None,
             "caption_word_count": 0,
             "processing_duration_seconds": None,
+            "prompt_used": None,
+            "prompt_template": None,
+            "input_context": {
+                "page_number": page_info["structural_metadata"].get(
+                    "page_number", "unknown"
+                ),
+                "source_filename": page_info["structural_metadata"].get(
+                    "source_filename", "unknown"
+                ),
+                "element_type": "image",
+            },
         }
 
         start_time = datetime.utcnow()
@@ -641,11 +690,12 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning full-page image: {image_url}")
-                enrichment_metadata["full_page_image_caption"] = (
-                    await self.vlm_captioner.caption_full_page_image_async(
-                        image_url, page_info["structural_metadata"], page_text_context
-                    )
+                vlm_result = await self.vlm_captioner.caption_full_page_image_async(
+                    image_url, page_info["structural_metadata"], page_text_context
                 )
+                enrichment_metadata["full_page_image_caption"] = vlm_result["caption"]
+                enrichment_metadata["prompt_used"] = vlm_result["prompt"]
+                enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
                 enrichment_metadata["full_page_image_filepath"] = image_url
                 enrichment_metadata["caption_word_count"] = len(
                     enrichment_metadata["full_page_image_caption"].split()
