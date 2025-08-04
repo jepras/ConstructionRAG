@@ -65,9 +65,9 @@ FastAPI Upload Endpoint → Beam Task Queue → IndexingOrchestrator → 5-Step 
 ### Phase 1: Infrastructure Setup (Week 1)
 
 #### 1.1 Beam Configuration
-- [ ] Create `beam.yaml` configuration file
+- [ ] Create `beam-app.py` configuration file (Beam v2 approach)
 - [ ] Set up Beam project and authentication
-- [ ] Configure GPU resources (T4, 8Gi memory)
+- [ ] Configure GPU resources (T4, 8Gi memory, 4 CPU)
 - [ ] Set up secrets management for API keys
 
 #### 1.2 Requirements Separation
@@ -81,26 +81,27 @@ FastAPI Upload Endpoint → Beam Task Queue → IndexingOrchestrator → 5-Step 
   - Voyage AI API key
   - OpenRouter API key
   - Anthropic API key
-- [ ] Test Beam environment setup
+- [ ] Deploy to production and test Beam environment setup
 
 ### Phase 2: Core Beam Worker (Week 2)
 
 #### 2.1 Basic Worker Structure
 - [ ] Create `backend/src/pipeline/indexing/beam_worker.py`
+- [ ] Create `backend/beam-app.py` with task queue configuration
 - [ ] Implement basic task queue structure
 - [ ] Add configuration fetching from Supabase
-- [ ] Test basic Beam task execution
+- [ ] Deploy and test basic Beam task execution in production
 
 #### 2.2 Document Processing Logic
 - [ ] Port `process_documents()` method to Beam
 - [ ] Implement file download from Supabase Storage
 - [ ] Add progress tracking integration
-- [ ] Test single document processing
+- [ ] Deploy and test single document processing in production
 
 #### 2.3 Error Handling
 - [ ] Implement comprehensive error handling
 - [ ] Add retry logic for transient failures
-- [ ] Test error scenarios
+- [ ] Deploy and test error scenarios in production
 
 ### Phase 3: Railway Integration (Week 3)
 
@@ -114,7 +115,7 @@ FastAPI Upload Endpoint → Beam Task Queue → IndexingOrchestrator → 5-Step 
 - [ ] Create callback endpoint on Railway
 - [ ] Implement per-document status updates
 - [ ] Add error handling for failed callbacks
-- [ ] Test callback reliability
+- [ ] Deploy and test callback reliability in production
 
 #### 3.3 Legacy Code Cleanup
 - [ ] Remove `/pipeline/indexing/start` endpoint
@@ -124,33 +125,52 @@ FastAPI Upload Endpoint → Beam Task Queue → IndexingOrchestrator → 5-Step 
 ### Phase 4: Testing & Validation (Week 4)
 
 #### 4.1 Integration Testing
-- [ ] Test single document upload flow
-- [ ] Test multi-document batch upload
-- [ ] Test error scenarios and recovery
-- [ ] Validate progress tracking
+- [ ] Deploy and test single document upload flow in production
+- [ ] Deploy and test multi-document batch upload in production
+- [ ] Deploy and test error scenarios and recovery in production
+- [ ] Validate progress tracking in production
 
 #### 4.2 Performance Testing
-- [ ] Benchmark processing times
-- [ ] Test concurrent upload handling
-- [ ] Validate resource utilization
-- [ ] Compare with previous Railway performance
+- [ ] Deploy and benchmark processing times in production
+- [ ] Deploy and test concurrent upload handling in production
+- [ ] Deploy and validate resource utilization in production
+- [ ] Compare with previous Railway performance in production
 
 #### 4.3 Production Validation
-- [ ] Deploy to production environment
-- [ ] Monitor real-world usage
-- [ ] Validate callback reliability
-- [ ] Check error rates and recovery
+- [ ] Monitor real-world usage in production
+- [ ] Validate callback reliability in production
+- [ ] Check error rates and recovery in production
+- [ ] Gather performance metrics and user feedback
 
 ## Technical Implementation Details
 
 ### Beam Worker Structure
 
 ```python
-@beam.task_queue(
+# beam-app.py
+from beam import Image, task_queue, env
+
+@task_queue(
+    name="construction-rag-indexing",
+    cpu=4,
+    memory="8Gi", 
     gpu="T4",
-    memory="8Gi",
-    timeout=1800  # 30 minutes
+    image=Image(
+        python_version="python3.12",
+        python_packages="beam_requirements.txt",
+    ),
 )
+def run_indexing_pipeline(
+    indexing_run_id: str,
+    document_ids: list,
+    user_id: str,
+    project_id: str
+):
+    return run_indexing_pipeline_on_beam(
+        indexing_run_id, document_ids, user_id, project_id
+    )
+
+# beam_worker.py
 async def run_indexing_pipeline_on_beam(
     indexing_run_id: str,
     document_ids: List[str],
@@ -198,29 +218,29 @@ config = await config_manager.get_stored_run_config(indexing_run_id)
 
 ## Testing Strategy
 
-### Unit Testing
-- [ ] Test Beam worker functions in isolation
-- [ ] Mock Supabase interactions
-- [ ] Test configuration fetching
-- [ ] Validate error handling
+### Production Testing
+- [ ] Deploy Beam worker and test in production
+- [ ] Validate Supabase interactions in real environment
+- [ ] Test configuration fetching from production database
+- [ ] Validate error handling in production
 
 ### Integration Testing
-- [ ] End-to-end upload → processing → callback flow
-- [ ] Test with real PDF files
-- [ ] Validate database state consistency
-- [ ] Test concurrent processing
+- [ ] Deploy and test end-to-end upload → processing → callback flow in production
+- [ ] Test with real PDF files in production environment
+- [ ] Validate database state consistency in production
+- [ ] Test concurrent processing in production
 
 ### Load Testing
-- [ ] Test multiple simultaneous uploads
-- [ ] Validate Beam queue handling
-- [ ] Monitor resource utilization
-- [ ] Test callback reliability under load
+- [ ] Deploy and test multiple simultaneous uploads in production
+- [ ] Validate Beam queue handling in production
+- [ ] Monitor resource utilization in production
+- [ ] Test callback reliability under load in production
 
 ### Error Testing
-- [ ] Network failures during processing
-- [ ] Invalid file formats
-- [ ] API key failures
-- [ ] Database connection issues
+- [ ] Deploy and test network failures during processing in production
+- [ ] Deploy and test invalid file formats in production
+- [ ] Deploy and test API key failures in production
+- [ ] Deploy and test database connection issues in production
 
 ## Risk Mitigation
 
