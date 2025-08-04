@@ -30,6 +30,7 @@ class ConfigManager:
 
     def __init__(self, db=None):
         self.db = db
+        self._admin_db = None  # Lazy load admin client only when needed
         self._indexing_config_cache = None
         self._query_config_cache = None
 
@@ -242,14 +243,21 @@ class ConfigManager:
 
     async def store_run_config(self, run_id: UUID, config: Dict[str, Any]) -> bool:
         """Store configuration used for a specific indexing run"""
-        if not self.db:
-            logger.warning("No database connection available for storing run config")
-            return False
+        # Use admin client for storing run config (background operation)
+        if not self._admin_db:
+            try:
+                from src.config.database import get_supabase_admin_client
+
+                self._admin_db = get_supabase_admin_client()
+                logger.info("Initialized admin client for storing run config")
+            except Exception as e:
+                logger.error(f"Failed to initialize admin client: {e}")
+                return False
 
         try:
-            # Update the indexing run with the pipeline configuration
+            # Update the indexing run with the pipeline configuration using admin client
             result = (
-                self.db.table("indexing_runs")
+                self._admin_db.table("indexing_runs")
                 .update({"pipeline_config": config})
                 .eq("id", str(run_id))
                 .execute()
@@ -268,13 +276,20 @@ class ConfigManager:
 
     async def get_run_config(self, run_id: UUID) -> Optional[Dict[str, Any]]:
         """Get configuration used for a specific indexing run"""
-        if not self.db:
-            logger.warning("No database connection available for retrieving run config")
-            return None
+        # Use admin client for retrieving run config (background operation)
+        if not self._admin_db:
+            try:
+                from src.config.database import get_supabase_admin_client
+
+                self._admin_db = get_supabase_admin_client()
+                logger.info("Initialized admin client for retrieving run config")
+            except Exception as e:
+                logger.error(f"Failed to initialize admin client: {e}")
+                return None
 
         try:
             result = (
-                self.db.table("indexing_runs")
+                self._admin_db.table("indexing_runs")
                 .select("pipeline_config")
                 .eq("id", str(run_id))
                 .execute()

@@ -35,5 +35,4 @@ def show_home_page():
         )
 
         if st.button("🚀 Get Started", type="primary"):
-            st.session_state.current_page = "Upload Documents"
-            st.rerun()
+            st.info("Use the sidebar navigation to upload documents and get started!")

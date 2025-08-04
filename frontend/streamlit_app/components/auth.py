@@ -7,6 +7,23 @@ def show_login_form() -> Optional[Dict[str, Any]]:
     """Display login form and return auth result"""
     st.markdown("### Sign In")
 
+    # Quick login button
+    if st.button(
+        "🚀 Quick Login (jeprasher@gmail.com)",
+        type="secondary",
+        use_container_width=True,
+    ):
+        init_auth()
+        auth_manager = st.session_state.auth_manager
+        result = auth_manager.sign_in("jeprasher@gmail.com", "Test123!")
+
+        if result.get("success"):
+            st.success("Quick login successful!")
+            st.rerun()
+        else:
+            st.error(result.get("message", "Quick login failed."))
+        return result
+
     with st.form("login_form"):
         email = st.text_input("Email", type="default", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")

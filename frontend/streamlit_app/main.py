@@ -140,35 +140,24 @@ def main():
     with st.sidebar:
         st.title("Navigation")
 
-        # Initialize session state for page selection
-        if "current_page" not in st.session_state:
-            st.session_state.current_page = "Home"
+        # Get current page for highlighting
+        current_page = st.session_state.get("current_page", "Home")
 
-        page = st.selectbox(
-            "Choose a page",
-            [
-                "Home",
-                "Authentication",
-                "Upload Documents",
-                "Project Overview",
-                "Progress Tracking",
-                "Query Interface",
-                "Settings",
-            ],
-            key="page_selector",
-            index=[
-                "Home",
-                "Authentication",
-                "Upload Documents",
-                "Project Overview",
-                "Progress Tracking",
-                "Query Interface",
-                "Settings",
-            ].index(st.session_state.current_page),
-        )
-
-        # Update session state when page changes
-        st.session_state.current_page = page
+        # Navigation buttons with visual feedback
+        def nav_button(label, page_name, icon):
+            is_active = current_page == page_name
+            button_style = "primary" if is_active else "secondary"
+            if st.button(f"{icon} {label}", use_container_width=True, type=button_style):
+                st.session_state.current_page = page_name
+                st.rerun()
+        
+        nav_button("Home", "Home", "🏠")
+        nav_button("Authentication", "Authentication", "🔐")
+        nav_button("Upload Documents", "Upload Documents", "📤")
+        nav_button("Project Overview", "Project Overview", "📊")
+        nav_button("Progress Tracking", "Progress Tracking", "📈")
+        nav_button("Query Interface", "Query Interface", "❓")
+        nav_button("Settings", "Settings", "⚙️")
 
         st.markdown("---")
         st.markdown("### Status")
@@ -192,7 +181,12 @@ def main():
         st.info(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
         st.info(f"Backend URL: {os.getenv('BACKEND_API_URL', 'Not configured')}")
 
+    # Initialize current_page if not set
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "Home"
+
     # Main content based on page selection
+    page = st.session_state.current_page
     if page == "Home":
         home.show_home_page()
     elif page == "Authentication":
