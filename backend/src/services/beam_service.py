@@ -24,7 +24,6 @@ class BeamService:
 
     async def trigger_indexing_pipeline(
         self,
-        indexing_run_id: str,
         document_ids: List[str],
         user_id: str = None,
         project_id: str = None,
@@ -33,7 +32,6 @@ class BeamService:
         Trigger the indexing pipeline on Beam.
 
         Args:
-            indexing_run_id: Unique identifier for this indexing run
             document_ids: List of document IDs to process
             user_id: User ID (optional for email uploads)
             project_id: Project ID (optional for email uploads)
@@ -43,7 +41,6 @@ class BeamService:
         """
         try:
             payload = {
-                "indexing_run_id": indexing_run_id,
                 "document_ids": document_ids,
             }
 
@@ -58,8 +55,7 @@ class BeamService:
                 "Authorization": f"Bearer {self.beam_token}",
             }
 
-            logger.info(f"Triggering Beam task for indexing run: {indexing_run_id}")
-            logger.info(f"Document IDs: {document_ids}")
+            logger.info(f"Triggering Beam task for documents: {document_ids}")
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(

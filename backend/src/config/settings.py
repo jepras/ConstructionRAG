@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"  # Allow extra fields to prevent validation errors
 
 
 # Global settings instance

@@ -251,7 +251,9 @@ class EnrichmentStep(PipelineStep):
         self.max_page_text_elements = config.get("max_page_text_elements", 5)
 
         # Initialize VLM captioner
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        from src.config.settings import get_settings
+        settings = get_settings()
+        api_key = settings.openrouter_api_key
         if not api_key:
             raise PipelineError("OPENROUTER_API_KEY not found in environment variables")
 
