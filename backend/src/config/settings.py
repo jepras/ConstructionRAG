@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     langchain_tracing_v2: Optional[str] = None
     langchain_project: Optional[str] = None
 
+    # Beam Integration
+    beam_webhook_url: Optional[str] = None
+    beam_auth_token: Optional[str] = None
+
     # Application
     app_name: str = "ConstructionRAG"
     app_version: str = "1.0.0"
