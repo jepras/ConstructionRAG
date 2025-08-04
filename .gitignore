@@ -1,5 +1,6 @@
 .env
 venv/
+test_venv/
 notebooks/figures/
 chroma_db/
 .cursor/

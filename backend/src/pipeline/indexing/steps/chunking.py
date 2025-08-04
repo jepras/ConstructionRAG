@@ -193,11 +193,19 @@ class IntelligentChunker:
 
     def filter_noise_elements(
         self, elements: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Filter out noise elements (headers, footers, page breaks, short text, titles)"""
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Filter out noise elements and return filtering statistics"""
         logger.debug(f"Starting with {len(elements)} elements")
 
         filtered_elements = []
+        filtering_stats = {
+            "total_elements": len(elements),
+            "filtered_out": 0,
+            "filtered_by_category": {},
+            "filtered_by_length": 0,
+            "filtered_elements": [],
+        }
+
         for el in elements:
             # Extract metadata and category
             meta = self.extract_structural_metadata(el)
@@ -205,31 +213,73 @@ class IntelligentChunker:
 
             # Exclude headers, footers, page breaks
             if category in self.exclude_categories:
+                filtering_stats["filtered_out"] += 1
+                filtering_stats["filtered_by_category"][category] = (
+                    filtering_stats["filtered_by_category"].get(category, 0) + 1
+                )
+                filtering_stats["filtered_elements"].append(
+                    {
+                        "category": category,
+                        "reason": f"Excluded category: {category}",
+                        "content_preview": (
+                            self.extract_text_content(el)[:100] + "..."
+                            if len(self.extract_text_content(el)) > 100
+                            else self.extract_text_content(el)
+                        ),
+                    }
+                )
                 continue
 
             # Exclude short uncategorized text (OCR noise)
             if category == "UncategorizedText":
                 text_content = self.extract_text_content(el)
                 if len(text_content) < self.min_content_length:
+                    filtering_stats["filtered_out"] += 1
+                    filtering_stats["filtered_by_length"] += 1
+                    filtering_stats["filtered_elements"].append(
+                        {
+                            "category": category,
+                            "reason": f"Too short: {len(text_content)} chars (min: {self.min_content_length})",
+                            "content_preview": text_content,
+                        }
+                    )
                     continue
 
             filtered_elements.append(el)
 
         logger.debug(f"After filtering: {len(filtered_elements)} elements")
-        return filtered_elements
+        return filtered_elements, filtering_stats
 
-    def group_list_items(self, elements: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Group consecutive list items with their narrative introduction"""
+    def group_list_items(
+        self, elements: List[Dict[str, Any]]
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Group consecutive list items with their narrative introduction and return grouping statistics"""
         if not self.enable_list_grouping:
-            return elements
+            return elements, {"list_grouping_enabled": False}
 
         grouped_elements = []
+        grouping_stats = {
+            "list_grouping_enabled": True,
+            "total_elements": len(elements),
+            "groups_created": 0,
+            "total_list_items_grouped": 0,
+            "narrative_texts_found": 0,
+            "list_items_found": 0,
+            "group_examples": [],
+        }
+
         i = 0
 
         while i < len(elements):
             current_el = elements[i]
             meta = self.extract_structural_metadata(current_el)
             category = meta.get("element_category", "unknown")
+
+            # Count narrative texts and list items
+            if category == "NarrativeText":
+                grouping_stats["narrative_texts_found"] += 1
+            elif category == "ListItem":
+                grouping_stats["list_items_found"] += 1
 
             # Check if this is a NarrativeText followed by ListItems
             if category == "NarrativeText" and i + 1 < len(elements):
@@ -260,6 +310,35 @@ class IntelligentChunker:
                     logger.debug(
                         f"Combined list: {len(list_items)} items (1 narrative + {len(list_items)-1} list items)"
                     )
+
+                    # Track grouping statistics
+                    grouping_stats["groups_created"] += 1
+                    grouping_stats["total_list_items_grouped"] += (
+                        len(list_items) - 1
+                    )  # Exclude narrative text
+
+                    # Store example of grouped list (up to 2 examples)
+                    if len(grouping_stats["group_examples"]) < 2:
+                        narrative_text = self.extract_text_content(list_items[0])
+                        list_texts = [
+                            self.extract_text_content(item) for item in list_items[1:]
+                        ]
+                        grouping_stats["group_examples"].append(
+                            {
+                                "narrative_text": (
+                                    narrative_text[:200] + "..."
+                                    if len(narrative_text) > 200
+                                    else narrative_text
+                                ),
+                                "list_items": [
+                                    text[:100] + "..." if len(text) > 100 else text
+                                    for text in list_texts[:3]
+                                ],  # Show first 3 list items
+                                "total_list_items": len(list_texts),
+                                "page_number": meta.get("page_number"),
+                                "section_title": meta.get("section_title_inherited"),
+                            }
+                        )
 
                     # Create new meta-element with category "List"
                     combined_element = {
@@ -311,8 +390,21 @@ class IntelligentChunker:
             grouped_elements.append(current_el)
             i += 1
 
+        # Calculate success rate
+        if grouping_stats["list_items_found"] > 0:
+            grouping_stats["grouping_success_rate"] = round(
+                (
+                    grouping_stats["total_list_items_grouped"]
+                    / grouping_stats["list_items_found"]
+                )
+                * 100,
+                2,
+            )
+        else:
+            grouping_stats["grouping_success_rate"] = 0
+
         logger.debug(f"After grouping: {len(grouped_elements)} elements")
-        return grouped_elements
+        return grouped_elements, grouping_stats
 
     def compose_final_content(self, el: Dict[str, Any], meta: dict) -> str:
         """Compose final content based on element type and category"""
@@ -378,15 +470,15 @@ class IntelligentChunker:
 
     def create_final_chunks(
         self, elements: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Main orchestrator: transform elements into final chunks"""
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Main orchestrator: transform elements into final chunks with processing statistics"""
         logger.info("=== INTELLIGENT CHUNKING PIPELINE ===")
 
         # Step 1: Filter noise
-        filtered_elements = self.filter_noise_elements(elements)
+        filtered_elements, filtering_stats = self.filter_noise_elements(elements)
 
         # Step 2: Group list items
-        grouped_elements = self.group_list_items(filtered_elements)
+        grouped_elements, grouping_stats = self.group_list_items(filtered_elements)
 
         # Step 3: Compose final chunks
         final_chunks = []
@@ -431,11 +523,19 @@ class IntelligentChunker:
 
             final_chunks.append(chunk)
 
+        # Combine all processing statistics
+        processing_stats = {
+            "filtering_stats": filtering_stats,
+            "grouping_stats": grouping_stats,
+            "total_elements_processed": len(elements),
+            "final_chunks_created": len(final_chunks),
+        }
+
         logger.info(f"Final chunks created: {len(final_chunks)}")
-        return final_chunks
+        return final_chunks, processing_stats
 
     def analyze_chunks(self, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate basic analysis of chunks"""
+        """Generate enhanced analysis of chunks with examples and quality metrics"""
         if not chunks:
             return {"error": "No chunks to analyze"}
 
@@ -443,12 +543,38 @@ class IntelligentChunker:
         avg_words = sum(len(c["content"].split()) for c in chunks) / total
         avg_chars = sum(len(c["content"]) for c in chunks) / total
 
-        # Content type distribution
+        # Content type distribution with examples
         type_dist = {}
+        type_examples = {}
+        section_headers_distribution = {}
+
         for c in chunks:
             meta = c["metadata"]
             cat = meta.get("element_category", "unknown")
             type_dist[cat] = type_dist.get(cat, 0) + 1
+
+            # Collect section headers distribution
+            section_title = meta.get("section_title_inherited", "Unknown Section")
+            section_headers_distribution[section_title] = (
+                section_headers_distribution.get(section_title, 0) + 1
+            )
+
+            # Collect examples for each type (up to 2 per type)
+            if cat not in type_examples:
+                type_examples[cat] = []
+            if len(type_examples[cat]) < 2:
+                type_examples[cat].append(
+                    {
+                        "content_preview": (
+                            c["content"][:300] + "..."
+                            if len(c["content"]) > 300
+                            else c["content"]
+                        ),
+                        "page_number": meta.get("page_number"),
+                        "section_title": meta.get("section_title_inherited"),
+                        "size": len(c["content"]),
+                    }
+                )
 
         # Chunk size distribution
         chunk_sizes = [len(c["content"]) for c in chunks]
@@ -458,14 +584,55 @@ class IntelligentChunker:
             "large": len([s for s in chunk_sizes if s >= 1000]),
         }
 
+        # Additional size tracking for quality analysis
+        very_small_chunks = len([s for s in chunk_sizes if s < 150])
+        very_large_chunks = len([s for s in chunk_sizes if s > 750])
+
+        # Find shortest and longest chunks
+        sorted_chunks = sorted(chunks, key=lambda x: len(x["content"]))
+        shortest_chunks = (
+            sorted_chunks[:3] if len(sorted_chunks) >= 3 else sorted_chunks
+        )
+        longest_chunks = (
+            sorted_chunks[-3:] if len(sorted_chunks) >= 3 else sorted_chunks
+        )
+
+        shortest_examples = [
+            {
+                "chunk_id": c["chunk_id"],
+                "content": c["content"],
+                "size": len(c["content"]),
+                "type": c["metadata"].get("element_category"),
+                "page": c["metadata"].get("page_number"),
+            }
+            for c in shortest_chunks
+        ]
+
+        longest_examples = [
+            {
+                "chunk_id": c["chunk_id"],
+                "content": c["content"],
+                "size": len(c["content"]),
+                "type": c["metadata"].get("element_category"),
+                "page": c["metadata"].get("page_number"),
+            }
+            for c in longest_chunks
+        ]
+
         return {
             "total_chunks": total,
             "average_words_per_chunk": round(avg_words, 2),
             "average_chars_per_chunk": round(avg_chars, 2),
             "content_type_distribution": type_dist,
+            "chunk_type_examples": type_examples,
+            "section_headers_distribution": section_headers_distribution,
             "chunk_size_distribution": size_distribution,
             "min_chunk_size": min(chunk_sizes) if chunk_sizes else 0,
             "max_chunk_size": max(chunk_sizes) if chunk_sizes else 0,
+            "shortest_chunks": shortest_examples,
+            "longest_chunks": longest_examples,
+            "very_small_chunks": very_small_chunks,
+            "very_large_chunks": very_large_chunks,
         }
 
     def validate_chunks(self, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -570,7 +737,9 @@ class ChunkingStep(PipelineStep):
             logger.info(f"Processing {len(all_elements)} total elements")
 
             # Create chunks using intelligent chunking
-            final_chunks = self.chunker.create_final_chunks(all_elements)
+            final_chunks, processing_stats = self.chunker.create_final_chunks(
+                all_elements
+            )
 
             # Generate analysis and validation
             analysis = self.chunker.analyze_chunks(final_chunks)
@@ -579,7 +748,7 @@ class ChunkingStep(PipelineStep):
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()
 
-            # Create summary statistics
+            # Create enhanced summary statistics
             summary_stats = {
                 "total_elements_processed": len(all_elements),
                 "total_chunks_created": len(final_chunks),
@@ -589,9 +758,20 @@ class ChunkingStep(PipelineStep):
                 "chunk_size_distribution": analysis.get("chunk_size_distribution", {}),
                 "average_chunk_size": analysis.get("average_chars_per_chunk", 0),
                 "validation_results": validation,
+                # Enhanced statistics
+                "shortest_chunks": analysis.get("shortest_chunks", []),
+                "longest_chunks": analysis.get("longest_chunks", []),
+                "chunk_type_examples": analysis.get("chunk_type_examples", {}),
+                "section_headers_distribution": analysis.get(
+                    "section_headers_distribution", {}
+                ),
+                "very_small_chunks": analysis.get("very_small_chunks", 0),
+                "very_large_chunks": analysis.get("very_large_chunks", 0),
+                "list_grouping_stats": processing_stats.get("grouping_stats", {}),
+                "noise_filtering_stats": processing_stats.get("filtering_stats", {}),
             }
 
-            # Create sample outputs for debugging
+            # Create enhanced sample outputs for debugging
             sample_outputs = {
                 "sample_chunks": [
                     {
@@ -612,7 +792,18 @@ class ChunkingStep(PipelineStep):
                         },
                     }
                     for chunk in final_chunks[:3]  # First 3 chunks as samples
-                ]
+                ],
+                "shortest_chunks": analysis.get("shortest_chunks", []),
+                "longest_chunks": analysis.get("longest_chunks", []),
+                "chunk_type_examples": analysis.get("chunk_type_examples", {}),
+                "list_grouping_examples": processing_stats.get(
+                    "grouping_stats", {}
+                ).get("group_examples", []),
+                "noise_filtering_examples": processing_stats.get(
+                    "filtering_stats", {}
+                ).get("filtered_elements", [])[
+                    :3
+                ],  # Show first 3 filtered items
             }
 
             logger.info(f"Chunking completed: {len(final_chunks)} chunks created")
@@ -640,6 +831,7 @@ class ChunkingStep(PipelineStep):
                         "processing_strategy": "intelligent_chunking",
                         "analysis": analysis,
                         "validation": validation,
+                        "processing_stats": processing_stats,
                     },
                 },
                 started_at=start_time,

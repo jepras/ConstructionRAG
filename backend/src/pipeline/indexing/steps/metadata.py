@@ -50,6 +50,28 @@ class UnifiedElementAnalyzer:
             r"^\s*.{0,15}?(\d+(?:\.\d+)?\.?)\s+([A-ZÆØÅ].{10,})", re.IGNORECASE
         )
 
+        # SECTION DETECTION TRACKING
+        self.detection_stats = {
+            "total_elements_processed": 0,
+            "elements_with_section_titles": 0,
+            "detection_breakdown": {
+                "category_based_detected": 0,
+                "pattern_based_detected": 0,
+                "inherited_from_page": 0,
+            },
+            "filtering_applied": {
+                "diagram_contexts_filtered": 0,
+                "bullet_points_filtered": 0,
+                "truncated_text_filtered": 0,
+                "minor_elements_filtered": 0,
+            },
+            "sample_detections": [],
+            "sample_filtered": [],
+        }
+
+        # Track recent text elements for context analysis
+        self.recent_text_elements = []
+
     def analyze_text_element(self, text_element: dict) -> dict:
         """Analyze a text element from partition data using pure JSON processing"""
 
@@ -275,16 +297,36 @@ class UnifiedElementAnalyzer:
     ) -> dict:
         """Enhanced section detection with page-aware inheritance (pure dict)"""
 
+        # Track total elements processed
+        self.detection_stats["total_elements_processed"] += 1
+
         # Method 1: Category-based detection (ONLY for numbered titles)
         if category.lower() in ["title", "header"]:
             # Check if title starts with a number pattern
             if self._starts_with_number(text):
                 struct_meta["section_title_category"] = text.strip()
+                self.detection_stats["detection_breakdown"][
+                    "category_based_detected"
+                ] += 1
+                self.detection_stats["elements_with_section_titles"] += 1
+
+                # Add to sample detections
+                if len(self.detection_stats["sample_detections"]) < 5:
+                    self.detection_stats["sample_detections"].append(
+                        {
+                            "text": text.strip(),
+                            "detection_method": "category_based",
+                            "confidence": "high",
+                            "category": category,
+                        }
+                    )
 
         # Method 2: Pattern-based detection (ONLY for numbered sections)
         pattern_title = self._detect_pattern_based_title(text, category)
         if pattern_title:
             struct_meta["section_title_pattern"] = pattern_title
+            self.detection_stats["detection_breakdown"]["pattern_based_detected"] += 1
+            self.detection_stats["elements_with_section_titles"] += 1
 
             # Check if this is a MAJOR section (should update page inheritance)
             is_major_section = self._is_major_section(text, category)
@@ -294,13 +336,26 @@ class UnifiedElementAnalyzer:
                 self.page_sections[page_num] = pattern_title
                 self.current_section_title = pattern_title
 
+                # Add to sample detections
+                if len(self.detection_stats["sample_detections"]) < 5:
+                    self.detection_stats["sample_detections"].append(
+                        {
+                            "text": text.strip(),
+                            "detection_method": "pattern_based",
+                            "confidence": "high",
+                            "inherited_to_page": page_num,
+                        }
+                    )
+
         # Method 3: Page-aware inheritance (NEW!)
         page_section = self.page_sections.get(page_num)
         if page_section:
             struct_meta["section_title_inherited"] = page_section
+            self.detection_stats["detection_breakdown"]["inherited_from_page"] += 1
         elif self.current_section_title:
             # Fall back to document-level inheritance
             struct_meta["section_title_inherited"] = self.current_section_title
+            self.detection_stats["detection_breakdown"]["inherited_from_page"] += 1
 
         return struct_meta
 
@@ -309,6 +364,15 @@ class UnifiedElementAnalyzer:
 
         # Filter out minor elements
         if category in ["FigureCaption", "Footer", "ListItem"]:
+            self.detection_stats["filtering_applied"]["minor_elements_filtered"] += 1
+            if len(self.detection_stats["sample_filtered"]) < 3:
+                self.detection_stats["sample_filtered"].append(
+                    {
+                        "text": text.strip(),
+                        "filter_reason": f"minor_element_category: {category}",
+                        "detection_method": "filtered_out",
+                    }
+                )
             return False
 
         # ONLY numbered sections can be major sections
@@ -322,14 +386,41 @@ class UnifiedElementAnalyzer:
             or text_stripped.endswith("...")
             or text_stripped.endswith("..")
         ):
+            self.detection_stats["filtering_applied"]["truncated_text_filtered"] += 1
+            if len(self.detection_stats["sample_filtered"]) < 3:
+                self.detection_stats["sample_filtered"].append(
+                    {
+                        "text": text.strip(),
+                        "filter_reason": "truncated_text",
+                        "detection_method": "filtered_out",
+                    }
+                )
             return False
 
         # Option 2: Filter by Content Patterns - Detect diagram-specific patterns
         if self._contains_diagram_patterns(text_stripped):
+            self.detection_stats["filtering_applied"]["bullet_points_filtered"] += 1
+            if len(self.detection_stats["sample_filtered"]) < 3:
+                self.detection_stats["sample_filtered"].append(
+                    {
+                        "text": text.strip(),
+                        "filter_reason": "diagram_patterns",
+                        "detection_method": "filtered_out",
+                    }
+                )
             return False
 
         # Option 1: Filter by Text Position/Context - Check for multiple numbered items in proximity
         if self._has_diagram_context(text_stripped):
+            self.detection_stats["filtering_applied"]["diagram_contexts_filtered"] += 1
+            if len(self.detection_stats["sample_filtered"]) < 3:
+                self.detection_stats["sample_filtered"].append(
+                    {
+                        "text": text.strip(),
+                        "filter_reason": "diagram_context",
+                        "detection_method": "filtered_out",
+                    }
+                )
             return False
 
         # Check for major section patterns (numbered sections with meaningful content)
@@ -440,7 +531,11 @@ class MetadataStep(PipelineStep):
             if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
                 # Input is a StepResult from partition step (unified processing)
                 # Check data field first, then fall back to sample_outputs
-                partition_data = input_data.data if hasattr(input_data, "data") and input_data.data else input_data.sample_outputs.get("partition_data", {})
+                partition_data = (
+                    input_data.data
+                    if hasattr(input_data, "data") and input_data.data
+                    else input_data.sample_outputs.get("partition_data", {})
+                )
                 logger.info(
                     f"Processing partition data from StepResult ({input_data.step})"
                 )
@@ -540,6 +635,13 @@ class MetadataStep(PipelineStep):
                     enriched_elements
                 ),
                 "page_sections_detected": len(self.analyzer.page_sections),
+                # Enhanced section detection statistics
+                "section_detection_stats": self.analyzer.detection_stats,
+                "regex_patterns_used": {
+                    "numbered_section_pattern": self.analyzer.numbered_section_pattern.pattern,
+                    "major_section_pattern": self.analyzer.major_section_pattern.pattern,
+                    "number_start_pattern": r"^\s*\d+(?:\.\d+)*\.?\s",
+                },
             }
 
             # Create sample outputs for debugging
@@ -683,7 +785,11 @@ class MetadataStep(PipelineStep):
                 logger.info(f"MetadataStep received StepResult from {input_data.step}")
 
                 # Extract partition data from StepResult - check both data and sample_outputs
-                partition_data = input_data.data if hasattr(input_data, "data") and input_data.data else input_data.sample_outputs.get("partition_data", {})
+                partition_data = (
+                    input_data.data
+                    if hasattr(input_data, "data") and input_data.data
+                    else input_data.sample_outputs.get("partition_data", {})
+                )
 
                 # Check for required keys from partition step
                 required_keys = ["text_elements", "table_elements", "extracted_pages"]

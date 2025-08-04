@@ -8,6 +8,7 @@ from .progress_helpers import (
     display_timing_summary,
     display_step_results,
     display_embedding_results,
+    display_enhanced_chunking_results,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def show_progress_page():
         st.subheader("Select Indexing Run")
 
         # Format run options for dropdown
-        run_options = {}
+        run_options = {"-- Select an indexing run --": None}
         for run in runs:
             # Create a readable label
             upload_type = run.get("upload_type", "unknown")
@@ -78,7 +79,9 @@ def show_progress_page():
                     dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
                     date_str = dt.strftime("%Y-%m-%d %H:%M")
                 except:
-                    date_str = started_at[:19]  # Just take first 19 chars if parsing fails
+                    date_str = started_at[
+                        :19
+                    ]  # Just take first 19 chars if parsing fails
             else:
                 date_str = "No start time"
 
@@ -88,10 +91,11 @@ def show_progress_page():
         selected_run_label = st.selectbox(
             "Choose an indexing run:",
             list(run_options.keys()),
+            index=0,  # Default to the first option (the placeholder)
             help="Select an indexing run to view its progress",
         )
 
-        if selected_run_label:
+        if selected_run_label and selected_run_label != "-- Select an indexing run --":
             run_id = run_options[selected_run_label]
 
             # Get detailed status for selected run
@@ -145,29 +149,60 @@ def show_progress_page():
 
                         # Display step-by-step results (unified for all upload types)
                         st.subheader("🔧 Pipeline Steps")
-                        
+
                         # Define step configurations
                         steps_config = [
                             ("PartitionStep", "Step 1: Partition", "📄", "Summary"),
-                            ("MetadataStep", "Step 2: Metadata", "🏷️", "Page Sections Detected"),
-                            ("EnrichmentStep", "Step 3: Enrichment", "🔍", "Image Captions"),
-                            ("ChunkingStep", "Step 4: Chunking", "✂️", "Chunking Statistics"),
+                            (
+                                "MetadataStep",
+                                "Step 2: Metadata",
+                                "🏷️",
+                                "Page Sections Detected",
+                            ),
+                            (
+                                "EnrichmentStep",
+                                "Step 3: Enrichment",
+                                "🔍",
+                                "Image Captions",
+                            ),
+                            (
+                                "ChunkingStep",
+                                "Step 4: Chunking",
+                                "✂️",
+                                "Chunking Statistics",
+                            ),
                         ]
 
                         # Display each step
-                        for step_name, step_display, step_icon, step_description in steps_config:
-                            display_step_results(documents, step_name, step_display, step_icon, step_description)
+                        for (
+                            step_name,
+                            step_display,
+                            step_icon,
+                            step_description,
+                        ) in steps_config:
+                            display_step_results(
+                                documents,
+                                step_name,
+                                step_display,
+                                step_icon,
+                                step_description,
+                            )
+
+                        # Display enhanced chunking results (from documents)
+                        display_enhanced_chunking_results(documents, "ChunkingStep")
 
                         # Display embedding results (from indexing run)
                         display_embedding_results(run_data)
                     else:
                         st.info("No documents found for this indexing run")
                 else:
-                    st.error(f"Failed to load documents: {documents_response.status_code}")
+                    st.error(
+                        f"Failed to load documents: {documents_response.status_code}"
+                    )
 
             else:
                 st.error(f"❌ Failed to load run status: {status_response.status_code}")
 
     except Exception as e:
         logger.error(f"❌ Error in progress page: {str(e)}")
-        st.error(f"❌ Error in progress page: {str(e)}") 
+        st.error(f"❌ Error in progress page: {str(e)}")
