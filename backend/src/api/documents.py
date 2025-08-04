@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from uuid import UUID, uuid4
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from fastapi import (
     APIRouter,
@@ -39,7 +40,6 @@ router = APIRouter(prefix="/api", tags=["documents"])
 class EmailUploadResponse(BaseModel):
     """Response for email upload"""
 
-    upload_id: str
     index_run_id: str
     document_count: int
     document_ids: List[str]
@@ -105,7 +105,6 @@ async def upload_email_pdf(
         if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit per file
             raise HTTPException(400, f"File {file.filename} must be less than 50MB")
 
-    upload_id = str(uuid4())
     index_run_id = str(uuid4())
 
     try:
@@ -116,7 +115,6 @@ async def upload_email_pdf(
         # Create storage structure for the new index run
         await storage_service.create_storage_structure(
             upload_type=UploadType.EMAIL,
-            upload_id=upload_id,
             index_run_id=UUID(index_run_id),
         )
 
@@ -124,7 +122,6 @@ async def upload_email_pdf(
         index_run_data = {
             "id": index_run_id,
             "upload_type": "email",
-            "upload_id": upload_id,
             "status": "pending",
             "created_at": "now()",
         }
@@ -147,8 +144,10 @@ async def upload_email_pdf(
             document_id = str(uuid4())
             document_ids.append(document_id)
 
-            # Upload to Supabase Storage using new structure
-            storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{file.filename}"
+            # Upload to Supabase Storage using simplified structure
+            storage_path = (
+                f"email-uploads/index-runs/{index_run_id}/pdfs/{file.filename}"
+            )
 
             # Create a temporary file just for upload (will be cleaned up immediately)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
@@ -181,8 +180,10 @@ async def upload_email_pdf(
                 "status": "processing",
                 "upload_type": "email",  # Set correct upload type for email uploads
                 "index_run_id": index_run_id,  # Link to indexing run
-                "upload_id": upload_id,  # Link to upload
-                "metadata": {"email": email, "upload_id": upload_id},
+                "expires_at": (
+                    datetime.utcnow() + timedelta(days=30)
+                ).isoformat(),  # Set expiration for email uploads
+                "metadata": {"email": email},
             }
 
             doc_result = db.table("documents").insert(document_data_for_db).execute()
@@ -190,24 +191,6 @@ async def upload_email_pdf(
             if not doc_result.data:
                 raise HTTPException(
                     500, f"Failed to store document record for {file.filename}"
-                )
-
-            # Store in email_uploads table (one record per file)
-            email_upload_data = {
-                "id": f"{upload_id}_{document_id}",  # Unique ID for each file
-                "email": email,
-                "filename": file.filename,
-                "file_size": len(content),
-                "status": "processing",
-                "public_url": public_url,
-                "index_run_id": index_run_id,
-            }
-
-            result = db.table("email_uploads").insert(email_upload_data).execute()
-
-            if not result.data:
-                raise HTTPException(
-                    500, f"Failed to store email upload record for {file.filename}"
                 )
 
             # Collect document data for unified processing
@@ -221,8 +204,7 @@ async def upload_email_pdf(
 
         # Start unified processing pipeline in background
         background_tasks.add_task(
-            process_multi_document_email_upload_async,
-            upload_id=upload_id,
+            process_email_upload_async,
             index_run_id=index_run_id,
             email=email,
             document_data=document_data,
@@ -230,14 +212,13 @@ async def upload_email_pdf(
 
         # Return response with multi-file information
         return EmailUploadResponse(
-            upload_id=upload_id,
             index_run_id=index_run_id,
             document_count=len(files),
             document_ids=document_ids,
-            public_url=f"/email-uploads/{upload_id}",
+            public_url=f"/pipeline/indexing/runs/{index_run_id}/status",  # Updated to use unified endpoint
             status="processing",
-            message=f"{len(files)} PDF(s) uploaded successfully. Processing started.",
-            expires_at=result.data[0]["expires_at"],
+            message=f"{len(files)} PDF(s) uploaded successfully. Processing started. Use Index Run ID: {index_run_id} to track progress.",
+            expires_at=(datetime.utcnow() + timedelta(days=30)).isoformat(),
         )
 
     except StorageError as e:
@@ -246,95 +227,6 @@ async def upload_email_pdf(
     except Exception as e:
         logger.error(f"Error during email upload: {e}")
         raise HTTPException(500, f"Upload failed: {str(e)}")
-
-
-@router.get("/email-uploads/{upload_id}", response_model=Dict[str, Any])
-async def get_email_upload_status(upload_id: str):
-    """Get status of email upload processing"""
-
-    try:
-        db = get_supabase_admin_client()
-
-        # First, try to find a single email upload record
-        result = db.table("email_uploads").select("*").eq("id", upload_id).execute()
-
-        if result.data:
-            # Single file upload (legacy)
-            upload_data = result.data[0]
-            return {
-                "upload_id": upload_id,
-                "index_run_id": upload_data.get("index_run_id"),
-                "email": upload_data["email"],
-                "filename": upload_data["filename"],
-                "status": upload_data["status"],
-                "public_url": upload_data["public_url"],
-                "created_at": upload_data["created_at"],
-                "completed_at": upload_data["completed_at"],
-                "expires_at": upload_data["expires_at"],
-                "processing_results": upload_data.get("processing_results", {}),
-            }
-
-        # If not found, check if it's a multi-document upload (upload_id without suffix)
-        # Look for records that start with the upload_id
-        result = (
-            db.table("email_uploads").select("*").like("id", f"{upload_id}_%").execute()
-        )
-
-        if result.data:
-            # Multi-document upload
-            uploads = result.data
-
-            # Get the index run status
-            index_run_id = uploads[0].get("index_run_id")
-            index_run_status = "unknown"
-
-            if index_run_id:
-                index_run_result = (
-                    db.table("indexing_runs")
-                    .select("*")
-                    .eq("id", index_run_id)
-                    .execute()
-                )
-                if index_run_result.data:
-                    index_run_status = index_run_result.data[0]["status"]
-
-            # Aggregate status from all uploads
-            all_completed = all(upload["status"] == "completed" for upload in uploads)
-            any_failed = any(upload["status"] == "failed" for upload in uploads)
-
-            if all_completed:
-                overall_status = "completed"
-            elif any_failed:
-                overall_status = "completed_with_errors"
-            else:
-                overall_status = "processing"
-
-            return {
-                "upload_id": upload_id,
-                "index_run_id": index_run_id,
-                "email": uploads[0]["email"],
-                "document_count": len(uploads),
-                "filenames": [upload["filename"] for upload in uploads],
-                "status": overall_status,
-                "index_run_status": index_run_status,
-                "created_at": uploads[0]["created_at"],
-                "expires_at": uploads[0]["expires_at"],
-                "individual_uploads": [
-                    {
-                        "filename": upload["filename"],
-                        "status": upload["status"],
-                        "public_url": upload["public_url"],
-                    }
-                    for upload in uploads
-                ],
-            }
-
-        # Not found
-        raise HTTPException(404, "Email upload not found")
-
-    except Exception as e:
-        logger.error(f"Error getting email upload status: {e}")
-        raise HTTPException(500, f"Failed to get upload status: {str(e)}")
 
 
 # User Project Upload Endpoints (Authenticated)
@@ -864,8 +756,52 @@ async def get_documents_by_index_run(
                 else:
                     logger.info(f"    {step_name}: {type(step_data)}")
 
-        logger.info(f"✅ Returning {len(documents_result.data)} documents")
-        return documents_result.data
+        # Convert to Document models to trigger computed properties
+        logger.info(f"🔄 Converting raw documents to Document models...")
+        from src.models.document import Document
+
+        document_models = []
+        for i, doc_data in enumerate(documents_result.data):
+            try:
+                logger.info(
+                    f"🔄 Creating Document model for document {i+1}: {doc_data.get('filename')}"
+                )
+                doc_model = Document(**doc_data)
+                logger.info(f"✅ Document model created successfully")
+
+                # Trigger computed properties
+                logger.info(
+                    f"🔍 Accessing computed properties for {doc_model.filename}..."
+                )
+                step_timings = doc_model.step_timings
+                total_time = doc_model.total_processing_time
+                current_step = doc_model.current_step
+
+                logger.info(f"📊 Computed step_timings: {step_timings}")
+                logger.info(f"📊 Computed total_processing_time: {total_time}")
+                logger.info(f"📊 Computed current_step: {current_step}")
+
+                # Convert back to dict with computed properties
+                doc_dict = doc_data.copy()
+                doc_dict["step_timings"] = step_timings
+                doc_dict["total_processing_time"] = total_time
+                doc_dict["current_step"] = current_step
+
+                document_models.append(doc_dict)
+                logger.info(f"✅ Document {i+1} processed with computed properties")
+
+            except Exception as e:
+                logger.error(
+                    f"❌ Error creating Document model for document {i+1}: {e}"
+                )
+                logger.error(f"❌ Document data: {doc_data}")
+                # Fall back to raw data
+                document_models.append(doc_data)
+
+        logger.info(
+            f"✅ Returning {len(document_models)} documents with computed properties"
+        )
+        return document_models
 
     except Exception as e:
         logger.error(f"❌ Error getting documents for indexing run {index_run_id}: {e}")
@@ -874,165 +810,6 @@ async def get_documents_by_index_run(
 
         logger.error(f"❌ Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-async def process_email_upload_async(
-    upload_id: str, index_run_id: str, email: str, storage_url: str, filename: str
-):
-    """Background processing for email uploads"""
-
-    try:
-        logger.info(
-            f"Starting email upload processing for {upload_id} (index run: {index_run_id})"
-        )
-
-        # Initialize services
-        storage_service = StorageService()
-        db = get_supabase_admin_client()
-
-        # Create document record for email upload
-        document_id = str(uuid4())
-        document_data = {
-            "id": document_id,
-            "user_id": None,  # No user for email uploads
-            "filename": filename,
-            "file_size": 0,  # We don't have file size from URL, set to 0
-            "status": "processing",
-            "upload_type": "email",
-            "upload_id": upload_id,
-            "index_run_id": index_run_id,
-        }
-
-        db.table("documents").insert(document_data).execute()
-
-        # Create document input for pipeline
-        document_input = DocumentInput(
-            document_id=UUID(document_id),  # Use the created document ID
-            run_id=UUID(index_run_id),  # Use the actual index run ID
-            user_id=None,  # No user for email uploads
-            file_path=storage_url,  # Use storage URL as file path
-            filename=filename,
-            upload_type=UploadType.EMAIL,
-            upload_id=upload_id,
-            index_run_id=UUID(index_run_id),
-            metadata={"email": email},
-        )
-
-        # Get orchestrator and process
-        orchestrator = await get_indexing_orchestrator()
-        success = await orchestrator.process_document_async(
-            document_input, existing_indexing_run_id=UUID(index_run_id)
-        )
-
-        if success:
-            # Update email_uploads table
-            db.table("email_uploads").update(
-                {"status": "completed", "completed_at": "now()"}
-            ).eq("id", upload_id).execute()
-
-            # Note: Indexing run status is updated by the orchestrator, no need to update here
-
-            logger.info(f"Email upload processing completed for {upload_id}")
-        else:
-            # Update email_uploads table with error
-            db.table("email_uploads").update(
-                {"status": "failed", "completed_at": "now()"}
-            ).eq("id", upload_id).execute()
-
-            # Note: Indexing run status is updated by the orchestrator, no need to update here
-
-            logger.error(f"Email upload processing failed for {upload_id}")
-
-    except Exception as e:
-        logger.error(f"Error in email upload processing for {upload_id}: {e}")
-
-        # Update email_uploads table with error
-        try:
-            db = get_supabase_admin_client()
-            db.table("email_uploads").update(
-                {"status": "failed", "completed_at": "now()"}
-            ).eq("id", upload_id).execute()
-
-            # Note: Indexing run status is updated by the orchestrator, no need to update here
-        except:
-            pass
-    # No file cleanup needed since we're using storage URLs
-
-
-async def process_multi_document_email_upload_async(
-    upload_id: str, index_run_id: str, email: str, document_data: List[Dict[str, Any]]
-):
-    """Background processing for multi-document email uploads using unified processing"""
-
-    try:
-        logger.info(
-            f"Starting multi-document email upload processing for {upload_id} (index run: {index_run_id})"
-        )
-
-        # Initialize services
-        storage_service = StorageService()
-        db = get_supabase_admin_client()
-
-        # Create document inputs for pipeline
-        document_inputs = []
-
-        for doc_data in document_data:
-            document_id = doc_data["document_id"]
-            filename = doc_data["filename"]
-            storage_url = doc_data["storage_url"]
-
-            # Create document input for pipeline
-            document_input = DocumentInput(
-                document_id=UUID(document_id),
-                run_id=UUID(index_run_id),
-                user_id=None,  # No user for email uploads
-                file_path=storage_url,
-                filename=filename,
-                upload_type=UploadType.EMAIL,
-                upload_id=upload_id,
-                index_run_id=UUID(index_run_id),
-                metadata={"email": email},
-            )
-            document_inputs.append(document_input)
-
-        # Get orchestrator and process using unified method
-        orchestrator = await get_indexing_orchestrator()
-        success = await orchestrator.process_documents(
-            document_inputs, existing_indexing_run_id=UUID(index_run_id)
-        )
-
-        if success:
-            # Update all email_uploads records for this upload_id
-            db.table("email_uploads").update(
-                {"status": "completed", "completed_at": "now()"}
-            ).like("id", f"{upload_id}_%").execute()
-
-            logger.info(
-                f"Multi-document email upload processing completed for {upload_id}"
-            )
-        else:
-            # Update all email_uploads records for this upload_id with error
-            db.table("email_uploads").update(
-                {"status": "failed", "completed_at": "now()"}
-            ).like("id", f"{upload_id}_%").execute()
-
-            logger.error(
-                f"Multi-document email upload processing failed for {upload_id}"
-            )
-
-    except Exception as e:
-        logger.error(
-            f"Error in multi-document email upload processing for {upload_id}: {e}"
-        )
-
-        # Update all email_uploads records for this upload_id with error
-        try:
-            db = get_supabase_admin_client()
-            db.table("email_uploads").update(
-                {"status": "failed", "completed_at": "now()"}
-            ).like("id", f"{upload_id}_%").execute()
-        except:
-            pass
 
 
 async def process_multi_document_project_upload_async(
@@ -1155,3 +932,55 @@ async def process_project_document_async(
             ).execute()
         except:
             pass
+
+
+async def process_email_upload_async(
+    index_run_id: str,
+    email: str,
+    document_data: List[Dict[str, Any]],
+):
+    """Background processing for email uploads using unified processing"""
+
+    try:
+        logger.info(
+            f"Starting email upload processing for {email} (index run: {index_run_id})"
+        )
+
+        # Initialize services
+        storage_service = StorageService()
+        db = get_supabase_admin_client()
+
+        # Create document inputs for pipeline
+        document_inputs = []
+
+        for doc_data in document_data:
+            document_id = doc_data["document_id"]
+            filename = doc_data["filename"]
+            storage_url = doc_data["storage_url"]
+
+            # Create document input for pipeline
+            document_input = DocumentInput(
+                document_id=UUID(document_id),
+                run_id=UUID(index_run_id),
+                user_id=None,  # No user for email uploads
+                file_path=storage_url,
+                filename=filename,
+                upload_type=UploadType.EMAIL,
+                index_run_id=UUID(index_run_id),
+                metadata={"email": email},
+            )
+            document_inputs.append(document_input)
+
+        # Get orchestrator and process using unified method
+        orchestrator = await get_indexing_orchestrator()
+        success = await orchestrator.process_documents(
+            document_inputs, existing_indexing_run_id=UUID(index_run_id)
+        )
+
+        if success:
+            logger.info(f"Email upload processing completed for {email}")
+        else:
+            logger.error(f"Email upload processing failed for {email}")
+
+    except Exception as e:
+        logger.error(f"Error in email upload processing for {email}: {e}")

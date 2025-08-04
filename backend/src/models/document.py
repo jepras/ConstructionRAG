@@ -3,6 +3,9 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from uuid import UUID
 from enum import Enum
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Handle StepResult import to avoid circular dependency
 if TYPE_CHECKING:
@@ -57,19 +60,38 @@ class Document(BaseModel):
     @property
     def step_timings(self) -> Dict[str, float]:
         """Extract step timings from step_results"""
+        logger.info(
+            f"🔍 Computing step_timings for document {self.filename} (ID: {self.id})"
+        )
+        logger.info(f"🔍 Raw step_results: {self.step_results}")
+
         if not self.step_results:
+            logger.warning(f"⚠️ No step_results found for document {self.filename}")
             return {}
 
         timings = {}
         for step_name, step_data in self.step_results.items():
+            logger.info(f"🔍 Processing step: {step_name}, data: {step_data}")
             if isinstance(step_data, dict) and "duration_seconds" in step_data:
                 timings[step_name] = step_data["duration_seconds"]
+                logger.info(
+                    f"✅ Added timing for {step_name}: {step_data['duration_seconds']}s"
+                )
+            else:
+                logger.warning(f"⚠️ No duration_seconds found for step {step_name}")
+
+        logger.info(f"🔍 Final step_timings: {timings}")
         return timings
 
     @property
     def total_processing_time(self) -> float:
         """Calculate total processing time across all steps"""
-        return sum(self.step_timings.values())
+        step_timings = self.step_timings
+        total = sum(step_timings.values())
+        logger.info(
+            f"🔍 Total processing time for {self.filename}: {total}s (from {step_timings})"
+        )
+        return total
 
     @property
     def current_step(self) -> Optional[str]:

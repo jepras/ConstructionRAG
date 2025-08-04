@@ -25,7 +25,6 @@ class DocumentInput(BaseModel):
         None, description="User who uploaded the document (None for email uploads)"
     )
     upload_type: UploadType = Field(description="Type of upload")
-    upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
     project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
     index_run_id: Optional[UUID] = Field(
         None, description="Index run ID for user projects"

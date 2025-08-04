@@ -246,7 +246,6 @@ class IndexingOrchestrator:
             else:
                 indexing_run = await self.pipeline_service.create_indexing_run(
                     upload_type=document_input.upload_type,
-                    upload_id=document_input.upload_id,
                     project_id=document_input.project_id,
                 )
 
@@ -263,7 +262,6 @@ class IndexingOrchestrator:
             # Create storage structure for the upload type
             await self.storage_service.create_storage_structure(
                 upload_type=document_input.upload_type,
-                upload_id=document_input.upload_id,
                 user_id=document_input.user_id,
                 project_id=document_input.project_id,
                 index_run_id=indexing_run.id,
@@ -410,7 +408,6 @@ class IndexingOrchestrator:
             else:
                 indexing_run = await self.pipeline_service.create_indexing_run(
                     upload_type=document_inputs[0].upload_type,
-                    upload_id=document_inputs[0].upload_id,
                     project_id=document_inputs[0].project_id,
                 )
 
@@ -427,7 +424,6 @@ class IndexingOrchestrator:
             # Create storage structure for the upload type
             await self.storage_service.create_storage_structure(
                 upload_type=document_inputs[0].upload_type,
-                upload_id=document_inputs[0].upload_id,
                 user_id=document_inputs[0].user_id,
                 project_id=document_inputs[0].project_id,
                 index_run_id=indexing_run.id,

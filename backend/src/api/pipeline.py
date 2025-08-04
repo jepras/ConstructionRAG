@@ -98,7 +98,6 @@ async def get_all_indexing_runs(
             {
                 "id": str(run.id),
                 "upload_type": run.upload_type,
-                "upload_id": run.upload_id,
                 "project_id": str(run.project_id) if run.project_id else None,
                 "status": run.status,
                 "started_at": run.started_at.isoformat() if run.started_at else None,
@@ -179,7 +178,7 @@ async def get_indexing_run_status(
         logger.info(f"✅ Indexing run found: {run.id}")
         logger.info(f"📊 Run status: {run.status}")
         logger.info(f"📊 Run upload_type: {run.upload_type}")
-        logger.info(f"📊 Run upload_id: {run.upload_id}")
+
         logger.info(f"📊 Run project_id: {run.project_id}")
         logger.info(f"📊 Run pipeline_config type: {type(run.pipeline_config)}")
         logger.info(f"📊 Run pipeline_config: {run.pipeline_config}")
@@ -204,11 +203,6 @@ async def get_indexing_run_status(
             logger.error(f"❌ Error adding upload_type: {e}")
             raise
 
-        try:
-            response_data["upload_id"] = run.upload_id
-            logger.info(f"✅ Added upload_id: {response_data['upload_id']}")
-        except Exception as e:
-            logger.error(f"❌ Error adding upload_id: {e}")
             raise
 
         try:

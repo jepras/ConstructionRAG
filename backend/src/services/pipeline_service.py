@@ -36,14 +36,12 @@ class PipelineService:
     async def create_indexing_run(
         self,
         upload_type: UploadType = UploadType.USER_PROJECT,
-        upload_id: Optional[str] = None,
         project_id: Optional[UUID] = None,
     ) -> IndexingRun:
         """Create a new indexing run."""
         try:
             indexing_run_data = IndexingRunCreate(
                 upload_type=upload_type,
-                upload_id=upload_id,
                 project_id=project_id,
                 status="pending",
             )

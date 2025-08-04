@@ -58,14 +58,11 @@ def show_query_page():
                 run_options = []
                 for run in all_runs:
                     upload_type = run.get("upload_type", "unknown")
-                    upload_id = run.get("upload_id", "N/A")
                     started_at = run.get("started_at", "Unknown")
 
                     # Format the display name
                     if upload_type == "email":
-                        display_name = (
-                            f"Email Upload ({upload_id[:8]}...) - {started_at[:10]}"
-                        )
+                        display_name = f"Email Upload - {started_at[:10]}"
                     else:
                         display_name = f"Project Document - {started_at[:10]}"
 

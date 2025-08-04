@@ -80,65 +80,66 @@ def show_upload_page():
                     # Prepare headers
                     headers = {"Authorization": f"Bearer {access_token}"}
 
-                    # Upload each file
-                    uploaded_count = 0
+                    # Prepare files data for unified multi-file upload
+                    files = []
                     for file in uploaded_files:
-                        try:
-                            # Prepare file data
-                            files = {
-                                "file": (file.name, file.getvalue(), "application/pdf")
-                            }
+                        files.append(
+                            ("files", (file.name, file.getvalue(), "application/pdf"))
+                        )
 
-                            # Prepare form data with email
-                            data = {"email": email}
+                    # Prepare form data with email
+                    data = {"email": email}
 
-                            # Log upload attempt
-                            logger.info(
-                                f"📤 Uploading file: {file.name} ({file.size} bytes) to email: {email}"
-                            )
+                    # Debug logging to verify what's being sent
+                    logger.info(f"🔍 DEBUG: Number of files to upload: {len(files)}")
+                    logger.info(
+                        f"🔍 DEBUG: File names being sent: {[f[1][0] for f in files]}"
+                    )
+                    logger.info(
+                        f"🔍 DEBUG: Field names being sent: {[f[0] for f in files]}"
+                    )
+                    logger.info(f"🔍 DEBUG: Data being sent: {data}")
 
-                            # Upload to email-uploads endpoint
-                            response = requests.post(
-                                f"{backend_url}/api/email-uploads",
-                                files=files,
-                                data=data,
-                                headers=headers,
-                                timeout=30,
-                            )
+                    # Log upload attempt
+                    logger.info(
+                        f"📤 Uploading {len(uploaded_files)} files to email: {email}"
+                    )
 
-                            if response.status_code == 200:
-                                result = response.json()
-                                logger.info(
-                                    f"✅ File uploaded successfully: {file.name}"
-                                )
-                                uploaded_count += 1
+                    # Upload all files in single request to unified endpoint
+                    response = requests.post(
+                        f"{backend_url}/api/email-uploads",
+                        files=files,
+                        data=data,
+                        headers=headers,
+                        timeout=60,  # Increased timeout for multiple files
+                    )
 
-                                # Show upload result
-                                st.success(f"✅ {file.name} uploaded successfully!")
-                                if result.get("upload_id"):
-                                    st.info(f"Upload ID: {result['upload_id']}")
-                            else:
-                                logger.error(
-                                    f"❌ Upload failed for {file.name}: {response.status_code}"
-                                )
-                                st.error(
-                                    f"❌ Failed to upload {file.name}: {response.text}"
-                                )
+                    # Debug response
+                    logger.info(f"🔍 DEBUG: Response status: {response.status_code}")
+                    logger.info(f"🔍 DEBUG: Response text: {response.text}")
 
-                        except Exception as e:
-                            logger.error(f"❌ Error uploading {file.name}: {str(e)}")
-                            st.error(f"❌ Error uploading {file.name}: {str(e)}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(
+                            f"✅ Successfully uploaded {len(uploaded_files)} files"
+                        )
 
-                    # Show final results
-                    if uploaded_count > 0:
+                        # Show upload result
                         st.success(
-                            f"🎉 Successfully uploaded {uploaded_count} out of {len(uploaded_files)} files!"
+                            f"✅ Successfully uploaded {len(uploaded_files)} files!"
                         )
-                        st.info(
-                            "Processing will continue in the background. Check the Project Overview page for updates."
-                        )
+                        if result.get("index_run_id"):
+                            st.info(f"Index Run ID: {result['index_run_id']}")
+                            st.info(
+                                "💡 Use this ID to track progress in the Progress page"
+                            )
+                        if result.get("document_count"):
+                            st.info(f"Document Count: {result['document_count']}")
+                        if result.get("message"):
+                            st.info(f"Status: {result['message']}")
                     else:
-                        st.error("❌ No files were uploaded successfully.")
+                        logger.error(f"❌ Upload failed: {response.status_code}")
+                        st.error(f"❌ Failed to upload files: {response.text}")
 
                 except Exception as e:
                     logger.error(f"❌ Upload process failed: {str(e)}")

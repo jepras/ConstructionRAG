@@ -81,7 +81,7 @@ class IndexingRun(BaseModel):
     upload_type: UploadType = Field(
         UploadType.USER_PROJECT, description="Type of upload"
     )
-    upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
+
     project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
     status: PipelineStatus = Field(
         PipelineStatus.PENDING, description="Indexing run status"
@@ -236,7 +236,6 @@ class IndexingRunCreate(BaseModel):
     """Model for creating a new indexing run"""
 
     upload_type: UploadType = UploadType.USER_PROJECT
-    upload_id: Optional[str] = None
     project_id: Optional[UUID] = None
     status: PipelineStatus = PipelineStatus.PENDING
 
@@ -249,7 +248,6 @@ class IndexingRunUpdate(BaseModel):
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
     upload_type: Optional[UploadType] = None
-    upload_id: Optional[str] = None
     project_id: Optional[UUID] = None
     pipeline_config: Optional[Dict[str, Any]] = None
 

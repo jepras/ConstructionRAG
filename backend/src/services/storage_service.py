@@ -119,7 +119,6 @@ class StorageService:
         page_num: int,
         complexity: str,
         upload_type: UploadType,
-        upload_id: Optional[str] = None,
         user_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
         index_run_id: Optional[UUID] = None,
@@ -130,7 +129,7 @@ class StorageService:
 
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
+                storage_path = f"email-uploads/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
 
@@ -158,7 +157,6 @@ class StorageService:
         document_id: UUID,
         table_id: str,
         upload_type: UploadType,
-        upload_id: Optional[str] = None,
         user_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
         index_run_id: Optional[UUID] = None,
@@ -169,7 +167,7 @@ class StorageService:
 
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
+                storage_path = f"email-uploads/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
 
@@ -195,7 +193,6 @@ class StorageService:
         file_path: str,
         filename: str,
         upload_type: UploadType,
-        upload_id: Optional[str] = None,
         user_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
         index_run_id: Optional[UUID] = None,
@@ -205,7 +202,9 @@ class StorageService:
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/generated/{filename}"
+                storage_path = (
+                    f"email-uploads/index-runs/{index_run_id}/generated/{filename}"
+                )
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{filename}"
 
@@ -229,7 +228,6 @@ class StorageService:
         file_path: str,
         filename: str,
         upload_type: UploadType,
-        upload_id: Optional[str] = None,
         user_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
         index_run_id: Optional[UUID] = None,
@@ -238,7 +236,9 @@ class StorageService:
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/pdfs/{filename}"
+                storage_path = (
+                    f"email-uploads/index-runs/{index_run_id}/pdfs/{filename}"
+                )
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}"
 
@@ -263,7 +263,6 @@ class StorageService:
         filename: str,
         step: str,
         upload_type: UploadType,
-        upload_id: Optional[str] = None,
         user_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
         index_run_id: Optional[UUID] = None,
@@ -273,7 +272,9 @@ class StorageService:
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}/temp/{step}/{filename}"
+                storage_path = (
+                    f"email-uploads/index-runs/{index_run_id}/temp/{step}/{filename}"
+                )
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/temp/{step}/{filename}"
 
@@ -296,7 +297,6 @@ class StorageService:
     async def create_storage_structure(
         self,
         upload_type: UploadType,
-        upload_id: Optional[str] = None,
         user_id: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
         index_run_id: Optional[UUID] = None,
@@ -304,8 +304,8 @@ class StorageService:
         """Create the storage folder structure for the upload type."""
         try:
             if upload_type == UploadType.EMAIL:
-                # Create email upload structure (consistent with user projects)
-                base_path = f"email-uploads/{upload_id}/index-runs/{index_run_id}"
+                # Create simplified email upload structure (no upload_id)
+                base_path = f"email-uploads/index-runs/{index_run_id}"
                 folders = [
                     f"{base_path}/pdfs",
                     f"{base_path}/generated",
@@ -323,7 +323,7 @@ class StorageService:
                     f"{base_path}/temp/embedding",
                 ]
             else:  # USER_PROJECT
-                # Create user project structure
+                # Create user project structure (unchanged)
                 base_path = (
                     f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}"
                 )
