@@ -27,12 +27,9 @@ load_dotenv()
 # CONFIGURATION
 # ==============================================================================
 
-# Test files - add your problematic PDFs here
+# Test files - Focus on the scanned document for OCR analysis
 TEST_FILES = [
-    "test-with-little-variety.pdf",  # Original test file
-    "small-complicated/I12727-01_K07_C08.01 Appendiks EL copy.pdf",
-    "small-complicated/MOL_K07_C08_ARB_EL - EL arbejdsbeskrivelse copy.pdf", 
-    "small-complicated/Tegninger samlet  copy.pdf",
+    "small-complicated/MOL_K07_C08_ARB_EL - EL arbejdsbeskrivelse copy.pdf",  # Scanned document for OCR comparison
 ]
 
 # Source directory
@@ -116,7 +113,7 @@ class PDFProcessingStrategies:
         return analysis
     
     def process_with_pymupdf(self, filepath: str) -> Dict[str, Any]:
-        """Process PDF using PyMuPDF only (current approach)"""
+        """Process PDF using PyMuPDF with full page extraction for pages with images"""
         start_time = time.time()
         
         try:
@@ -127,6 +124,7 @@ class PDFProcessingStrategies:
                 "text_elements": [],
                 "table_elements": [],
                 "image_elements": [],
+                "full_pages_extracted": [],
                 "document_metadata": {},
                 "processing_time": 0,
                 "error": None
@@ -145,6 +143,10 @@ class PDFProcessingStrategies:
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 page_index = page_num + 1
+                
+                # Check for images on this page
+                images = page.get_images()
+                has_images = len(images) > 0
                 
                 # Extract text
                 text_dict = page.get_text("dict")
@@ -181,7 +183,6 @@ class PDFProcessingStrategies:
                         logger.warning(f"Failed to extract table: {e}")
                 
                 # Count images
-                images = page.get_images()
                 for img_idx, img in enumerate(images):
                     results["image_elements"].append({
                         "id": f"image_page{page_index}_img{img_idx}",
@@ -189,6 +190,37 @@ class PDFProcessingStrategies:
                         "category": "Image",
                         "xref": img[0]
                     })
+                
+                # Extract full page if it has images
+                if has_images:
+                    try:
+                        # Determine DPI based on image count
+                        if len(images) > 10:
+                            matrix = fitz.Matrix(3, 3)  # High DPI for many images
+                        elif len(images) > 3:
+                            matrix = fitz.Matrix(2, 2)  # Standard DPI
+                        else:
+                            matrix = fitz.Matrix(1.5, 1.5)  # Lower DPI for few images
+                        
+                        pixmap = page.get_pixmap(matrix=matrix)
+                        
+                        # Save to temp directory
+                        filename = f"pymupdf_page{page_index:02d}.png"
+                        save_path = self.temp_dirs["pymupdf_images"] / filename
+                        pixmap.save(str(save_path))
+                        
+                        results["full_pages_extracted"].append({
+                            "page": page_index,
+                            "image_count": len(images),
+                            "image_path": str(save_path),
+                            "filename": filename,
+                            "width": pixmap.width,
+                            "height": pixmap.height,
+                            "dpi": int(matrix.a * 72)
+                        })
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to extract full page {page_index}: {e}")
             
             doc.close()
             results["processing_time"] = time.time() - start_time
@@ -206,30 +238,31 @@ class PDFProcessingStrategies:
         
         return results
     
-    def process_with_unstructured_hi_res(self, filepath: str) -> Dict[str, Any]:
-        """Process PDF using Unstructured hi_res strategy"""
+    def process_with_unstructured_fast(self, filepath: str) -> Dict[str, Any]:
+        """Process PDF using Unstructured fast strategy"""
         start_time = time.time()
         
         try:
             elements = partition_pdf(
                 filename=filepath,
-                strategy="hi_res",
+                strategy="fast",  # Fast strategy
                 infer_table_structure=True,
                 extract_images_in_pdf=True,
                 extract_image_block_types=["Image", "Table"],
                 extract_image_block_output_dir=str(self.temp_dirs["unstructured_images"]),
                 extract_image_block_to_payload=False,
-                chunking_strategy=None,  # No chunking, we'll do that later
+                chunking_strategy=None,  # No chunking
                 languages=["dan"],  # Danish support
                 include_page_breaks=True,
             )
             
             results = {
-                "strategy": "unstructured_hi_res", 
+                "strategy": "unstructured_fast", 
                 "success": True,
                 "text_elements": [],
                 "table_elements": [],
                 "image_elements": [],
+                "full_pages_extracted": [],
                 "processing_time": 0,
                 "error": None
             }
@@ -258,6 +291,98 @@ class PDFProcessingStrategies:
                     results["image_elements"].append(element_dict)
                 else:
                     results["text_elements"].append(element_dict)
+            
+            # Check for extracted images that could be full pages
+            image_dir = self.temp_dirs["unstructured_images"]
+            if image_dir.exists():
+                for image_file in image_dir.glob("*.png"):
+                    if "page" in image_file.name.lower():
+                        results["full_pages_extracted"].append({
+                            "filename": image_file.name,
+                            "image_path": str(image_file),
+                            "source": "unstructured_extraction"
+                        })
+            
+            results["processing_time"] = time.time() - start_time
+            
+        except Exception as e:
+            results = {
+                "strategy": "unstructured_fast",
+                "success": False,
+                "error": str(e),
+                "processing_time": time.time() - start_time,
+                "text_elements": [],
+                "table_elements": [],
+                "image_elements": [],
+                "full_pages_extracted": [],
+            }
+        
+        return results
+    
+    def process_with_unstructured_hi_res(self, filepath: str) -> Dict[str, Any]:
+        """Process PDF using Unstructured hi_res strategy"""
+        start_time = time.time()
+        
+        try:
+            elements = partition_pdf(
+                filename=filepath,
+                strategy="hi_res",
+                infer_table_structure=True,
+                extract_images_in_pdf=True,
+                extract_image_block_types=["Image", "Table"],
+                extract_image_block_output_dir=str(self.temp_dirs["unstructured_images"]),
+                extract_image_block_to_payload=False,
+                chunking_strategy=None,  # No chunking, we'll do that later
+                languages=["dan"],  # Danish support
+                include_page_breaks=True,
+            )
+            
+            results = {
+                "strategy": "unstructured_hi_res", 
+                "success": True,
+                "text_elements": [],
+                "table_elements": [],
+                "image_elements": [],
+                "full_pages_extracted": [],
+                "processing_time": 0,
+                "error": None
+            }
+            
+            # Process elements
+            for element in elements:
+                element_dict = {
+                    "id": getattr(element, 'id', None) or f"element_{len(results['text_elements']) + len(results['table_elements']) + len(results['image_elements'])}",
+                    "category": element.category,
+                    "text": str(element),
+                    "page": getattr(element.metadata, 'page_number', None),
+                    "length": len(str(element))
+                }
+                
+                # Add element-specific metadata
+                if hasattr(element.metadata, 'text_as_html') and element.metadata.text_as_html:
+                    element_dict["html_content"] = element.metadata.text_as_html
+                
+                if hasattr(element.metadata, 'image_path') and element.metadata.image_path:
+                    element_dict["image_path"] = element.metadata.image_path
+                
+                # Categorize elements
+                if element.category in ["Table"]:
+                    results["table_elements"].append(element_dict)
+                elif element.category in ["Image", "FigureCaption"]:
+                    results["image_elements"].append(element_dict)
+                else:
+                    results["text_elements"].append(element_dict)
+            
+            # Check for extracted images that could be full pages
+            image_dir = self.temp_dirs["unstructured_images"]
+            if image_dir.exists():
+                for image_file in image_dir.glob("*.png"):
+                    if "page" in image_file.name.lower():
+                        results["full_pages_extracted"].append({
+                            "filename": image_file.name,
+                            "image_path": str(image_file),
+                            "source": "unstructured_extraction"
+                        })
             
             results["processing_time"] = time.time() - start_time
             
@@ -298,6 +423,7 @@ class PDFProcessingStrategies:
                 "text_elements": [],
                 "table_elements": [],
                 "image_elements": [],
+                "full_pages_extracted": [],
                 "processing_time": 0,
                 "error": None
             }
@@ -324,6 +450,17 @@ class PDFProcessingStrategies:
                     results["image_elements"].append(element_dict)
                 else:
                     results["text_elements"].append(element_dict)
+            
+            # Check for extracted images that could be full pages
+            image_dir = self.temp_dirs["unstructured_images"]
+            if image_dir.exists():
+                for image_file in image_dir.glob("*.png"):
+                    if "page" in image_file.name.lower():
+                        results["full_pages_extracted"].append({
+                            "filename": image_file.name,
+                            "image_path": str(image_file),
+                            "source": "unstructured_extraction"
+                        })
             
             results["processing_time"] = time.time() - start_time
             
@@ -411,6 +548,7 @@ def run_comparison():
         # Test each strategy
         strategies = [
             ("pymupdf", processor.process_with_pymupdf),
+            ("unstructured_fast", processor.process_with_unstructured_fast),
             ("unstructured_hi_res", processor.process_with_unstructured_hi_res),
             ("unstructured_ocr", processor.process_with_unstructured_ocr),
             ("hybrid", processor.process_with_hybrid),
@@ -424,7 +562,8 @@ def run_comparison():
                 
                 # Print summary
                 if result["success"]:
-                    print(f"    ✅ {len(result['text_elements'])} text, {len(result['table_elements'])} tables, {len(result['image_elements'])} images ({result['processing_time']:.1f}s)")
+                    full_pages = len(result.get('full_pages_extracted', []))
+                    print(f"    ✅ {len(result['text_elements'])} text, {len(result['table_elements'])} tables, {len(result['image_elements'])} images, {full_pages} full pages ({result['processing_time']:.1f}s)")
                 else:
                     print(f"    ❌ Failed: {result['error']}")
                     
@@ -460,9 +599,10 @@ def run_comparison():
                 text_count = len(strategy_result["text_elements"])
                 table_count = len(strategy_result["table_elements"])
                 image_count = len(strategy_result["image_elements"])
+                full_pages = len(strategy_result.get("full_pages_extracted", []))
                 time_taken = strategy_result["processing_time"]
                 
-                print(f"   {strategy_name:20}: {text_count:3d} text, {table_count:2d} tables, {image_count:2d} images ({time_taken:5.1f}s)")
+                print(f"   {strategy_name:20}: {text_count:3d} text, {table_count:2d} tables, {image_count:2d} images, {full_pages:2d} full pages ({time_taken:5.1f}s)")
                 
                 # Show hybrid decision if applicable
                 if strategy_name == "hybrid" and "chosen_strategy" in strategy_result:
