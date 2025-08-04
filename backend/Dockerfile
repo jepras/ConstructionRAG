@@ -23,7 +23,6 @@ RUN pip install --no-cache-dir --prefer-binary -r requirements.txt
 
 # Copy application code (this layer changes most frequently)
 # Copy in order of least to most frequently changing files
-COPY config/ ./config/
 COPY start.sh ./start.sh
 COPY src/ ./src/
 
