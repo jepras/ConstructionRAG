@@ -100,9 +100,10 @@ class EmbeddingStep(PipelineStep):
         api_key = config.get("api_key")
         if not api_key:
             # Try to get from environment variable
-            import os
+            from src.config.settings import get_settings
 
-            api_key = os.getenv("VOYAGE_API_KEY")
+            settings = get_settings()
+            api_key = settings.voyage_api_key
             if not api_key:
                 raise ValueError("Voyage API key not provided in config or environment")
 

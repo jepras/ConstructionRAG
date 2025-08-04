@@ -98,7 +98,9 @@ async def run_indexing_pipeline_on_beam(
                 # Validate UUIDs before creating DocumentInput
                 print(f"🔍 Validating UUIDs...")
                 print(f"  - doc_id: {doc_id} (type: {type(doc_id)})")
-                print(f"  - indexing_run_id: {indexing_run_id} (type: {type(indexing_run_id)})")
+                print(
+                    f"  - indexing_run_id: {indexing_run_id} (type: {type(indexing_run_id)})"
+                )
                 print(f"  - user_id: {user_id} (type: {type(user_id)})")
                 print(f"  - project_id: {project_id} (type: {type(project_id)})")
 
@@ -148,7 +150,9 @@ async def run_indexing_pipeline_on_beam(
         print(
             f"🔄 Starting unified document processing for {len(document_inputs)} documents"
         )
-        print(f"🔄 Calling orchestrator.process_documents with existing_indexing_run_id: {indexing_run_id}")
+        print(
+            f"🔄 Calling orchestrator.process_documents with existing_indexing_run_id: {indexing_run_id}"
+        )
 
         try:
             success = await orchestrator.process_documents(
@@ -167,7 +171,9 @@ async def run_indexing_pipeline_on_beam(
             }
 
         if success:
-            print(f"✅ Indexing pipeline completed successfully for run: {indexing_run_id}")
+            print(
+                f"✅ Indexing pipeline completed successfully for run: {indexing_run_id}"
+            )
             return {
                 "status": "completed",
                 "indexing_run_id": indexing_run_id,
@@ -225,7 +231,9 @@ def process_documents(
     if env.is_remote():
         # Run the async function in an event loop
         return asyncio.run(
-            run_indexing_pipeline_on_beam(indexing_run_id, document_ids, user_id, project_id)
+            run_indexing_pipeline_on_beam(
+                indexing_run_id, document_ids, user_id, project_id
+            )
         )
     else:
         # Local development - just return success
