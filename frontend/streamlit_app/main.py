@@ -7,7 +7,7 @@ from datetime import datetime
 from utils.auth_utils import init_auth
 
 # Import page modules
-from pages import home, progress, upload, overview, query, settings
+from pages import home, progress, upload, overview, query, settings, progress_polling
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,7 @@ def main():
         nav_button("Upload Documents", "Upload Documents", "📤")
         nav_button("Project Overview", "Project Overview", "📊")
         nav_button("Progress Tracking", "Progress Tracking", "📈")
+        nav_button("Progress Polling", "Progress Polling", "🔄")
         nav_button("Query Interface", "Query Interface", "❓")
         nav_button("Settings", "Settings", "⚙️")
 
@@ -201,6 +202,8 @@ def main():
         overview.show_overview_page()
     elif page == "Progress Tracking":
         progress.show_progress_page()
+    elif page == "Progress Polling":
+        progress_polling.show_progress_polling_page()
     elif page == "Query Interface":
         query.show_query_page()
     elif page == "Settings":

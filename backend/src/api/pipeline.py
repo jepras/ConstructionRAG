@@ -363,22 +363,26 @@ async def get_indexing_run_progress(
         # Get step results from the run
         step_results = run.step_results or {}
         # Convert Pydantic models to dictionaries if needed
-        if step_results and hasattr(next(iter(step_results.values())), 'status'):
+        if step_results and hasattr(next(iter(step_results.values())), "status"):
             # These are Pydantic models, convert to dict
             step_results_dict = {
                 step_name: {
                     "status": step.status,
                     "duration_seconds": step.duration_seconds,
                     "summary_stats": step.summary_stats,
-                    "completed_at": step.completed_at.isoformat() if step.completed_at else None,
-                    "error_message": step.error_message if hasattr(step, 'error_message') else None
+                    "completed_at": (
+                        step.completed_at.isoformat() if step.completed_at else None
+                    ),
+                    "error_message": (
+                        step.error_message if hasattr(step, "error_message") else None
+                    ),
                 }
                 for step_name, step in step_results.items()
             }
         else:
             # These are already dictionaries
             step_results_dict = step_results
-            
+
         completed_run_steps = len(
             [
                 step
