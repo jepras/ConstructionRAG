@@ -15,12 +15,13 @@ websockets==15.0.1
 # HTTP client - Updated to working version
 httpx==0.28.1
 
-# PDF processing (for pipeline) - Moved to Beam
+# PDF processing - Minimal for query pipeline only
+# Heavy processing (Unstructured, etc.) is in beam_requirements.txt
 pypdf==5.8.0
 pdf2image==1.17.0
 PyMuPDF==1.26.3
 
-# Scientific computing - Moved to Beam
+# Scientific computing - Minimal for query pipeline
 numpy==1.26.4
 scipy==1.16.0
 pandas==2.3.1

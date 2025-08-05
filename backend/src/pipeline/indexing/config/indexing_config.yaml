@@ -1,9 +1,17 @@
 steps:
   partition:
+    # Hybrid processing configuration
+    hybrid_mode: true
+    scanned_detection:
+      text_threshold: 25  # chars per page threshold for scanned detection
+      sample_pages: 3     # pages to analyze for detection
+    
+    # Legacy settings (still used)
     ocr_strategy: "auto"
     extract_tables: true
     extract_images: true
     max_image_size_mb: 10
+    ocr_languages: ["dan"]
     
   metadata:
     extract_page_structure: true

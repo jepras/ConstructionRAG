@@ -13,10 +13,16 @@ PyMuPDF==1.26.3
 pypdf==5.8.0
 pdf2image==1.17.0
 
+# Advanced PDF processing (for hybrid partition system)
+# Full PDF functionality needed for OCR and hi-res processing
+unstructured[pdf]==0.10.25
+nltk==3.8.1
+
 # Scientific computing
 numpy==1.26.4
 scipy==1.16.0
 pandas==2.3.1
+matplotlib==3.8.2
 
 # Database and HTTP
 supabase==2.17.0

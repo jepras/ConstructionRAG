@@ -321,9 +321,9 @@ class IndexingOrchestrator:
                 else:
                     result = await step_executor.execute_with_tracking(current_data)
 
-                # Store step result in database
-                await self.pipeline_service.store_step_result(
-                    indexing_run_id=indexing_run.id,
+                # Store step result in document's step_results field
+                await self.pipeline_service.store_document_step_result(
+                    document_id=document_input.document_id,
                     step_name=step.get_step_name(),
                     step_result=result,
                 )
@@ -642,7 +642,7 @@ class IndexingOrchestrator:
                 document_id=None,  # Process all documents
             )
 
-            # Store embedding step result
+            # Store embedding step result in indexing run (batch operation affects all documents)
             await self.pipeline_service.store_step_result(
                 indexing_run_id=indexing_run_id,
                 step_name="embedding",

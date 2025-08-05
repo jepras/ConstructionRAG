@@ -177,8 +177,12 @@ async def run_indexing_pipeline_on_beam(
     memory="8Gi",
     gpu="T4",
     image=Image(
-        python_version="python3.12",
+        python_version="python3.11",  # Changed from 3.12 for Unstructured compatibility
         python_packages="beam_requirements.txt",
+        # Add system dependencies for Unstructured hi_res strategy
+        commands=[
+            "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libxrender1 libgomp1 libgcc-s1 libstdc++6 fonts-liberation poppler-utils tesseract-ocr tesseract-ocr-dan"
+        ],
     ),
     # Timeout set to 30 minutes to match current pipeline expectations
     timeout=1800,

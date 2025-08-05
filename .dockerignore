@@ -1,0 +1,51 @@
+# Exclude indexing pipeline from FastAPI Docker builds
+# The indexing pipeline only runs on Beam, not in FastAPI
+backend/src/pipeline/indexing/
+
+# Keep these in FastAPI Docker builds:
+# - backend/src/pipeline/querying/ (needed for search API)
+# - backend/src/pipeline/shared/ (shared models and utilities)
+
+# Standard Docker excludes
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+.env
+.env.*
+
+# Development files
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.log
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*.sublime-*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test files and temp directories
+test_*.py
+*_test.py
+notebooks/
+data/
+
+# Beam specific files (these run on Beam, not FastAPI)
+beam-app.py
+beam_requirements.txt

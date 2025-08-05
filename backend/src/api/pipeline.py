@@ -16,10 +16,15 @@ try:
 except Exception as e:
     raise
 
+# Indexing orchestrator only available on Beam, not FastAPI
 try:
     from ..pipeline.indexing.orchestrator import get_indexing_orchestrator
-except Exception as e:
-    raise
+
+    INDEXING_AVAILABLE = True
+except ImportError:
+    INDEXING_AVAILABLE = False
+    get_indexing_orchestrator = None
+    logging.warning("Indexing orchestrator not available - indexing runs on Beam only")
 
 try:
     from ..pipeline.shared.models import DocumentInput
@@ -49,6 +54,14 @@ async def start_indexing_pipeline(
     pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
     """Start the indexing pipeline for a document."""
+
+    # Indexing now runs exclusively on Beam, not FastAPI
+    if not INDEXING_AVAILABLE:
+        raise HTTPException(
+            status_code=501,
+            detail="Indexing pipeline runs on Beam only. Use /api/email-uploads endpoint for document processing.",
+        )
+
     try:
         # Create document input with placeholder run_id (will be updated by orchestrator)
         document_input = DocumentInput(
@@ -57,6 +70,7 @@ async def start_indexing_pipeline(
             user_id=current_user["id"],
             file_path=f"/path/to/document/{document_id}.pdf",  # This would come from document service
             filename=f"document_{document_id}.pdf",
+            upload_type="user_project",
             metadata={},
         )
 
@@ -360,12 +374,15 @@ async def get_indexing_run_progress(
             if status["progress_percentage"] >= 100
         )
 
-        # Get step results from the run
-        step_results = run.step_results or {}
+        # Get step results from the run (only batch operations like embedding)
+        run_step_results = run.step_results or {}
+
         # Convert Pydantic models to dictionaries if needed
-        if step_results and hasattr(next(iter(step_results.values())), "status"):
+        if run_step_results and hasattr(
+            next(iter(run_step_results.values())), "status"
+        ):
             # These are Pydantic models, convert to dict
-            step_results_dict = {
+            run_step_results_dict = {
                 step_name: {
                     "status": step.status,
                     "duration_seconds": step.duration_seconds,
@@ -377,20 +394,62 @@ async def get_indexing_run_progress(
                         step.error_message if hasattr(step, "error_message") else None
                     ),
                 }
-                for step_name, step in step_results.items()
+                for step_name, step in run_step_results.items()
             }
         else:
             # These are already dictionaries
-            step_results_dict = step_results
+            run_step_results_dict = run_step_results
 
+        # Count completed run steps (batch operations only)
         completed_run_steps = len(
             [
                 step
-                for step in step_results_dict.values()
+                for step in run_step_results_dict.values()
                 if step.get("status") == "completed"
             ]
         )
-        total_run_steps = 6  # Including the final batch embedding step
+
+        # Total run steps includes batch operations (typically just embedding)
+        total_run_steps = 1  # Only batch embedding step is stored at run level
+
+        # Aggregate all step results for display (document + run level)
+        all_step_results = {}
+
+        # Add document-level step results (aggregated across all documents)
+        if document_status:
+            # Get unique step names from all documents
+            all_document_steps = set()
+            for doc_status in document_status.values():
+                all_document_steps.update(doc_status["step_results"].keys())
+
+            # Aggregate document step results (show completion across all documents)
+            for step_name in all_document_steps:
+                completed_count = sum(
+                    1
+                    for doc_status in document_status.values()
+                    if doc_status["step_results"].get(step_name, {}).get("status")
+                    == "completed"
+                )
+                total_count = len(document_status)
+
+                all_step_results[f"document_{step_name}"] = {
+                    "status": (
+                        "completed" if completed_count == total_count else "running"
+                    ),
+                    "completed_documents": completed_count,
+                    "total_documents": total_count,
+                    "progress_percentage": (
+                        (completed_count / total_count * 100) if total_count > 0 else 0
+                    ),
+                    "step_type": "document_level",
+                }
+
+        # Add run-level step results (batch operations)
+        for step_name, step_data in run_step_results_dict.items():
+            all_step_results[f"run_{step_name}"] = {
+                **step_data,
+                "step_type": "batch_level",
+            }
 
         return {
             "run_id": str(run_id),
@@ -411,7 +470,7 @@ async def get_indexing_run_progress(
                 ),
             },
             "document_status": document_status,
-            "step_results": step_results_dict,
+            "step_results": all_step_results,
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
             "error_message": run.error_message,

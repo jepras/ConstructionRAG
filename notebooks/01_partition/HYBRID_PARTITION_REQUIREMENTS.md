@@ -171,12 +171,164 @@ steps:
 - **Table Detection**: Accurate table detection (2 real tables vs 9 false positives)
 - **Compatibility**: Seamless integration with existing pipeline
 
-### 6. Success Criteria
-1. Scanned documents: Extract text from all pages (not just 40%)
-2. Regular documents: Maintain current performance and accuracy
-3. Output format: Consistent schema regardless of strategy used
-4. Integration: No breaking changes to downstream steps (metadata, chunking, etc.)
-5. Reliability: Robust fallback mechanisms for edge cases
+### 6. Testing Strategy
+
+#### Phase 1: Unit Testing (Individual Components)
+```python
+# Test document detection
+def test_document_detection():
+    # Regular document should be detected as not scanned
+    assert not _detect_document_type("test-with-little-variety.pdf")["is_likely_scanned"]
+    
+    # Scanned document should be detected as scanned  
+    assert _detect_document_type("MOL_K07_C08_ARB_EL.pdf")["is_likely_scanned"]
+
+# Test output normalization
+def test_output_normalization():
+    # Unstructured elements should normalize to current format
+    unstructured_elements = [mock_unstructured_element()]
+    text_elements, table_elements = _normalize_unstructured_to_current_format(unstructured_elements)
+    
+    # Verify exact schema match
+    assert all(["id", "category", "page", "text", "metadata"] == list(elem.keys()) for elem in text_elements)
+```
+
+#### Phase 2: Integration Testing (Full Pipeline)
+```python
+# Test with known documents from our comparison results
+TEST_DOCUMENTS = {
+    "scanned": "small-complicated/MOL_K07_C08_ARB_EL - EL arbejdsbeskrivelse copy.pdf",
+    "regular": "test-with-little-variety.pdf", 
+    "complex_tables": "small-complicated/Tegninger samlet copy.pdf"
+}
+
+def test_scanned_document_processing():
+    """Test that scanned docs get full page coverage"""
+    result = partition_step.execute(TEST_DOCUMENTS["scanned"])
+    
+    # Should use hi_res strategy
+    assert result.data["metadata"]["processing_strategy"] == "unstructured_hi_res"
+    
+    # Should extract from all pages (not just 40%)
+    pages_with_text = set(elem["page"] for elem in result.data["text_elements"])
+    assert len(pages_with_text) >= 3  # Should find text on pages 1,2,3 (not just 4,5)
+    
+    # Should find more text elements than PyMuPDF (140 vs 8)
+    assert len(result.data["text_elements"]) > 100
+
+def test_regular_document_processing():
+    """Test that regular docs maintain current performance"""
+    result = partition_step.execute(TEST_DOCUMENTS["regular"])
+    
+    # Should use PyMuPDF strategy
+    assert result.data["metadata"]["processing_strategy"] == "pymupdf_only"
+    
+    # Should maintain current performance characteristics
+    assert result.duration_seconds < 5.0  # Fast processing
+
+def test_output_compatibility():
+    """Test that both strategies produce identical output schema"""
+    scanned_result = partition_step.execute(TEST_DOCUMENTS["scanned"])
+    regular_result = partition_step.execute(TEST_DOCUMENTS["regular"])
+    
+    # Both should have identical top-level keys
+    assert set(scanned_result.data.keys()) == set(regular_result.data.keys())
+    
+    # Elements should have identical schema
+    for result in [scanned_result, regular_result]:
+        for elem in result.data["text_elements"]:
+            assert set(elem.keys()) == {"id", "category", "page", "text", "metadata"}
+```
+
+#### Phase 3: Downstream Compatibility Testing
+```python
+def test_metadata_step_compatibility():
+    """Test that metadata step works with both strategies"""
+    # Process with both strategies
+    scanned_partition = partition_step.execute(TEST_DOCUMENTS["scanned"])
+    regular_partition = partition_step.execute(TEST_DOCUMENTS["regular"])
+    
+    # Both should work with metadata step
+    scanned_metadata = metadata_step.execute(scanned_partition)
+    regular_metadata = metadata_step.execute(regular_partition)
+    
+    # Both should succeed
+    assert scanned_metadata.status == "completed"
+    assert regular_metadata.status == "completed"
+
+def test_chunking_step_compatibility():
+    """Test that chunking step works with both strategies"""
+    # Similar pattern for chunking step...
+```
+
+#### Phase 4: Performance & Accuracy Validation
+```python
+def test_performance_benchmarks():
+    """Validate performance characteristics"""
+    # Regular docs should be fast (< 3s)
+    regular_result = partition_step.execute(TEST_DOCUMENTS["regular"])
+    assert regular_result.duration_seconds < 3.0
+    
+    # Scanned docs can be slower but should complete (< 30s)
+    scanned_result = partition_step.execute(TEST_DOCUMENTS["scanned"])
+    assert scanned_result.duration_seconds < 30.0
+
+def test_accuracy_improvements():
+    """Validate accuracy improvements for scanned docs"""
+    result = partition_step.execute(TEST_DOCUMENTS["scanned"])
+    
+    # Should extract significantly more content than current system
+    # Current: 8 text elements from pages 4-5 only
+    # Expected: 100+ text elements from all pages 1-5
+    assert len(result.data["text_elements"]) > 100
+    
+    # Should cover all pages
+    pages_covered = set(elem["page"] for elem in result.data["text_elements"])
+    assert len(pages_covered) >= 3  # Should cover pages 1,2,3 (currently missed)
+```
+
+#### Phase 5: Error Handling & Fallback Testing
+```python
+def test_unstructured_failure_fallback():
+    """Test fallback to PyMuPDF when Unstructured fails"""
+    # Mock Unstructured failure
+    with mock.patch('unstructured.partition.pdf.partition_pdf', side_effect=Exception("OCR failed")):
+        result = partition_step.execute(TEST_DOCUMENTS["scanned"])
+        
+        # Should fallback to PyMuPDF and still complete
+        assert result.status == "completed"
+        assert result.data["metadata"]["processing_strategy"] == "pymupdf_fallback"
+
+def test_malformed_pdf_handling():
+    """Test handling of corrupted/malformed PDFs"""
+    # Test with corrupted PDF should not crash pipeline
+```
+
+#### Testing Environment Setup
+```bash
+# Use existing test environment
+cd notebooks/01_partition
+source test_venv/bin/activate
+
+# Run tests
+python -m pytest test_hybrid_partition.py -v
+
+# Performance benchmarking
+python benchmark_hybrid_partition.py
+```
+
+### 7. Success Criteria
+1. **Accuracy**: Scanned documents extract text from all pages (not just 40%)
+2. **Performance**: Regular documents maintain current speed (< 3s)
+3. **Compatibility**: All existing tests pass unchanged
+4. **Integration**: Metadata and chunking steps work without modification
+5. **Reliability**: Robust fallback mechanisms prevent pipeline failures
+
+### 8. Rollout Plan  
+1. **Development**: Implement with comprehensive test suite
+2. **Testing**: Run against existing document corpus
+3. **Staging**: Deploy to staging environment with monitoring
+4. **Production**: Gradual rollout with rollback capability
 
 ## Implementation Priority
 **High Priority**: This directly addresses the core issue where 60% of scanned document content is being lost in the current system.

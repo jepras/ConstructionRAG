@@ -24,8 +24,10 @@ class ProgressTracker:
         self, step: str, status: str, result: StepResult
     ):
         """Update progress in database and logs with async operations"""
-        # Update indexing_runs table (async database operation)
-        await self.update_run_status_async(step, status, result)
+        # Only update indexing run for batch operations (like embedding)
+        # Individual document steps should only be stored in document.step_results
+        if self._is_batch_operation(step):
+            await self.update_run_status_async(step, status, result)
 
         # Async structured logging
         await self.log_progress_async(step, status, result)
@@ -33,8 +35,18 @@ class ProgressTracker:
         # Update completion count
         self.completed_steps += 1
 
+    def _is_batch_operation(self, step: str) -> bool:
+        """Determine if a step is a batch operation that affects all documents"""
+        batch_operations = [
+            "EmbeddingStep",
+            "embedding",
+            "batch_embedding",
+            "batch_embed_all_chunks",
+        ]
+        return step in batch_operations
+
     async def update_run_status_async(self, step: str, status: str, result: StepResult):
-        """Async database update for run status"""
+        """Async database update for run status - ONLY for batch operations"""
         if not self.db:
             return
 
@@ -79,7 +91,7 @@ class ProgressTracker:
                 print(f"❌ Failed to update step results for run {self.run_id}")
                 return
 
-            print(f"✅ Updated step results for {step} in run {self.run_id}")
+            print(f"✅ Updated batch step results for {step} in run {self.run_id}")
 
         except Exception as e:
             print(f"❌ Failed to update run status: {e}")

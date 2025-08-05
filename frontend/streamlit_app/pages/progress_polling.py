@@ -242,6 +242,61 @@ def show_progress_polling_page():
                             if data.get("error_message"):
                                 st.write(f"**Error:** {data['error_message']}")
 
+                    # Display aggregated step results
+                    if data.get("step_results"):
+                        st.markdown("### 📊 Step Progress")
+
+                        # Separate document-level and batch-level steps
+                        document_steps = {}
+                        batch_steps = {}
+
+                        for step_key, step_data in data["step_results"].items():
+                            if step_data.get("step_type") == "document_level":
+                                # Remove "document_" prefix for display
+                                step_name = step_key.replace("document_", "")
+                                document_steps[step_name] = step_data
+                            elif step_data.get("step_type") == "batch_level":
+                                # Remove "run_" prefix for display
+                                step_name = step_key.replace("run_", "")
+                                batch_steps[step_name] = step_data
+
+                        # Display document-level steps
+                        if document_steps:
+                            st.markdown("**📄 Document Processing Steps:**")
+                            for step_name, step_data in document_steps.items():
+                                if step_data.get("status") == "completed":
+                                    st.write(f"✅ {step_name}: All documents completed")
+                                elif step_data.get("status") == "running":
+                                    progress = step_data.get("progress_percentage", 0)
+                                    completed = step_data.get("completed_documents", 0)
+                                    total = step_data.get("total_documents", 0)
+                                    st.write(
+                                        f"🔄 {step_name}: {completed}/{total} documents ({progress:.1f}%)"
+                                    )
+                                else:
+                                    st.write(
+                                        f"⏳ {step_name}: {step_data.get('status', 'unknown')}"
+                                    )
+
+                        # Display batch-level steps
+                        if batch_steps:
+                            st.markdown("**🔄 Batch Operations:**")
+                            for step_name, step_data in batch_steps.items():
+                                if step_data.get("status") == "completed":
+                                    duration = step_data.get("duration_seconds", 0)
+                                    st.write(
+                                        f"✅ {step_name}: Completed ({duration:.1f}s)"
+                                    )
+                                elif step_data.get("status") == "failed":
+                                    error = step_data.get(
+                                        "error_message", "Unknown error"
+                                    )
+                                    st.write(f"❌ {step_name}: Failed - {error}")
+                                else:
+                                    st.write(
+                                        f"🔄 {step_name}: {step_data.get('status', 'unknown')}"
+                                    )
+
                     # Auto-refresh
                     time.sleep(3)
                     st.rerun()

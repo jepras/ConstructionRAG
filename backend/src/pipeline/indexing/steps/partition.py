@@ -12,8 +12,19 @@ from typing import Dict, Any, List, Optional, Tuple
 from uuid import UUID, uuid4
 import logging
 
+# Initialize logger first
+logger = logging.getLogger(__name__)
+
 # PDF processing
 import fitz  # PyMuPDF
+
+try:
+    from unstructured.partition.pdf import partition_pdf
+
+    UNSTRUCTURED_AVAILABLE = True
+except ImportError:
+    UNSTRUCTURED_AVAILABLE = False
+    logger.warning("Unstructured not available - will use PyMuPDF only")
 
 # Storage
 from src.services.storage_service import StorageService
@@ -22,8 +33,6 @@ from src.services.storage_service import StorageService
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import DocumentInput, PipelineError
-
-logger = logging.getLogger(__name__)
 
 
 class PartitionStep(PipelineStep):
@@ -58,6 +67,380 @@ class PartitionStep(PipelineStep):
         self.images_dir.mkdir(exist_ok=True)
 
         logger.info(f"PartitionStep initialized with temp dir: {self.temp_dir}")
+
+    def _detect_document_type(self, filepath: str) -> Dict[str, Any]:
+        """Detect if document is scanned using fast PyMuPDF analysis"""
+        try:
+            doc = fitz.open(filepath)
+            analysis = {
+                "total_pages": len(doc),
+                "has_selectable_text": False,
+                "text_density": [],  # Text chars per page
+                "avg_text_per_page": 0,
+                "is_likely_scanned": False,
+                "detection_confidence": 0.0,
+                "sample_pages_analyzed": 0,
+            }
+
+            # Analyze sample pages (first 3 or all if fewer)
+            sample_pages = min(3, len(doc))
+            total_text_chars = 0
+
+            for page_num in range(sample_pages):
+                page = doc[page_num]
+                text = page.get_text().strip()
+                text_length = len(text)
+
+                analysis["text_density"].append(text_length)
+                total_text_chars += text_length
+
+                if text_length > 0:
+                    analysis["has_selectable_text"] = True
+
+            doc.close()
+
+            # Calculate averages
+            analysis["sample_pages_analyzed"] = sample_pages
+            analysis["avg_text_per_page"] = (
+                total_text_chars / sample_pages if sample_pages > 0 else 0
+            )
+
+            # Detection logic based on our testing results
+            # Threshold: < 25 chars per page suggests scanned document
+            text_threshold = self.config.get("scanned_detection", {}).get(
+                "text_threshold", 25
+            )
+
+            if analysis["avg_text_per_page"] < text_threshold:
+                analysis["is_likely_scanned"] = True
+                analysis["detection_confidence"] = max(
+                    0.7, 1.0 - (analysis["avg_text_per_page"] / text_threshold)
+                )
+            else:
+                analysis["is_likely_scanned"] = False
+                analysis["detection_confidence"] = min(
+                    0.9, analysis["avg_text_per_page"] / (text_threshold * 10)
+                )
+
+            logger.info(
+                f"Document analysis: {analysis['avg_text_per_page']:.1f} chars/page, "
+                f"scanned: {analysis['is_likely_scanned']} "
+                f"(confidence: {analysis['detection_confidence']:.2f})"
+            )
+            print(
+                f"📊 Document analysis: {analysis['avg_text_per_page']:.1f} chars/page, "
+                f"scanned: {analysis['is_likely_scanned']} "
+                f"(confidence: {analysis['detection_confidence']:.2f})"
+            )
+
+            return analysis
+
+        except Exception as e:
+            logger.error(f"Document detection failed: {e}")
+            # Fallback to regular processing
+            return {
+                "total_pages": 0,
+                "has_selectable_text": True,  # Assume not scanned if detection fails
+                "is_likely_scanned": False,
+                "detection_confidence": 0.0,
+                "error": str(e),
+            }
+
+    async def _process_with_unstructured(
+        self, filepath: str, document_input: DocumentInput
+    ) -> Dict[str, Any]:
+        """Process document using Unstructured hi-res strategy for scanned documents"""
+        if not UNSTRUCTURED_AVAILABLE:
+            raise PipelineError(
+                "Unstructured library not available for scanned document processing"
+            )
+
+        try:
+            logger.info(
+                "Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images"
+            )
+            print(
+                "🔄 Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images"
+            )
+
+            # Run Unstructured processing in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            elements = await loop.run_in_executor(
+                None, self._run_unstructured_sync, filepath
+            )
+
+            # Normalize output to current format
+            normalized_result = await self._normalize_unstructured_output(
+                elements, filepath, document_input
+            )
+
+            return normalized_result
+
+        except Exception as e:
+            logger.error(f"Unstructured processing failed: {e}")
+            raise PipelineError(f"Unstructured processing failed: {str(e)}")
+
+    def _run_unstructured_sync(self, filepath: str):
+        """Run Unstructured processing synchronously (for thread pool execution)"""
+        return partition_pdf(
+            filename=filepath,
+            strategy="hi_res",
+            infer_table_structure=True,
+            languages=self.ocr_languages,
+            include_page_breaks=True,
+        )
+
+    async def _normalize_unstructured_output(
+        self, elements, filepath: str, document_input: DocumentInput
+    ) -> Dict[str, Any]:
+        """Normalize Unstructured output to match current PyMuPDF format exactly"""
+        try:
+            # Initialize result structure to match current format
+            result = {
+                "text_elements": [],
+                "table_elements": [],
+                "extracted_pages": {},
+                "page_analysis": {},
+                "document_metadata": {},
+                "metadata": {
+                    "processing_strategy": "unstructured_hi_res",
+                    "timestamp": datetime.now().isoformat(),
+                    "source_file": os.path.basename(filepath),
+                },
+            }
+
+            # Process each element from Unstructured OCR
+            for element in elements:
+                # Create normalized element matching current schema
+                # Handle None page numbers from Unstructured by assigning to page 1
+                page_number = getattr(element.metadata, "page_number", None)
+                if page_number is None:
+                    page_number = 1  # Default to page 1 if Unstructured doesn't provide page number
+
+                normalized_element = {
+                    "id": getattr(element, "id", None)
+                    or f"element_{len(result['text_elements']) + len(result['table_elements'])}",
+                    "category": element.category,
+                    "page": page_number,
+                    "text": str(element),
+                    "metadata": {
+                        "page_number": page_number,
+                        "filename": getattr(element.metadata, "filename", None),
+                        "extraction_method": "unstructured_ocr",
+                    },
+                }
+
+                # Add table-specific metadata if available
+                if (
+                    hasattr(element.metadata, "text_as_html")
+                    and element.metadata.text_as_html
+                ):
+                    normalized_element["metadata"][
+                        "text_as_html"
+                    ] = element.metadata.text_as_html
+
+                # Categorize elements like current system
+                if element.category in ["Table"]:
+                    result["table_elements"].append(normalized_element)
+                else:
+                    result["text_elements"].append(normalized_element)
+
+            # Step 2: Use PyMuPDF for image detection and full page extraction
+            await self._extract_full_pages_with_pymupdf(
+                filepath, result, document_input
+            )
+
+            # Step 3: Process table images if Unstructured detected any tables
+            if result["table_elements"]:
+                await self._process_table_images_from_unstructured(
+                    filepath, result, document_input
+                )
+
+            # Step 3: Add document metadata
+            doc = fitz.open(filepath)
+            metadata = doc.metadata
+            result["document_metadata"] = {
+                "total_pages": len(doc),
+                "title": metadata.get("title", ""),
+                "author": metadata.get("author", ""),
+                "creation_date": metadata.get("creationDate", ""),
+            }
+            doc.close()
+
+            # Step 4: Add processing metadata
+            result["metadata"].update(
+                {
+                    "text_count": len(result["text_elements"]),
+                    "table_count": len(result["table_elements"]),
+                    "pages_with_full_extraction": len(result["extracted_pages"]),
+                    "ocr_text_elements": len(
+                        [
+                            e
+                            for e in result["text_elements"]
+                            if e.get("metadata", {}).get("extraction_method")
+                            == "unstructured_ocr"
+                        ]
+                    ),
+                }
+            )
+
+            logger.info(
+                f"Hybrid processing complete: {len(result['text_elements'])} text (OCR), "
+                f"{len(result['table_elements'])} tables, "
+                f"{len(result['extracted_pages'])} full pages"
+            )
+            print(
+                f"✅ Hybrid processing complete: {len(result['text_elements'])} text (OCR), "
+                f"{len(result['table_elements'])} tables, "
+                f"{len(result['extracted_pages'])} full pages"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Output normalization failed: {e}")
+            raise PipelineError(f"Output normalization failed: {str(e)}")
+
+    async def _extract_full_pages_with_pymupdf(
+        self, filepath: str, result: Dict[str, Any], document_input: DocumentInput
+    ):
+        """Extract full pages using PyMuPDF when images are detected"""
+        try:
+            doc = fitz.open(filepath)
+
+            # Analyze which pages have images/tables and need full extraction
+            pages_to_extract = set()
+
+            # Check for images on each page
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                images = page.get_images()
+
+                if len(images) > 0:
+                    pages_to_extract.add(page_num + 1)  # 1-indexed
+
+            # Extract full pages
+            for page_num in pages_to_extract:
+                try:
+                    page = doc[page_num - 1]  # Convert to 0-indexed
+                    images = page.get_images()
+
+                    # Determine DPI based on image count
+                    if len(images) > 10:
+                        matrix = fitz.Matrix(3, 3)  # High DPI for many images
+                    elif len(images) > 3:
+                        matrix = fitz.Matrix(2, 2)  # Standard DPI
+                    else:
+                        matrix = fitz.Matrix(1.5, 1.5)  # Lower DPI for few images
+
+                    pixmap = page.get_pixmap(matrix=matrix)
+
+                    # Save pixmap to temporary file
+                    temp_filename = (
+                        f"unstructured_page_{page_num}_{uuid4().hex[:8]}.png"
+                    )
+                    temp_image_path = self.images_dir / temp_filename
+                    pixmap.save(str(temp_image_path))
+
+                    # Upload to storage
+                    upload_result = (
+                        await self.storage_service.upload_extracted_page_image(
+                            image_path=str(temp_image_path),
+                            document_id=document_input.document_id,
+                            page_num=page_num,
+                            complexity="moderate",  # Default for Unstructured pages
+                            upload_type=document_input.upload_type,
+                            user_id=document_input.user_id,
+                            project_id=document_input.project_id,
+                            index_run_id=document_input.run_id,
+                        )
+                    )
+
+                    result["extracted_pages"][page_num] = {
+                        "url": upload_result["url"],
+                        "storage_path": upload_result["storage_path"],
+                        "filename": upload_result["filename"],
+                        "complexity": "moderate",
+                        "width": pixmap.width,
+                        "height": pixmap.height,
+                        "dpi": int(matrix.a * 72),
+                        "original_image_count": len(images),
+                        "image_type": "extracted_page",
+                    }
+
+                    logger.info(
+                        f"Extracted full page {page_num} with {len(images)} images"
+                    )
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract page {page_num}: {e}")
+
+            doc.close()
+
+        except Exception as e:
+            logger.warning(f"Full page extraction failed: {e}")
+
+    async def _process_table_images_from_unstructured(
+        self, filepath: str, result: Dict[str, Any], document_input: DocumentInput
+    ):
+        """Process table images detected by Unstructured using PyMuPDF extraction"""
+        try:
+            logger.info(
+                f"Processing {len(result['table_elements'])} table images from Unstructured"
+            )
+
+            doc = fitz.open(filepath)
+
+            for i, table_element in enumerate(result["table_elements"]):
+                try:
+                    page_num = table_element.get("page", 1)
+                    table_id = table_element.get("id", f"table_{i+1}")
+
+                    # Get the page
+                    page = doc[page_num - 1]  # Convert to 0-indexed
+
+                    # For Unstructured tables, we need to extract the table area
+                    # Since Unstructured doesn't provide coordinates, we'll extract the full page
+                    # and let the enrichment step handle table detection
+
+                    # Extract full page as table image (simplified approach)
+                    matrix = fitz.Matrix(2, 2)  # Standard DPI for tables
+                    pixmap = page.get_pixmap(matrix=matrix)
+
+                    # Save table image
+                    temp_filename = (
+                        f"unstructured_table_{table_id}_{uuid4().hex[:8]}.png"
+                    )
+                    temp_image_path = self.images_dir / temp_filename
+                    pixmap.save(str(temp_image_path))
+
+                    # Upload to storage
+                    upload_result = await self.storage_service.upload_table_image(
+                        image_path=str(temp_image_path),
+                        document_id=document_input.document_id,
+                        table_id=table_id,
+                        upload_type=document_input.upload_type,
+                        user_id=document_input.user_id,
+                        project_id=document_input.project_id,
+                        index_run_id=document_input.run_id,
+                    )
+
+                    # Add image URL to table metadata
+                    table_element["metadata"]["image_url"] = upload_result["url"]
+                    table_element["metadata"]["image_storage_path"] = upload_result[
+                        "storage_path"
+                    ]
+                    table_element["metadata"]["image_path"] = str(temp_image_path)
+
+                    logger.info(f"Uploaded table {table_id}: {upload_result['url']}")
+
+                except Exception as e:
+                    logger.warning(f"Failed to process table {i+1}: {e}")
+
+            doc.close()
+
+        except Exception as e:
+            logger.warning(f"Table image processing failed: {e}")
 
     async def _get_local_file_path(self, file_path_or_url: str) -> str:
         """Get a local file path, downloading from URL if necessary"""
@@ -117,8 +500,8 @@ class PartitionStep(PipelineStep):
                 if file_path != input_data.file_path:
                     downloaded_file_path = file_path
 
-                # Execute partitioning pipeline
-                partition_result = await self._partition_document_async(
+                # Execute HYBRID partitioning pipeline
+                partition_result = await self._partition_document_hybrid(
                     file_path, input_data
                 )
             else:
@@ -326,6 +709,64 @@ class PartitionStep(PipelineStep):
             return int(file_size_mb * 10)
         except:
             return 60  # Default 1 minute
+
+    async def _partition_document_hybrid(
+        self, filepath: str, document_input: DocumentInput
+    ) -> Dict[str, Any]:
+        """Execute hybrid partitioning: detect document type and choose optimal strategy"""
+        try:
+            # Step 1: Detect document type
+            doc_analysis = self._detect_document_type(filepath)
+
+            # Step 2: Choose processing strategy based on detection
+            if doc_analysis["is_likely_scanned"] and UNSTRUCTURED_AVAILABLE:
+                logger.info(
+                    f"Document detected as SCANNED (confidence: {doc_analysis['detection_confidence']:.2f}) - using Hybrid: Unstructured OCR + PyMuPDF images"
+                )
+                print(
+                    f"🎯 Document detected as SCANNED (confidence: {doc_analysis['detection_confidence']:.2f}) - using Hybrid: Unstructured OCR + PyMuPDF images"
+                )
+                try:
+                    result = await self._process_with_unstructured(
+                        filepath, document_input
+                    )
+                    result["metadata"]["hybrid_detection"] = doc_analysis
+                    result["metadata"]["processing_strategy"] = "hybrid_ocr_images"
+                    return result
+                except Exception as e:
+                    logger.warning(
+                        f"Hybrid processing failed: {e} - falling back to PyMuPDF only"
+                    )
+                    # Fall through to PyMuPDF processing
+
+            # Step 3: Use PyMuPDF for regular documents or as fallback
+            if doc_analysis["is_likely_scanned"]:
+                logger.warning(
+                    "Scanned document detected but using PyMuPDF only (Unstructured unavailable or failed)"
+                )
+            else:
+                logger.info(
+                    f"Document detected as REGULAR (confidence: {doc_analysis['detection_confidence']:.2f}) - using PyMuPDF only"
+                )
+                print(
+                    f"🎯 Document detected as REGULAR (confidence: {doc_analysis['detection_confidence']:.2f}) - using PyMuPDF only"
+                )
+
+            result = await self._partition_document_async(filepath, document_input)
+
+            # Add hybrid detection info to metadata
+            result["metadata"]["hybrid_detection"] = doc_analysis
+            result["metadata"]["processing_strategy"] = (
+                "pymupdf_only"
+                if not doc_analysis["is_likely_scanned"]
+                else "pymupdf_fallback"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Hybrid partitioning failed: {e}")
+            raise PipelineError(f"Hybrid partitioning failed: {str(e)}")
 
     async def _partition_document_async(
         self, filepath: str, document_input: DocumentInput
