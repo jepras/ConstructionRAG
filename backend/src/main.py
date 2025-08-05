@@ -58,6 +58,25 @@ async def api_health():
     }
 
 
+@app.get("/api/debug/env")
+async def debug_env():
+    """Debug endpoint to check environment variables"""
+    return {
+        "beam_webhook_url": os.getenv("BEAM_WEBHOOK_URL", "NOT_SET"),
+        "beam_auth_token": (
+            os.getenv("BEAM_AUTH_TOKEN", "NOT_SET")[:10] + "..."
+            if os.getenv("BEAM_AUTH_TOKEN")
+            else "NOT_SET"
+        ),
+        "environment": os.getenv("ENVIRONMENT", "NOT_SET"),
+        "supabase_url": (
+            os.getenv("SUPABASE_URL", "NOT_SET")[:20] + "..."
+            if os.getenv("SUPABASE_URL")
+            else "NOT_SET"
+        ),
+    }
+
+
 # Include API routers
 try:
     from src.api import auth_router

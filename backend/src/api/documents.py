@@ -193,6 +193,21 @@ async def upload_email_pdf(
                     500, f"Failed to store document record for {file.filename}"
                 )
 
+            # Create junction table entry to link document to indexing run
+            junction_data = {
+                "indexing_run_id": index_run_id,
+                "document_id": document_id,
+            }
+
+            junction_result = (
+                db.table("indexing_run_documents").insert(junction_data).execute()
+            )
+
+            if not junction_result.data:
+                logger.warning(
+                    f"Failed to create junction table entry for document {document_id}"
+                )
+
             # Collect document data for unified processing
             document_data.append(
                 {
@@ -202,29 +217,15 @@ async def upload_email_pdf(
                 }
             )
 
-        # Trigger Beam task for document processing
-        try:
-            from src.services.beam_service import BeamService
+        # Start processing pipeline in background
+        background_tasks.add_task(
+            process_email_upload_async,
+            index_run_id=index_run_id,
+            email=email,
+            document_data=document_data,
+        )
 
-            beam_service = BeamService()
-            beam_result = await beam_service.trigger_indexing_pipeline(
-                indexing_run_id=index_run_id,
-                document_ids=document_ids,
-                # No user_id or project_id for email uploads
-            )
-
-            if beam_result["status"] == "triggered":
-                logger.info(
-                    f"Beam task triggered successfully: {beam_result['task_id']}"
-                )
-                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started on Beam. Use Index Run ID: {index_run_id} to track progress."
-            else:
-                logger.error(f"Failed to trigger Beam task: {beam_result}")
-                processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam trigger failed). Use Index Run ID: {index_run_id} to track progress."
-
-        except Exception as e:
-            logger.error(f"Error triggering Beam task: {e}")
-            processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing started (Beam error). Use Index Run ID: {index_run_id} to track progress."
+        processing_message = f"{len(files)} PDF(s) uploaded successfully. Processing will start soon. Use Index Run ID: {index_run_id} to track progress."
 
         # Return response with multi-file information
         return EmailUploadResponse(
@@ -955,48 +956,36 @@ async def process_email_upload_async(
     email: str,
     document_data: List[Dict[str, Any]],
 ):
-    """Background processing for email uploads using unified processing"""
+    """Background processing for email uploads using Beam"""
 
     try:
         logger.info(
             f"Starting email upload processing for {email} (index run: {index_run_id})"
         )
 
-        # Initialize services
-        storage_service = StorageService()
-        db = get_supabase_admin_client()
+        # Extract document IDs for Beam
+        document_ids = [doc_data["document_id"] for doc_data in document_data]
 
-        # Create document inputs for pipeline
-        document_inputs = []
+        # Trigger Beam task for document processing
+        try:
+            from src.services.beam_service import BeamService
 
-        for doc_data in document_data:
-            document_id = doc_data["document_id"]
-            filename = doc_data["filename"]
-            storage_url = doc_data["storage_url"]
-
-            # Create document input for pipeline
-            document_input = DocumentInput(
-                document_id=UUID(document_id),
-                run_id=UUID(index_run_id),
-                user_id=None,  # No user for email uploads
-                file_path=storage_url,
-                filename=filename,
-                upload_type=UploadType.EMAIL,
-                index_run_id=UUID(index_run_id),
-                metadata={"email": email},
+            beam_service = BeamService()
+            beam_result = await beam_service.trigger_indexing_pipeline(
+                indexing_run_id=index_run_id,
+                document_ids=document_ids,
+                # No user_id or project_id for email uploads
             )
-            document_inputs.append(document_input)
 
-        # Get orchestrator and process using unified method
-        orchestrator = await get_indexing_orchestrator()
-        success = await orchestrator.process_documents(
-            document_inputs, existing_indexing_run_id=UUID(index_run_id)
-        )
+            if beam_result["status"] == "triggered":
+                logger.info(
+                    f"Beam task triggered successfully: {beam_result['task_id']}"
+                )
+            else:
+                logger.error(f"Failed to trigger Beam task: {beam_result}")
 
-        if success:
-            logger.info(f"Email upload processing completed for {email}")
-        else:
-            logger.error(f"Email upload processing failed for {email}")
+        except Exception as e:
+            logger.error(f"Error triggering Beam task: {e}")
 
     except Exception as e:
         logger.error(f"Error in email upload processing for {email}: {e}")

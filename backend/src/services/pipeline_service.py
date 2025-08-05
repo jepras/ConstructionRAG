@@ -80,6 +80,21 @@ class PipelineService:
             data_dict["indexing_run_id"] = str(data_dict["indexing_run_id"])
             data_dict["document_id"] = str(data_dict["document_id"])
 
+            # Check if the link already exists
+            existing_result = (
+                self.supabase.table("indexing_run_documents")
+                .select("id")
+                .eq("indexing_run_id", str(indexing_run_id))
+                .eq("document_id", str(document_id))
+                .execute()
+            )
+
+            if existing_result.data:
+                logger.info(
+                    f"Document {document_id} already linked to indexing run {indexing_run_id}"
+                )
+                return True
+
             result = (
                 self.supabase.table("indexing_run_documents")
                 .insert(data_dict)
