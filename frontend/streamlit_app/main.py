@@ -7,7 +7,7 @@ from datetime import datetime
 from utils.auth_utils import init_auth
 
 # Import page modules
-from pages import home, progress, upload, overview, query, settings, progress_polling
+from pages import progress, upload, overview, query, settings, progress_polling
 
 logger = logging.getLogger(__name__)
 
@@ -127,21 +127,12 @@ def main():
     logger.info(f"🔗 Backend URL: {os.getenv('BACKEND_API_URL', 'Not configured')}")
     logger.info(f"📁 Working directory: {os.getcwd()}")
 
-    # Header
-    st.markdown(
-        '<h1 class="main-header">🏗️ ConstructionRAG</h1>', unsafe_allow_html=True
-    )
-    st.markdown(
-        '<p class="sub-header">AI-powered construction document processing and Q&A system</p>',
-        unsafe_allow_html=True,
-    )
-
     # Sidebar
     with st.sidebar:
         st.title("Navigation")
 
         # Get current page for highlighting
-        current_page = st.session_state.get("current_page", "Home")
+        current_page = st.session_state.get("current_page", "Authentication")
 
         # Navigation buttons with visual feedback
         def nav_button(label, page_name, icon):
@@ -153,7 +144,6 @@ def main():
                 st.session_state.current_page = page_name
                 st.rerun()
 
-        nav_button("Home", "Home", "🏠")
         nav_button("Authentication", "Authentication", "🔐")
         nav_button("Upload Documents", "Upload Documents", "📤")
         nav_button("Project Overview", "Project Overview", "📊")
@@ -186,13 +176,11 @@ def main():
 
     # Initialize current_page if not set
     if "current_page" not in st.session_state:
-        st.session_state.current_page = "Home"
+        st.session_state.current_page = "Authentication"
 
     # Main content based on page selection
     page = st.session_state.current_page
-    if page == "Home":
-        home.show_home_page()
-    elif page == "Authentication":
+    if page == "Authentication":
         from components import show_auth_page
 
         show_auth_page()
