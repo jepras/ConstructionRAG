@@ -84,7 +84,15 @@ class IndexingOrchestrator:
         self.storage = storage
         self.config_manager = config_manager or ConfigManager(db)
         self.progress_tracker = progress_tracker
-        self.pipeline_service = pipeline_service or PipelineService()
+        # Use provided pipeline service or create one with admin client if db is available
+        if pipeline_service:
+            self.pipeline_service = pipeline_service
+        elif db:
+            # Create pipeline service with admin client using the existing db connection
+            self.pipeline_service = PipelineService(use_admin_client=True)
+        else:
+            # Fallback to regular pipeline service
+            self.pipeline_service = PipelineService()
         self.upload_type = upload_type
 
         # Initialize storage service based on test flag
