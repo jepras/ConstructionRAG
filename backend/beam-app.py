@@ -52,15 +52,40 @@ async def run_indexing_pipeline_on_beam(
         db = get_supabase_admin_client()
         print("✅ Supabase admin client initialized")
 
-        # Test database connection
+        # Test database connection and access to all tables
         try:
-            print("🔍 Testing database connection...")
-            test_result = db.table("documents").select("id").limit(1).execute()
-            print(
-                f"✅ Database connection successful, test query returned {len(test_result.data)} rows"
-            )
+            print("🔍 Testing database connection and table access...")
+            
+            # Test documents table
+            test_docs = db.table("documents").select("id").limit(1).execute()
+            print(f"✅ Documents table access: {len(test_docs.data)} rows")
+            
+            # Test indexing_runs table
+            test_runs = db.table("indexing_runs").select("id").limit(5).execute()
+            print(f"✅ Indexing runs table access: {len(test_runs.data)} rows")
+            if test_runs.data:
+                print(f"📊 Available indexing run IDs: {[run.get('id') for run in test_runs.data]}")
+            
+            # Test indexing_run_documents table
+            test_junction = db.table("indexing_run_documents").select("indexing_run_id, document_id").limit(5).execute()
+            print(f"✅ Junction table access: {len(test_junction.data)} rows")
+            if test_junction.data:
+                print(f"📊 Available junction entries: {test_junction.data}")
+            
+            # Test specific indexing run lookup
+            print(f"🔍 Testing specific lookup for: {indexing_run_id}")
+            specific_run = db.table("indexing_runs").select("*").eq("id", str(indexing_run_id)).execute()
+            print(f"📊 Specific run lookup result: {len(specific_run.data)} rows")
+            if specific_run.data:
+                print(f"📊 Found run: {specific_run.data[0]}")
+            else:
+                print(f"❌ Run {indexing_run_id} not found in database")
+                
         except Exception as db_error:
             print(f"❌ Database connection failed: {db_error}")
+            print(f"❌ Error type: {type(db_error)}")
+            import traceback
+            print(f"❌ Full traceback: {traceback.format_exc()}")
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
