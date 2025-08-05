@@ -1,6 +1,6 @@
 # ==============================================================================
 # VLM ENRICHMENT PIPELINE - META DATA VERSION
-# Enhanced captioning for tables and images using Claude 3.5 Sonnet
+# Enhanced captioning for tables and images using Gemini 2.5 Flash
 # Works with enriched elements from meta_data.py instead of raw partition data
 # ==============================================================================
 
@@ -40,7 +40,7 @@ CAPTION_LANGUAGE = (
 )
 
 # --- Model Configuration ---
-VLM_MODEL_NAME = "anthropic/claude-3-5-sonnet"  # VLM model to use for captioning
+VLM_MODEL_NAME = "google/gemini-2.5-flash"  # VLM model to use for captioning
 
 # --- Path Configuration ---
 # Base directories (relative to project root)
@@ -93,7 +93,7 @@ class VLMEnrichmentMetadata(BaseModel):
     """Metadata for VLM-enriched content"""
 
     # VLM Processing Info
-    vlm_model: str = "claude-3.5-sonnet"
+    vlm_model: str = "gemini-2.5-flash"
     vlm_processed: bool = False
     vlm_processing_timestamp: Optional[str] = None
     vlm_processing_error: Optional[str] = None

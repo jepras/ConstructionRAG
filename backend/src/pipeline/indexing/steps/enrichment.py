@@ -245,13 +245,14 @@ class EnrichmentStep(PipelineStep):
         self.storage_service = storage_service or StorageService()
 
         # Extract configuration
-        self.vlm_model = config.get("vlm_model", "anthropic/claude-3-5-sonnet")
+        self.vlm_model = config.get("vlm_model", "google/gemini-2.5-flash")
         self.caption_language = config.get("caption_language", "Danish")
         self.max_text_context_length = config.get("max_text_context_length", 1500)
         self.max_page_text_elements = config.get("max_page_text_elements", 5)
 
         # Initialize VLM captioner
         from src.config.settings import get_settings
+
         settings = get_settings()
         api_key = settings.openrouter_api_key
         if not api_key:

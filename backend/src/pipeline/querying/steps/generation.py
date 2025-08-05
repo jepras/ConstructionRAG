@@ -22,8 +22,11 @@ class GenerationConfig(BaseModel):
     """Configuration for the generation step"""
 
     provider: str = "openrouter"
-    model: str = "anthropic/claude-3.5-sonnet"
-    fallback_models: List[str] = ["openai/gpt-4", "meta-llama/llama-3.1-8b-instruct"]
+    model: str = "google/gemini-2.5-flash"
+    fallback_models: List[str] = [
+        "anthropic/claude-3.5-haiku",
+        "meta-llama/llama-3.1-8b-instruct",
+    ]
     timeout_seconds: float = 5.0
     max_tokens: int = 1000
     temperature: float = 0.1
