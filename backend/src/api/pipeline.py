@@ -91,33 +91,41 @@ async def get_all_indexing_runs(
     )
 
     try:
-        runs = await pipeline_service.get_all_indexing_runs()
+        # Direct database query to avoid validation issues
+        result = (
+            pipeline_service.supabase.table("indexing_runs")
+            .select(
+                "id, upload_type, project_id, status, started_at, completed_at, error_message"
+            )
+            .order("started_at", desc=True)
+            .limit(5)  # Only get last 5 runs
+            .execute()
+        )
+
+        if not result.data:
+            logger.info("📭 No indexing runs found")
+            return []
+
+        # Transform the raw data
+        runs = []
+        for run_data in result.data:
+            runs.append(
+                {
+                    "id": run_data["id"],
+                    "upload_type": run_data.get("upload_type", "unknown"),
+                    "project_id": run_data.get("project_id"),
+                    "status": run_data.get("status", "unknown"),
+                    "started_at": run_data.get("started_at"),
+                    "completed_at": run_data.get("completed_at"),
+                    "error_message": run_data.get("error_message"),
+                }
+            )
+
         logger.info(f"📊 Found {len(runs)} indexing runs")
+        logger.info(f"📊 Run IDs being returned: {[run['id'] for run in runs]}")
 
-        result = [
-            {
-                "id": str(run.id),
-                "upload_type": run.upload_type,
-                "project_id": str(run.project_id) if run.project_id else None,
-                "status": run.status,
-                "started_at": run.started_at.isoformat() if run.started_at else None,
-                "completed_at": (
-                    run.completed_at.isoformat() if run.completed_at else None
-                ),
-                "error_message": run.error_message,
-                "step_results": run.step_results,
-            }
-            for run in runs
-        ]
+        return runs
 
-        logger.info(f"📊 Returning {len(result)} indexing runs")
-        logger.info(f"📊 Run IDs being returned: {[run['id'] for run in result]}")
-
-        return result
-
-    except DatabaseError as e:
-        logger.error(f"Database error getting all indexing runs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get all indexing runs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -302,9 +310,13 @@ async def get_indexing_run_progress(
             .eq("indexing_run_id", str(run_id))
             .execute()
         )
-        
-        document_ids = [doc["document_id"] for doc in documents_result.data] if documents_result.data else []
-        
+
+        document_ids = (
+            [doc["document_id"] for doc in documents_result.data]
+            if documents_result.data
+            else []
+        )
+
         # Get document details
         document_status = {}
         if document_ids:
@@ -314,36 +326,68 @@ async def get_indexing_run_progress(
                 .in_("id", document_ids)
                 .execute()
             )
-            
+
             for doc in documents_result.data:
                 doc_id = doc["id"]
                 step_results = doc.get("step_results", {})
-                
+
                 # Determine document status based on step results
-                completed_steps = len([step for step in step_results.values() 
-                                    if step.get("status") == "completed"])
+                completed_steps = len(
+                    [
+                        step
+                        for step in step_results.values()
+                        if step.get("status") == "completed"
+                    ]
+                )
                 total_steps = 5  # partition, metadata, enrichment, chunking, embedding
-                
+
                 document_status[doc_id] = {
                     "filename": doc["filename"],
                     "completed_steps": completed_steps,
                     "total_steps": total_steps,
-                    "progress_percentage": (completed_steps / total_steps * 100) if total_steps > 0 else 0,
+                    "progress_percentage": (
+                        (completed_steps / total_steps * 100) if total_steps > 0 else 0
+                    ),
                     "current_step": _get_current_step(step_results),
-                    "step_results": step_results
+                    "step_results": step_results,
                 }
 
         # Calculate overall progress
         total_docs = len(document_status)
-        completed_docs = sum(1 for status in document_status.values() 
-                           if status["progress_percentage"] >= 100)
-        
+        completed_docs = sum(
+            1
+            for status in document_status.values()
+            if status["progress_percentage"] >= 100
+        )
+
         # Get step results from the run
         step_results = run.step_results or {}
-        completed_run_steps = len([step for step in step_results.values() 
-                                 if step.get("status") == "completed"])
+        # Convert Pydantic models to dictionaries if needed
+        if step_results and hasattr(next(iter(step_results.values())), 'status'):
+            # These are Pydantic models, convert to dict
+            step_results_dict = {
+                step_name: {
+                    "status": step.status,
+                    "duration_seconds": step.duration_seconds,
+                    "summary_stats": step.summary_stats,
+                    "completed_at": step.completed_at.isoformat() if step.completed_at else None,
+                    "error_message": step.error_message if hasattr(step, 'error_message') else None
+                }
+                for step_name, step in step_results.items()
+            }
+        else:
+            # These are already dictionaries
+            step_results_dict = step_results
+            
+        completed_run_steps = len(
+            [
+                step
+                for step in step_results_dict.values()
+                if step.get("status") == "completed"
+            ]
+        )
         total_run_steps = 6  # Including the final batch embedding step
-        
+
         return {
             "run_id": str(run_id),
             "status": run.status,
@@ -351,18 +395,24 @@ async def get_indexing_run_progress(
             "progress": {
                 "documents_processed": completed_docs,
                 "total_documents": total_docs,
-                "documents_percentage": (completed_docs / total_docs * 100) if total_docs > 0 else 0,
+                "documents_percentage": (
+                    (completed_docs / total_docs * 100) if total_docs > 0 else 0
+                ),
                 "run_steps_completed": completed_run_steps,
                 "total_run_steps": total_run_steps,
-                "run_steps_percentage": (completed_run_steps / total_run_steps * 100) if total_run_steps > 0 else 0
+                "run_steps_percentage": (
+                    (completed_run_steps / total_run_steps * 100)
+                    if total_run_steps > 0
+                    else 0
+                ),
             },
             "document_status": document_status,
-            "step_results": step_results,
+            "step_results": step_results_dict,
             "started_at": run.started_at.isoformat() if run.started_at else None,
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-            "error_message": run.error_message
+            "error_message": run.error_message,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get indexing run progress: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -372,7 +422,7 @@ def _get_current_step(step_results: dict) -> str:
     """Helper function to determine the current step for a document"""
     if not step_results:
         return "waiting"
-    
+
     # Check steps in order
     steps = ["partition", "metadata", "enrichment", "chunking", "embedding"]
     for step in steps:
@@ -380,7 +430,7 @@ def _get_current_step(step_results: dict) -> str:
             return step
         if step_results[step].get("status") != "completed":
             return step
-    
+
     return "completed"
 
 
