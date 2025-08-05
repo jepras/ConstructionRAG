@@ -52,14 +52,19 @@ class ProgressTracker:
                 return
 
             current_step_results = current_result.data[0].get("step_results", {})
-            
+
             # Add the new step result
             current_step_results[step] = {
+                "step": step,  # Add the required step field
                 "status": status,
                 "duration_seconds": result.duration_seconds,
                 "summary_stats": result.summary_stats,
-                "completed_at": result.completed_at.isoformat() if result.completed_at else None,
-                "error_message": result.error_message if hasattr(result, 'error_message') else None
+                "completed_at": (
+                    result.completed_at.isoformat() if result.completed_at else None
+                ),
+                "error_message": (
+                    result.error_message if hasattr(result, "error_message") else None
+                ),
             }
 
             # Update the step_results field
@@ -93,9 +98,13 @@ class ProgressTracker:
             }
 
             if status == "completed":
-                print(f"✅ Step {step} completed for run {self.run_id} ({result.duration_seconds:.1f}s)")
+                print(
+                    f"✅ Step {step} completed for run {self.run_id} ({result.duration_seconds:.1f}s)"
+                )
             elif status == "failed":
-                print(f"❌ Step {step} failed for run {self.run_id}: {result.error_message if hasattr(result, 'error_message') else 'Unknown error'}")
+                print(
+                    f"❌ Step {step} failed for run {self.run_id}: {result.error_message if hasattr(result, 'error_message') else 'Unknown error'}"
+                )
             else:
                 print(f"🔄 Step {step} {status} for run {self.run_id}")
 
@@ -111,11 +120,13 @@ class ProgressTracker:
             # Update indexing_runs table to mark as failed
             update_result = (
                 self.db.table("indexing_runs")
-                .update({
-                    "status": "failed",
-                    "error_message": error_message,
-                    "completed_at": datetime.utcnow().isoformat()
-                })
+                .update(
+                    {
+                        "status": "failed",
+                        "error_message": error_message,
+                        "completed_at": datetime.utcnow().isoformat(),
+                    }
+                )
                 .eq("id", str(self.run_id))
                 .execute()
             )
@@ -124,7 +135,9 @@ class ProgressTracker:
                 print(f"❌ Failed to mark pipeline as failed for run {self.run_id}")
                 return
 
-            print(f"❌ Marked pipeline as failed for run {self.run_id}: {error_message}")
+            print(
+                f"❌ Marked pipeline as failed for run {self.run_id}: {error_message}"
+            )
 
         except Exception as e:
             print(f"❌ Failed to mark pipeline as failed: {e}")
