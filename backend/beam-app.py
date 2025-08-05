@@ -44,92 +44,51 @@ async def run_indexing_pipeline_on_beam(
     try:
         print(f"🚀 Starting Beam indexing pipeline for run: {indexing_run_id}")
         print(f"📄 Processing {len(document_ids)} documents")
-        print(f"🔍 Input parameters - user_id: {user_id}, project_id: {project_id}")
-        print(f"🔍 Document IDs: {document_ids}")
 
         # Initialize services
-        print("🔧 Initializing Supabase connection...")
+        print("🔧 Initializing services...")
         db = get_supabase_admin_client()
-        print("✅ Supabase admin client initialized")
+        storage_service = StorageService()
+        print("✅ Services initialized")
 
-        # Test database connection and access to all tables
+        # Quick database connectivity test
         try:
-            print("🔍 Testing database connection and table access...")
-            
-            # Test documents table
-            test_docs = db.table("documents").select("id").limit(1).execute()
-            print(f"✅ Documents table access: {len(test_docs.data)} rows")
-            
-            # Test indexing_runs table
-            test_runs = db.table("indexing_runs").select("id").limit(5).execute()
-            print(f"✅ Indexing runs table access: {len(test_runs.data)} rows")
-            if test_runs.data:
-                print(f"📊 Available indexing run IDs: {[run.get('id') for run in test_runs.data]}")
-            
-            # Test indexing_run_documents table
-            test_junction = db.table("indexing_run_documents").select("indexing_run_id, document_id").limit(5).execute()
-            print(f"✅ Junction table access: {len(test_junction.data)} rows")
-            if test_junction.data:
-                print(f"📊 Available junction entries: {test_junction.data}")
-            
-            # Test specific indexing run lookup
-            print(f"🔍 Testing specific lookup for: {indexing_run_id}")
-            specific_run = db.table("indexing_runs").select("*").eq("id", str(indexing_run_id)).execute()
-            print(f"📊 Specific run lookup result: {len(specific_run.data)} rows")
-            if specific_run.data:
-                print(f"📊 Found run: {specific_run.data[0]}")
-            else:
-                print(f"❌ Run {indexing_run_id} not found in database")
-                
+            test_run = (
+                db.table("indexing_runs")
+                .select("id")
+                .eq("id", str(indexing_run_id))
+                .execute()
+            )
+            if not test_run.data:
+                print(f"❌ Indexing run {indexing_run_id} not found in database")
+                return {
+                    "status": "failed",
+                    "indexing_run_id": indexing_run_id,
+                    "error": f"Indexing run {indexing_run_id} not found",
+                }
+            print(f"✅ Found indexing run: {indexing_run_id}")
         except Exception as db_error:
             print(f"❌ Database connection failed: {db_error}")
-            print(f"❌ Error type: {type(db_error)}")
-            import traceback
-            print(f"❌ Full traceback: {traceback.format_exc()}")
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
                 "error": f"Database connection failed: {str(db_error)}",
             }
 
-        print("🔧 Initializing storage service...")
-        storage_service = StorageService()
-        print("✅ Storage service initialized")
-
         # Create document inputs for the pipeline
         document_inputs = []
-        print(f"🔍 Fetching document data for {len(document_ids)} documents...")
+        print(f"📋 Preparing {len(document_ids)} documents...")
 
         for i, doc_id in enumerate(document_ids):
-            print(f"📄 Processing document {i+1}/{len(document_ids)}: {doc_id}")
-
-            # Fetch document info from database
             try:
-                print(f"🔍 Fetching document data for ID: {doc_id}")
                 doc_result = (
                     db.table("documents").select("*").eq("id", doc_id).execute()
                 )
-                print(f"📊 Document query result: {len(doc_result.data)} rows returned")
-
                 if not doc_result.data:
-                    print(f"❌ Document {doc_id} not found in database")
+                    print(f"❌ Document {doc_id} not found")
                     continue
 
                 doc_data = doc_result.data[0]
-                print(f"📋 Document data keys: {list(doc_data.keys())}")
-                print(f"📋 Document filename: {doc_data.get('filename', 'N/A')}")
-                print(f"📋 Document file_path: {doc_data.get('file_path', 'N/A')}")
-
-                # Validate UUIDs before creating DocumentInput
-                print(f"🔍 Validating UUIDs...")
-                print(f"  - doc_id: {doc_id} (type: {type(doc_id)})")
-                print(
-                    f"  - indexing_run_id: {indexing_run_id} (type: {type(indexing_run_id)})"
-                )
-                print(f"  - user_id: {user_id} (type: {type(user_id)})")
-                print(f"  - project_id: {project_id} (type: {type(project_id)})")
-
-                # Create document input for pipeline - let the orchestrator handle validation
                 document_input = DocumentInput(
                     document_id=UUID(doc_id),
                     run_id=UUID(indexing_run_id),
@@ -144,11 +103,9 @@ async def run_indexing_pipeline_on_beam(
                     metadata={"project_id": str(project_id)} if project_id else {},
                 )
                 document_inputs.append(document_input)
-                print(f"✅ Successfully created DocumentInput for document {doc_id}")
 
             except Exception as doc_error:
                 print(f"❌ Error processing document {doc_id}: {doc_error}")
-                print(f"❌ Error type: {type(doc_error)}")
                 continue
 
         if not document_inputs:
@@ -159,36 +116,29 @@ async def run_indexing_pipeline_on_beam(
                 "indexing_run_id": indexing_run_id,
             }
 
-        print(f"✅ Successfully created {len(document_inputs)} DocumentInput objects")
+        print(f"✅ Prepared {len(document_inputs)} documents")
 
         # Initialize orchestrator
-        print("🔧 Initializing IndexingOrchestrator...")
+        print("🔧 Initializing orchestrator...")
         orchestrator = IndexingOrchestrator(
             db=db,
             storage=storage_service,
             use_test_storage=False,
             upload_type=(UploadType.EMAIL if not user_id else UploadType.USER_PROJECT),
         )
-        print("✅ IndexingOrchestrator initialized")
+        print("✅ Orchestrator ready")
 
-        # Process documents using the unified method - use existing indexing run
-        print(
-            f"🔄 Starting unified document processing for {len(document_inputs)} documents"
-        )
-        print(
-            f"🔄 Calling orchestrator.process_documents with existing_indexing_run_id: {indexing_run_id}"
-        )
-
+        # Process documents using the unified method
+        print(f"🔄 Starting document processing...")
         try:
             success = await orchestrator.process_documents(
                 document_inputs, existing_indexing_run_id=UUID(indexing_run_id)
             )
             print(
-                f"🔄 Orchestrator.process_documents completed with success: {success}"
+                f"🔄 Processing completed: {'✅ Success' if success else '❌ Failed'}"
             )
         except Exception as orchestrator_error:
-            print(f"❌ Error in orchestrator.process_documents: {orchestrator_error}")
-            print(f"❌ Error type: {type(orchestrator_error)}")
+            print(f"❌ Orchestrator error: {orchestrator_error}")
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
@@ -196,9 +146,7 @@ async def run_indexing_pipeline_on_beam(
             }
 
         if success:
-            print(
-                f"✅ Indexing pipeline completed successfully for run: {indexing_run_id}"
-            )
+            print(f"✅ Indexing pipeline completed successfully")
             return {
                 "status": "completed",
                 "indexing_run_id": indexing_run_id,
@@ -206,7 +154,7 @@ async def run_indexing_pipeline_on_beam(
                 "message": "Indexing pipeline completed successfully",
             }
         else:
-            print(f"❌ Indexing pipeline failed for run: {indexing_run_id}")
+            print(f"❌ Indexing pipeline failed")
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
@@ -215,7 +163,7 @@ async def run_indexing_pipeline_on_beam(
             }
 
     except Exception as e:
-        print(f"💥 Critical error in Beam indexing pipeline: {e}")
+        print(f"💥 Critical error: {e}")
         return {
             "status": "failed",
             "error": str(e),
