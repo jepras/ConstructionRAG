@@ -280,6 +280,110 @@ async def get_indexing_run_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/indexing/runs/{run_id}/progress", response_model=Dict[str, Any])
+async def get_indexing_run_progress(
+    run_id: UUID,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    pipeline_service: PipelineService = Depends(
+        lambda: PipelineService(use_admin_client=True)
+    ),
+):
+    """Get detailed progress information for an indexing run."""
+    try:
+        # Get basic run info
+        run = await pipeline_service.get_indexing_run(run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Indexing run not found")
+
+        # Get documents associated with this run
+        documents_result = (
+            pipeline_service.supabase.table("indexing_run_documents")
+            .select("document_id")
+            .eq("indexing_run_id", str(run_id))
+            .execute()
+        )
+        
+        document_ids = [doc["document_id"] for doc in documents_result.data] if documents_result.data else []
+        
+        # Get document details
+        document_status = {}
+        if document_ids:
+            documents_result = (
+                pipeline_service.supabase.table("documents")
+                .select("id, filename, step_results")
+                .in_("id", document_ids)
+                .execute()
+            )
+            
+            for doc in documents_result.data:
+                doc_id = doc["id"]
+                step_results = doc.get("step_results", {})
+                
+                # Determine document status based on step results
+                completed_steps = len([step for step in step_results.values() 
+                                    if step.get("status") == "completed"])
+                total_steps = 5  # partition, metadata, enrichment, chunking, embedding
+                
+                document_status[doc_id] = {
+                    "filename": doc["filename"],
+                    "completed_steps": completed_steps,
+                    "total_steps": total_steps,
+                    "progress_percentage": (completed_steps / total_steps * 100) if total_steps > 0 else 0,
+                    "current_step": _get_current_step(step_results),
+                    "step_results": step_results
+                }
+
+        # Calculate overall progress
+        total_docs = len(document_status)
+        completed_docs = sum(1 for status in document_status.values() 
+                           if status["progress_percentage"] >= 100)
+        
+        # Get step results from the run
+        step_results = run.step_results or {}
+        completed_run_steps = len([step for step in step_results.values() 
+                                 if step.get("status") == "completed"])
+        total_run_steps = 6  # Including the final batch embedding step
+        
+        return {
+            "run_id": str(run_id),
+            "status": run.status,
+            "upload_type": run.upload_type,
+            "progress": {
+                "documents_processed": completed_docs,
+                "total_documents": total_docs,
+                "documents_percentage": (completed_docs / total_docs * 100) if total_docs > 0 else 0,
+                "run_steps_completed": completed_run_steps,
+                "total_run_steps": total_run_steps,
+                "run_steps_percentage": (completed_run_steps / total_run_steps * 100) if total_run_steps > 0 else 0
+            },
+            "document_status": document_status,
+            "step_results": step_results,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "error_message": run.error_message
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get indexing run progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _get_current_step(step_results: dict) -> str:
+    """Helper function to determine the current step for a document"""
+    if not step_results:
+        return "waiting"
+    
+    # Check steps in order
+    steps = ["partition", "metadata", "enrichment", "chunking", "embedding"]
+    for step in steps:
+        if step not in step_results:
+            return step
+        if step_results[step].get("status") != "completed":
+            return step
+    
+    return "completed"
+
+
 @router.get("/indexing/runs/{run_id}/steps/{step_name}", response_model=Dict[str, Any])
 async def get_step_result(
     run_id: UUID,

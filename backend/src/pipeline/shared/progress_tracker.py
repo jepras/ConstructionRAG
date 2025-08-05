@@ -39,21 +39,45 @@ class ProgressTracker:
             return
 
         try:
-            # Update step_results in indexing_runs table
-            step_key = f"{{{step}}}"
-            step_data = result.dict()
+            # Get current step_results from database
+            current_result = (
+                self.db.table("indexing_runs")
+                .select("step_results")
+                .eq("id", str(self.run_id))
+                .execute()
+            )
 
-            # This would be the actual database update
-            # await self.db.execute(
-            #     "UPDATE indexing_runs SET step_results = jsonb_set(step_results, $1, $2) WHERE id = $3",
-            #     step_key, step_data, self.run_id
-            # )
+            if not current_result.data:
+                print(f"❌ Indexing run {self.run_id} not found for step update")
+                return
 
-            # Placeholder for actual implementation
-            logger.info(f"Updated run status for step {step}")
+            current_step_results = current_result.data[0].get("step_results", {})
+            
+            # Add the new step result
+            current_step_results[step] = {
+                "status": status,
+                "duration_seconds": result.duration_seconds,
+                "summary_stats": result.summary_stats,
+                "completed_at": result.completed_at.isoformat() if result.completed_at else None,
+                "error_message": result.error_message if hasattr(result, 'error_message') else None
+            }
+
+            # Update the step_results field
+            update_result = (
+                self.db.table("indexing_runs")
+                .update({"step_results": current_step_results})
+                .eq("id", str(self.run_id))
+                .execute()
+            )
+
+            if not update_result.data:
+                print(f"❌ Failed to update step results for run {self.run_id}")
+                return
+
+            print(f"✅ Updated step results for {step} in run {self.run_id}")
 
         except Exception as e:
-            logger.error(f"Failed to update run status: {e}")
+            print(f"❌ Failed to update run status: {e}")
 
     async def log_progress_async(self, step: str, status: str, result: StepResult):
         """Async structured logging for progress updates"""
@@ -69,14 +93,14 @@ class ProgressTracker:
             }
 
             if status == "completed":
-                logger.info("Step progress updated", extra=log_data)
+                print(f"✅ Step {step} completed for run {self.run_id} ({result.duration_seconds:.1f}s)")
             elif status == "failed":
-                logger.error("Step failed", extra=log_data)
+                print(f"❌ Step {step} failed for run {self.run_id}: {result.error_message if hasattr(result, 'error_message') else 'Unknown error'}")
             else:
-                logger.info("Step progress updated", extra=log_data)
+                print(f"🔄 Step {step} {status} for run {self.run_id}")
 
         except Exception as e:
-            logger.error(f"Failed to log progress: {e}")
+            print(f"❌ Failed to log progress: {e}")
 
     async def mark_pipeline_failed_async(self, error_message: str):
         """Async failure marking"""
@@ -85,16 +109,25 @@ class ProgressTracker:
 
         try:
             # Update indexing_runs table to mark as failed
-            # await self.db.execute(
-            #     "UPDATE indexing_runs SET status = 'failed', error_message = $1 WHERE id = $2",
-            #     error_message, self.run_id
-            # )
+            update_result = (
+                self.db.table("indexing_runs")
+                .update({
+                    "status": "failed",
+                    "error_message": error_message,
+                    "completed_at": datetime.utcnow().isoformat()
+                })
+                .eq("id", str(self.run_id))
+                .execute()
+            )
 
-            # Placeholder for actual implementation
-            logger.error(f"Pipeline failed: {error_message}")
+            if not update_result.data:
+                print(f"❌ Failed to mark pipeline as failed for run {self.run_id}")
+                return
+
+            print(f"❌ Marked pipeline as failed for run {self.run_id}: {error_message}")
 
         except Exception as e:
-            logger.error(f"Failed to mark pipeline as failed: {e}")
+            print(f"❌ Failed to mark pipeline as failed: {e}")
 
     async def get_progress_summary_async(self) -> Dict[str, Any]:
         """Get current progress summary"""

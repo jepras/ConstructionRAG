@@ -532,9 +532,7 @@ class IndexingOrchestrator:
 
         for i in range(0, len(document_inputs), max_concurrent):
             batch = document_inputs[i : i + max_concurrent]
-            logger.info(
-                f"Processing batch {i//max_concurrent + 1}: {len(batch)} documents"
-            )
+            print(f"🔄 Processing batch {i//max_concurrent + 1}: {len(batch)} documents")
 
             # Process batch in parallel
             tasks = []
@@ -574,9 +572,7 @@ class IndexingOrchestrator:
             for step in self.steps[:-1]:  # Exclude embedding step
                 step_executor = StepExecutor(step, progress_tracker)
 
-                logger.info(
-                    f"Processing {step.get_step_name()} for document {document_input.document_id}"
-                )
+                print(f"📄 Processing {step.get_step_name()} for document {document_input.document_id}")
 
                 # Special handling for steps that need run information
                 if isinstance(step, ChunkingStep):
@@ -601,9 +597,7 @@ class IndexingOrchestrator:
 
                 current_data = result
 
-            logger.info(
-                f"Successfully completed individual steps for document {document_input.document_id}"
-            )
+            print(f"✅ Completed individual steps for document {document_input.document_id}")
             return True
 
         except Exception as e:
