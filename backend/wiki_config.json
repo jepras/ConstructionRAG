@@ -1,0 +1,23 @@
+{
+  "vector_search": {
+    "similarity_threshold": 0.7,
+    "max_chunks_per_query": 10,
+    "overview_query_count": 12
+  },
+  "semantic_clustering": {
+    "min_clusters": 4,
+    "max_clusters": 10,
+    "random_seed": 42
+  },
+  "llm_generation": {
+    "overview_max_tokens": 2000,
+    "structure_max_tokens": 3000,
+    "page_max_tokens": 4000,
+    "temperature": 0.3
+  },
+  "output": {
+    "max_chunks_in_prompt": 15,
+    "content_preview_length": 800,
+    "save_intermediate_results": true
+  }
+}
