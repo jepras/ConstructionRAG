@@ -497,99 +497,114 @@ Generer projektoversigten på dansk:"""
             
             return dummy_overview
     
-    def generate_cluster_name(self, text: str, cluster_id: int, used_names: set = None) -> str:
-        """Generate meaningful cluster name based on content with uniqueness."""
-        if used_names is None:
-            used_names = set()
+    def generate_cluster_names_llm(self, cluster_summaries: List[Dict[str, Any]]) -> Dict[int, str]:
+        """Generate meaningful cluster names using LLM based on cluster content samples."""
+        print(f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger...")
+        
+        # Prepare cluster samples for LLM
+        cluster_samples = []
+        for summary in cluster_summaries:
+            cluster_id = summary["cluster_id"]
+            sample_content = summary.get("sample_content", [])
             
-        # Danish construction terms to identify themes with more granular categories
-        construction_themes = {
-            "el_installation": ["elektrisk", "el-", "installation", "kabel", "stik", "ledning", "strøm", "el ", "elektro"],
-            "el_system": ["elinstallation", "elsystem", "hovedbord", "fordeling", "sikring", "jordforbindelse"],
-            "tegning_plan": ["plantegning", "plan", "grundplan", "etageplan", "situationsplan"],
-            "tegning_snit": ["snit", "tværsnit", "længdesnit", "facade", "opstalt", "detalje"],  
-            "sikkerhed_brand": ["brandsikkerhed", "branddetektorer", "sprinkler", "brandvæg", "flugtplan"],
-            "sikkerhed_adgang": ["adgangskontrol", "dørtelefon", "kort", "låsning", "nøgle", "sikkerhedssystem"],
-            "bygning_struktur": ["bærende", "konstruktion", "fundament", "etage", "dæk", "søjle", "bjælke"],
-            "bygning_rum": ["rum", "lokale", "kælder", "loft", "toilet", "køkken", "kontor"],
-            "materiale_beton": ["beton", "armering", "støbning", "betonkvalitet", "cement"],
-            "materiale_staal": ["stål", "profiler", "svejsning", "galvaniseret", "korrosion"],
-            "materiale_byg": ["murværk", "tegl", "isolering", "tagmateriale", "vinduer", "døre"],
-            "ventilation_luft": ["ventilation", "luft", "luftskifte", "kanal", "ventilator"],
-            "ventilation_vvs": ["vvs", "varme", "vand", "afløb", "radiator", "pumpe", "kedel"],
-            "projekt_plan": ["projektplan", "tidsplan", "milepæl", "fase", "deadline", "planlægning"],
-            "projekt_kontrakt": ["kontrakt", "udbud", "tilbud", "pris", "betaling", "leverandør"],
-            "kvalitet": ["kvalitet", "kontrol", "inspektion", "test", "godkendelse", "certifikat"],
-            "miljø": ["miljø", "bæredygtig", "energi", "affald", "genanvendelse", "klima"]
-        }
+            # Combine sample content into a representative text
+            combined_sample = " | ".join(sample_content)
+            cluster_samples.append({
+                "cluster_id": cluster_id,
+                "sample_text": combined_sample[:800]  # Limit to avoid token overflow
+            })
         
-        # Find most relevant themes with scores
-        theme_scores = {}
-        for theme, keywords in construction_themes.items():
-            score = sum(text.lower().count(keyword.lower()) for keyword in keywords)
-            if score > 0:  # Only consider themes with actual matches
-                theme_scores[theme] = score
+        # Create prompt for LLM to generate names
+        samples_text = "\n".join([
+            f"Klynge {item['cluster_id']}: {item['sample_text']}"
+            for item in cluster_samples
+        ])
         
-        # Sort themes by score (highest first)
-        sorted_themes = sorted(theme_scores.items(), key=lambda x: x[1], reverse=True)
-        
-        # Theme name mappings with more specific names
-        theme_names = {
-            "el_installation": "Elektriske Installationer",
-            "el_system": "El-systemer og Fordelinger", 
-            "tegning_plan": "Plantegninger og Layouts",
-            "tegning_snit": "Tegninger og Detaljer",
-            "sikkerhed_brand": "Brandsikkerhed",
-            "sikkerhed_adgang": "Adgangskontrol og Sikring",
-            "bygning_struktur": "Bygningskonstruktion", 
-            "bygning_rum": "Rum og Faciliteter",
-            "materiale_beton": "Beton og Armering",
-            "materiale_staal": "Stålkonstruktioner",
-            "materiale_byg": "Byggematerialer",
-            "ventilation_luft": "Ventilationssystemer",
-            "ventilation_vvs": "VVS-installationer",
-            "projekt_plan": "Projektplanlægning",
-            "projekt_kontrakt": "Kontrakt og Økonomi", 
-            "kvalitet": "Kvalitetssikring",
-            "miljø": "Miljø og Bæredygtighed"
-        }
-        
-        # Try to find unique theme name
-        for theme, score in sorted_themes:
-            candidate_name = theme_names.get(theme, f"Specialområde {cluster_id}")
-            if candidate_name not in used_names:
-                used_names.add(candidate_name)
-                return candidate_name
-        
-        # Fallback: create unique generic name
-        generic_names = [
-            "Tekniske Specifikationer",
-            "Projektdokumentation", 
-            "Bygningskomponenter",
-            "Systemintegration",
-            "Udførselsdetaljer",
-            "Driftsforhold",
-            "Leverandørdokumentation",
-            "Godkendelsesprocedurer"
-        ]
-        
-        for generic_name in generic_names:
-            if generic_name not in used_names:
-                used_names.add(generic_name)
-                return generic_name
-        
-        # Final fallback with cluster ID
-        final_name = f"Temaområde {cluster_id}"
-        while final_name in used_names:
-            cluster_id += 1
-            final_name = f"Temaområde {cluster_id}"
-        
-        used_names.add(final_name)
-        return final_name
+        prompt = f"""Baseret på følgende dokumentindhold fra en byggeprojekt-database, generer korte, beskrivende navne for hver klynge.
+
+Navnene skal være:
+- Korte og præcise (2-4 ord)
+- Beskrivende for klyngens indhold
+- Professionelle og faglige
+- På dansk
+- Unikke (ingen gentagelser)
+
+Dokumentklynger:
+{samples_text}
+
+Generer navne i følgende format:
+Klynge 0: [Navn]
+Klynge 1: [Navn]
+...
+
+Svar kun med navnene i det specificerede format."""
+
+        try:
+            start_time = time.time()
+            llm_response = self.call_openrouter_api(prompt, max_tokens=500)
+            end_time = time.time()
+            
+            print(f"LLM klyngenavne genereret på {end_time - start_time:.1f} sekunder")
+            
+            # Parse the response to extract cluster names
+            cluster_names = {}
+            for line in llm_response.strip().split('\n'):
+                if ':' in line and 'Klynge' in line:
+                    try:
+                        parts = line.split(':', 1)
+                        if len(parts) == 2:
+                            cluster_part = parts[0].strip()
+                            name_part = parts[1].strip()
+                            
+                            # Extract cluster ID from "Klynge X" format
+                            cluster_id = int(cluster_part.split()[-1])
+                            cluster_names[cluster_id] = name_part
+                            
+                    except (ValueError, IndexError) as e:
+                        print(f"⚠️  Kunne ikke parse linje: '{line}' - {e}")
+                        continue
+            
+            print(f"Parset {len(cluster_names)} klyngenavne fra LLM respons")
+            
+            # Fallback for missing names
+            for summary in cluster_summaries:
+                cluster_id = summary["cluster_id"]
+                if cluster_id not in cluster_names:
+                    fallback_name = f"Temaområde {cluster_id}"
+                    cluster_names[cluster_id] = fallback_name
+                    print(f"  Bruger fallback navn for klynge {cluster_id}: {fallback_name}")
+            
+            return cluster_names
+            
+        except Exception as e:
+            print(f"⚠️  LLM klyngenavn generering fejlede: {str(e)}")
+            print(f"⚠️  Falder tilbage til generiske navne...")
+            
+            # Fallback to generic names
+            generic_names = [
+                "Tekniske Specifikationer",
+                "Projektdokumentation", 
+                "Bygningskomponenter",
+                "Systeminstallationer",
+                "Udførselsdetaljer",
+                "Drifts- og Vedligehold",
+                "Kvalitetssikring",
+                "Sikkerhedsforhold"
+            ]
+            
+            cluster_names = {}
+            for i, summary in enumerate(cluster_summaries):
+                cluster_id = summary["cluster_id"]
+                if i < len(generic_names):
+                    cluster_names[cluster_id] = generic_names[i]
+                else:
+                    cluster_names[cluster_id] = f"Temaområde {cluster_id}"
+            
+            return cluster_names
     
     def semantic_clustering(self, chunks: List[Dict]) -> Dict[str, Any]:
-        """Step 4: SEMANTIC ANALYSIS - Perform semantic clustering to identify 4-10 main topics."""
-        print(f"Trin 4: Udfører semantisk clustering for emneidentifikation...")
+        """Step 4: SEMANTIC ANALYSIS - Perform semantic clustering and LLM-based naming to identify 4-10 main topics."""
+        print(f"Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation...")
         
         # Filter chunks with embeddings
         chunks_with_embeddings = [
@@ -634,8 +649,7 @@ Generer projektoversigten på dansk:"""
         for i, label in enumerate(cluster_labels):
             clusters[label].append(chunks_with_embeddings[i])
         
-        # Create cluster summaries with meaningful names - track used names for uniqueness
-        used_names = set()
+        # Create initial cluster summaries with sample content (without names yet)
         cluster_summaries = []
         for cluster_id, cluster_chunks in clusters.items():
             # Sample content for summary
@@ -644,18 +658,21 @@ Generer projektoversigten på dansk:"""
                 content_preview = chunk.get("content", "")[:150]
                 sample_content.append(content_preview)
             
-            # Generate cluster name based on most common terms with uniqueness
-            all_text = " ".join([chunk.get("content", "") for chunk in cluster_chunks[:10]]).lower()
-            cluster_name = self.generate_cluster_name(all_text, int(cluster_id), used_names)
-            
             cluster_summary = {
                 "cluster_id": int(cluster_id),  # Convert numpy int32 to Python int
-                "cluster_name": cluster_name,
                 "chunk_count": len(cluster_chunks),
                 "sample_content": sample_content,
                 "representative_content": " | ".join(sample_content)
             }
             cluster_summaries.append(cluster_summary)
+        
+        # Generate cluster names using LLM
+        cluster_names = self.generate_cluster_names_llm(cluster_summaries)
+        
+        # Add the generated names to summaries
+        for summary in cluster_summaries:
+            cluster_id = summary["cluster_id"]
+            summary["cluster_name"] = cluster_names.get(cluster_id, f"Temaområde {cluster_id}")
         
         print(f"Klynger oprettet:")
         for summary in cluster_summaries:
@@ -827,8 +844,9 @@ Generer projektoversigten på dansk:"""
                 if line.strip():
                     print(f"    {line[:80]}...")
             
-            print(f"\nTrin 4 - Semantisk analyse:")
+            print(f"\nTrin 4 - Semantisk analyse med LLM navngivning:")
             print(f"  Antal klynger: {semantic_analysis['n_clusters']}")
+            print(f"  LLM-genererede navne:")
             for summary in semantic_analysis['cluster_summaries'][:3]:
                 print(f"    {summary['cluster_name']}: {summary['chunk_count']} chunks")
             

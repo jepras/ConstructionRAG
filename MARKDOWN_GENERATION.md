@@ -232,6 +232,13 @@ IMPORTANT: You MUST cite AT LEAST 5 different source documents throughout the wi
 
 8. **Construction Professional Language:** Use clear, professional, and concise technical language suitable for project managers, contractors, architects, engineers, inspectors, and other construction professionals working on or learning about the project. Use correct construction and engineering terminology, including Danish construction terms when they appear in the source documents.
 
+9. **Image/table summaries:** If some of the sources you retrieve are tables and images, then list them in a table format like below: 
+
+| Tegning | Område | Beskrivelse |
+| :--- | :--- | :--- |
+| `112727-01_K07_H1_EK_61.101` | Kælder | Viser placering af hovedtavle (HT) og hovedkrydsfelt (HX). |
+| `112727-01_K07_H1_E0_61.102` | Stueetage | Føringsveje i fællesrum, café og multirum. |
+
 9. **Conclusion/Summary:** End with a brief summary paragraph if appropriate for "${page.title}", reiterating the key aspects covered, critical deadlines, major deliverables, and their significance within the overall construction project.
 
 IMPORTANT: Generate the content in Danish language.
