@@ -98,10 +98,16 @@ try:
 except Exception as e:
     raise
 
+try:
+    from src.api import wiki
+except Exception as e:
+    raise
+
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])
 app.include_router(queries.router, prefix="/api", tags=["Queries"])
 app.include_router(documents.router, tags=["Documents"])
+app.include_router(wiki.router, prefix="/api", tags=["Wiki"])
 
 if __name__ == "__main__":
     settings = get_settings()

@@ -3,7 +3,7 @@
 import os
 import asyncio
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from uuid import UUID
 import logging
 from enum import Enum
@@ -293,6 +293,273 @@ class StorageService:
         except Exception as e:
             logger.error(f"Failed to upload temp file: {e}")
             raise StorageError(f"Failed to upload temp file: {str(e)}")
+
+    async def upload_wiki_page(
+        self,
+        file_path: Optional[str],
+        filename: str,
+        wiki_run_id: UUID,
+        upload_type: UploadType,
+        user_id: Optional[UUID] = None,
+        project_id: Optional[UUID] = None,
+        index_run_id: Optional[UUID] = None,
+        content: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Upload a wiki page markdown file."""
+        try:
+            # Create storage path based on upload type
+            if upload_type == UploadType.EMAIL:
+                storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+            else:  # USER_PROJECT
+                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+
+            # If content is provided, create a temporary file
+            if content is not None:
+                import tempfile
+                import os
+
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".md", delete=False, encoding="utf-8"
+                ) as temp_file:
+                    temp_file.write(content)
+                    temp_file_path = temp_file.name
+
+                try:
+                    # Upload the temporary file
+                    url = await self.upload_file(
+                        temp_file_path, storage_path, "text/markdown"
+                    )
+                finally:
+                    # Clean up temporary file
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+            else:
+                # Upload file from path
+                url = await self.upload_file(file_path, storage_path, "text/markdown")
+
+            # Return metadata
+            return {
+                "url": url,
+                "storage_path": storage_path,
+                "filename": filename,
+                "wiki_run_id": str(wiki_run_id),
+                "upload_type": upload_type.value,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to upload wiki page: {e}")
+            raise StorageError(f"Failed to upload wiki page: {str(e)}")
+
+    async def upload_wiki_metadata(
+        self,
+        metadata_content: str,
+        wiki_run_id: UUID,
+        upload_type: UploadType,
+        user_id: Optional[UUID] = None,
+        project_id: Optional[UUID] = None,
+        index_run_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """Upload wiki metadata JSON file."""
+        try:
+            filename = "wiki_metadata.json"
+
+            # Create storage path based on upload type
+            if upload_type == UploadType.EMAIL:
+                storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+            else:  # USER_PROJECT
+                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+
+            # Create a temporary file with the JSON content
+            import tempfile
+            import os
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False, encoding="utf-8"
+            ) as temp_file:
+                temp_file.write(metadata_content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Use the existing upload_file method which handles content types properly
+                url = await self.upload_file(
+                    temp_file_path, storage_path, "text/markdown"
+                )
+
+                logger.info(
+                    f"Uploaded wiki metadata to storage: {storage_path} -> {url}"
+                )
+
+                # Return metadata
+                return {
+                    "url": url,
+                    "storage_path": storage_path,
+                    "filename": filename,
+                    "wiki_run_id": str(wiki_run_id),
+                    "upload_type": upload_type.value,
+                }
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+
+        except Exception as e:
+            logger.error(f"Failed to upload wiki metadata: {e}")
+            raise StorageError(f"Failed to upload wiki metadata: {str(e)}")
+
+    async def get_wiki_page_content(
+        self,
+        wiki_run_id: UUID,
+        filename: str,
+        upload_type: UploadType,
+        user_id: Optional[UUID] = None,
+        project_id: Optional[UUID] = None,
+        index_run_id: Optional[UUID] = None,
+    ) -> str:
+        """Get the content of a wiki page markdown file."""
+        try:
+            # Create storage path based on upload type
+            if upload_type == UploadType.EMAIL:
+                storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+            else:  # USER_PROJECT
+                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+
+            # Get file content
+            result = self.supabase.storage.from_(self.bucket_name).download(
+                storage_path
+            )
+
+            if result:
+                return result.decode("utf-8")
+            else:
+                raise StorageError(
+                    f"Failed to download wiki page content: {storage_path}"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to get wiki page content: {e}")
+            raise StorageError(f"Failed to get wiki page content: {str(e)}")
+
+    async def list_wiki_pages(
+        self,
+        wiki_run_id: UUID,
+        upload_type: UploadType,
+        user_id: Optional[UUID] = None,
+        project_id: Optional[UUID] = None,
+        index_run_id: Optional[UUID] = None,
+    ) -> List[Dict[str, Any]]:
+        """List all wiki pages for a specific wiki run."""
+        try:
+            # Create base path based on upload type
+            if upload_type == UploadType.EMAIL:
+                base_path = (
+                    f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
+                )
+            else:  # USER_PROJECT
+                base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
+
+            # List files in the wiki directory
+            files = await self.list_files(base_path)
+
+            # Filter for markdown files and metadata
+            wiki_files = []
+            for file_info in files:
+                if isinstance(file_info, dict) and "name" in file_info:
+                    filename = file_info["name"]
+                    if filename.endswith(".md") or filename == "wiki_metadata.json":
+                        wiki_files.append(
+                            {
+                                "filename": filename,
+                                "storage_path": f"{base_path}/{filename}",
+                                "size": file_info.get("size", 0),
+                                "created_at": file_info.get("created_at"),
+                            }
+                        )
+
+            return wiki_files
+
+        except Exception as e:
+            logger.error(f"Failed to list wiki pages: {e}")
+            raise StorageError(f"Failed to list wiki pages: {str(e)}")
+
+    async def create_wiki_storage_structure(
+        self,
+        wiki_run_id: UUID,
+        upload_type: UploadType,
+        user_id: Optional[UUID] = None,
+        project_id: Optional[UUID] = None,
+        index_run_id: Optional[UUID] = None,
+    ) -> bool:
+        """Create the storage folder structure for wiki generation."""
+        try:
+            if upload_type == UploadType.EMAIL:
+                # Create email upload wiki structure
+                base_path = (
+                    f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
+                )
+            else:  # USER_PROJECT
+                # Create user project wiki structure
+                base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
+
+            # Create the wiki directory structure
+            folders = [
+                base_path,
+                f"{base_path}/assets",  # For any additional assets
+            ]
+
+            logger.info(f"Wiki storage structure paths defined for {upload_type.value}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to create wiki storage structure: {e}")
+            return False
+
+    async def delete_wiki_run(
+        self,
+        wiki_run_id: UUID,
+        upload_type: UploadType,
+        user_id: Optional[UUID] = None,
+        project_id: Optional[UUID] = None,
+        index_run_id: Optional[UUID] = None,
+    ) -> bool:
+        """Delete entire wiki run directory and all its contents."""
+        try:
+            # Create base path based on upload type
+            if upload_type == UploadType.EMAIL:
+                base_path = (
+                    f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
+                )
+            else:  # USER_PROJECT
+                base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
+
+            # List all files in the wiki directory
+            files = await self.list_files(base_path)
+
+            if not files:
+                logger.info(f"No files found in wiki directory: {base_path}")
+                return True
+
+            # Extract file paths from the list
+            file_paths = []
+            for file_info in files:
+                if isinstance(file_info, dict) and "name" in file_info:
+                    file_paths.append(f"{base_path}/{file_info['name']}")
+                elif isinstance(file_info, str):
+                    file_paths.append(f"{base_path}/{file_info}")
+
+            # Delete all files
+            if file_paths:
+                result = self.supabase.storage.from_(self.bucket_name).remove(
+                    file_paths
+                )
+                logger.info(
+                    f"Deleted {len(file_paths)} files from wiki directory: {base_path}"
+                )
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete wiki run directory: {e}")
+            return False
 
     async def create_storage_structure(
         self,

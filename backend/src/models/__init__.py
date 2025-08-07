@@ -28,6 +28,14 @@ from .pipeline import (
     QueryRunUpdate,
     UserConfigOverrideCreate,
     UserConfigOverrideUpdate,
+    # Wiki generation models
+    WikiGenerationStatus,
+    WikiPageMetadata,
+    WikiGenerationRun,
+    WikiGenerationRunCreate,
+    WikiGenerationRunUpdate,
+    WikiPageMetadataCreate,
+    WikiPageMetadataUpdate,
 )
 from .query import (
     Query,
@@ -70,6 +78,14 @@ __all__ = [
     "QueryRunUpdate",
     "UserConfigOverrideCreate",
     "UserConfigOverrideUpdate",
+    # Wiki Generation models
+    "WikiGenerationStatus",
+    "WikiPageMetadata",
+    "WikiGenerationRun",
+    "WikiGenerationRunCreate",
+    "WikiGenerationRunUpdate",
+    "WikiPageMetadataCreate",
+    "WikiPageMetadataUpdate",
     # Query models
     "Query",
     "QueryResponse",

@@ -15,6 +15,15 @@ logger = get_logger(__name__)
 security = HTTPBearer()
 
 
+# Optional security for endpoints that support both authenticated and unauthenticated access
+class OptionalHTTPBearer(HTTPBearer):
+    def __init__(self, **kwargs):
+        super().__init__(auto_error=False, **kwargs)
+
+
+optional_security = OptionalHTTPBearer()
+
+
 class AuthService:
     """Authentication service for Supabase Auth integration"""
 
@@ -321,7 +330,7 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
 ) -> Optional[Dict[str, Any]]:
     """Dependency to get current user (optional - doesn't require auth)"""
     if not credentials:

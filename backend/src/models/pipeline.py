@@ -1,5 +1,5 @@
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from uuid import UUID
 from enum import Enum
@@ -14,6 +14,15 @@ class UploadType(str, Enum):
 
 class PipelineStatus(str, Enum):
     """Pipeline run status"""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class WikiGenerationStatus(str, Enum):
+    """Wiki generation run status"""
 
     PENDING = "pending"
     RUNNING = "running"
@@ -72,6 +81,105 @@ class StepResult(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat() if hasattr(v, "isoformat") else str(v)
         }
+
+
+class WikiPageMetadata(BaseModel):
+    """Metadata for a wiki page"""
+
+    title: str = Field(description="Page title")
+    filename: str = Field(description="Markdown filename")
+    storage_path: str = Field(description="Storage path to the markdown file")
+    storage_url: Optional[str] = Field(
+        None, description="Signed URL to the markdown file"
+    )
+    file_size: Optional[int] = Field(None, description="File size in bytes")
+    order: int = Field(description="Page order in the wiki")
+
+
+class WikiGenerationRun(BaseModel):
+    """Wiki generation run model matching the wiki_generation_runs table"""
+
+    id: UUID = Field(description="Wiki generation run unique identifier")
+    indexing_run_id: UUID = Field(description="Associated indexing run ID")
+    upload_type: UploadType = Field(
+        UploadType.USER_PROJECT, description="Type of upload"
+    )
+    user_id: Optional[UUID] = Field(None, description="User ID for user projects")
+    project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
+    upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
+    status: WikiGenerationStatus = Field(
+        WikiGenerationStatus.PENDING, description="Wiki generation status"
+    )
+    language: str = Field("danish", description="Wiki language")
+    model: str = Field("google/gemini-2.5-flash", description="LLM model used")
+    step_results: Dict[str, StepResult] = Field(
+        default_factory=dict, description="Detailed results from each step"
+    )
+    wiki_structure: Dict[str, Any] = Field(
+        default_factory=dict, description="Generated wiki structure"
+    )
+    pages_metadata: List[WikiPageMetadata] = Field(
+        default_factory=list, description="Metadata for generated pages"
+    )
+    storage_path: Optional[str] = Field(
+        None, description="Base storage path for this wiki run"
+    )
+    started_at: datetime = Field(
+        default_factory=datetime.utcnow, description="Wiki generation start timestamp"
+    )
+    completed_at: Optional[datetime] = Field(
+        None, description="Wiki generation completion timestamp"
+    )
+    error_message: Optional[str] = Field(
+        None, description="Error message if wiki generation failed"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Wiki generation creation timestamp",
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Wiki generation last update timestamp",
+    )
+
+    @classmethod
+    def model_validate(cls, obj):
+        """Custom validation to handle pages_metadata conversion"""
+        if isinstance(obj, dict) and "pages_metadata" in obj:
+            # Convert pages_metadata from dict to list if needed
+            pages_metadata = obj.get("pages_metadata", {})
+            if isinstance(pages_metadata, dict):
+                obj["pages_metadata"] = []
+        return super().model_validate(obj)
+
+    # Computed properties for timing data
+    @property
+    def step_timings(self) -> Dict[str, float]:
+        """Extract step timings from step_results"""
+        if not self.step_results:
+            return {}
+
+        timings = {}
+        for step_name, step_result in self.step_results.items():
+            if hasattr(step_result, "duration_seconds"):
+                timings[step_name] = step_result.duration_seconds
+            elif isinstance(step_result, dict) and "duration_seconds" in step_result:
+                timings[step_name] = step_result["duration_seconds"]
+        return timings
+
+    @property
+    def total_processing_time(self) -> float:
+        """Calculate total processing time across all steps"""
+        return sum(self.step_timings.values())
+
+    @property
+    def page_count(self) -> int:
+        """Get the number of pages in this wiki"""
+        return len(self.pages_metadata)
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
 
 
 class IndexingRun(BaseModel):
@@ -297,11 +405,10 @@ class PipelineConfig(BaseModel):
     generation_model: str = Field("gpt-4", description="Generation model name")
     generation_temperature: float = Field(0.1, description="Generation temperature")
     generation_max_tokens: int = Field(
-        1000, description="Maximum tokens for generation"
+        2000, description="Maximum tokens for generation"
     )
 
 
-# New models for storage structure support
 class Project(BaseModel):
     """Project model matching the projects table"""
 
@@ -405,3 +512,51 @@ class IndexingRunDocumentCreate(BaseModel):
 
     indexing_run_id: UUID
     document_id: UUID
+
+
+# Wiki Generation Models
+class WikiGenerationRunCreate(BaseModel):
+    """Model for creating a new wiki generation run"""
+
+    indexing_run_id: UUID
+    upload_type: UploadType = UploadType.USER_PROJECT
+    user_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
+    upload_id: Optional[str] = None
+    language: str = "danish"
+    model: str = "google/gemini-2.5-flash"
+    status: WikiGenerationStatus = WikiGenerationStatus.PENDING
+
+
+class WikiGenerationRunUpdate(BaseModel):
+    """Model for updating an existing wiki generation run"""
+
+    status: Optional[WikiGenerationStatus] = None
+    step_results: Optional[Dict[str, StepResult]] = None
+    wiki_structure: Optional[Dict[str, Any]] = None
+    pages_metadata: Optional[List[WikiPageMetadata]] = None
+    storage_path: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+
+class WikiPageMetadataCreate(BaseModel):
+    """Model for creating wiki page metadata"""
+
+    title: str
+    filename: str
+    storage_path: str
+    storage_url: Optional[str] = None
+    file_size: Optional[int] = None
+    order: int
+
+
+class WikiPageMetadataUpdate(BaseModel):
+    """Model for updating wiki page metadata"""
+
+    title: Optional[str] = None
+    filename: Optional[str] = None
+    storage_path: Optional[str] = None
+    storage_url: Optional[str] = None
+    file_size: Optional[int] = None
+    order: Optional[int] = None
