@@ -19,6 +19,7 @@ from .config.wiki_config import WikiConfig
 from .steps import (
     MetadataCollectionStep,
     OverviewGenerationStep,
+    SemanticClusteringStep,
     StructureGenerationStep,
     PageContentRetrievalStep,
     MarkdownGenerationStep,
@@ -46,6 +47,10 @@ class WikiGenerationOrchestrator:
                 storage_service=self.storage_service,
             ),
             "overview_generation": OverviewGenerationStep(
+                config=config_dict,
+                storage_service=self.storage_service,
+            ),
+            "semantic_clustering": SemanticClusteringStep(
                 config=config_dict,
                 storage_service=self.storage_service,
             ),
@@ -142,21 +147,47 @@ class WikiGenerationOrchestrator:
             )
             project_overview = overview_result.data["project_overview"]
 
-            # Step 3: Structure Generation
+            # Step 3: Semantic Clustering
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 3: Structure Generation"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 3: Semantic Clustering"
             )
-            logger.info("Step 3: Structure Generation")
+            logger.info("Step 3: Semantic Clustering")
+            clustering_result = await self.steps["semantic_clustering"].execute(
+                {
+                    "metadata": metadata,
+                }
+            )
+
+            if clustering_result.status == "failed":
+                print(
+                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 failed: {clustering_result.error_message}"
+                )
+                await self._update_wiki_run_status(
+                    wiki_run.id, "failed", clustering_result.error_message
+                )
+                return wiki_run
+
+            print(
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 completed successfully"
+            )
+            semantic_analysis = clustering_result.data
+
+            # Step 4: Structure Generation
+            print(
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 4: Structure Generation"
+            )
+            logger.info("Step 4: Structure Generation")
             structure_result = await self.steps["structure_generation"].execute(
                 {
                     "metadata": metadata,
                     "project_overview": project_overview,
+                    "semantic_analysis": semantic_analysis,
                 }
             )
 
             if structure_result.status == "failed":
                 print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 failed: {structure_result.error_message}"
+                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 failed: {structure_result.error_message}"
                 )
                 await self._update_wiki_run_status(
                     wiki_run.id, "failed", structure_result.error_message
@@ -164,15 +195,15 @@ class WikiGenerationOrchestrator:
                 return wiki_run
 
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 completed successfully"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 completed successfully"
             )
             wiki_structure = structure_result.data
 
-            # Step 4: Page Content Retrieval
+            # Step 5: Page Content Retrieval
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 4: Page Content Retrieval"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 5: Page Content Retrieval"
             )
-            logger.info("Step 4: Page Content Retrieval")
+            logger.info("Step 5: Page Content Retrieval")
             content_result = await self.steps["page_content_retrieval"].execute(
                 {
                     "metadata": metadata,
@@ -182,7 +213,7 @@ class WikiGenerationOrchestrator:
 
             if content_result.status == "failed":
                 print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 failed: {content_result.error_message}"
+                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 failed: {content_result.error_message}"
                 )
                 await self._update_wiki_run_status(
                     wiki_run.id, "failed", content_result.error_message
@@ -190,15 +221,15 @@ class WikiGenerationOrchestrator:
                 return wiki_run
 
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 completed successfully"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 completed successfully"
             )
             page_contents = content_result.data
 
-            # Step 5: Markdown Generation
+            # Step 6: Markdown Generation
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 5: Markdown Generation"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 6: Markdown Generation"
             )
-            logger.info("Step 5: Markdown Generation")
+            logger.info("Step 6: Markdown Generation")
             markdown_result = await self.steps["markdown_generation"].execute(
                 {
                     "metadata": metadata,
@@ -209,7 +240,7 @@ class WikiGenerationOrchestrator:
 
             if markdown_result.status == "failed":
                 print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 failed: {markdown_result.error_message}"
+                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 failed: {markdown_result.error_message}"
                 )
                 await self._update_wiki_run_status(
                     wiki_run.id, "failed", markdown_result.error_message
@@ -217,15 +248,15 @@ class WikiGenerationOrchestrator:
                 return wiki_run
 
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 completed successfully"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 completed successfully"
             )
             generated_pages = markdown_result.data
 
-            # Step 6: Save to Storage
+            # Step 7: Save to Storage
             print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 6: Saving to Storage"
+                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 7: Saving to Storage"
             )
-            logger.info("Step 6: Saving to Storage")
+            logger.info("Step 7: Saving to Storage")
             await self._save_wiki_to_storage(
                 wiki_run.id,
                 wiki_structure,
@@ -391,12 +422,12 @@ class WikiGenerationOrchestrator:
             storage_path = None
 
             # Save individual pages and collect metadata
-            for page_id, page_data in generated_pages.items():
+            for i, (page_id, page_data) in enumerate(generated_pages.items(), 1):
                 page_title = page_data["title"]
                 markdown_content = page_data["markdown_content"]
 
-                # Create filename from title
-                filename = self._sanitize_filename(page_title) + ".md"
+                # Use simple numbered filename instead of sanitizing title
+                filename = f"page-{i}.md"
 
                 # Upload markdown file to storage
                 upload_result = await self.storage_service.upload_wiki_page(
@@ -415,17 +446,27 @@ class WikiGenerationOrchestrator:
                     storage_path = upload_result["storage_path"].rsplit("/", 1)[0]
 
                 # Create page metadata for database
+                storage_url = upload_result["url"]
+                # Ensure storage_url is a string (handle case where it might be a dict)
+                if isinstance(storage_url, dict):
+                    if "signedURL" in storage_url:
+                        storage_url = storage_url["signedURL"]
+                    elif "signedUrl" in storage_url:
+                        storage_url = storage_url["signedUrl"]
+                    else:
+                        storage_url = str(storage_url)
+
                 page_metadata = {
                     "title": page_title,
                     "filename": filename,
                     "storage_path": upload_result["storage_path"],
-                    "storage_url": self._extract_url_from_result(upload_result["url"]),
+                    "storage_url": storage_url,
                     "file_size": len(markdown_content.encode("utf-8")),
-                    "order": len(pages_metadata_list) + 1,
+                    "order": i,
                 }
                 pages_metadata_list.append(page_metadata)
 
-                logger.info(f"Saved wiki page: {filename}")
+                logger.info(f"Saved wiki page: {filename} (title: {page_title})")
 
             # Update database with metadata
             update_data = {
@@ -458,99 +499,13 @@ class WikiGenerationOrchestrator:
     def _sanitize_filename(self, title: str) -> str:
         """Sanitize title for use as filename."""
         import re
-        import unicodedata
 
-        # First, normalize unicode characters (NFD decomposition)
-        normalized = unicodedata.normalize("NFD", title)
-
-        # Replace Danish characters with ASCII equivalents
-        danish_to_ascii = {
-            "æ": "ae",
-            "ø": "oe",
-            "å": "aa",
-            "Æ": "AE",
-            "Ø": "OE",
-            "Å": "AA",
-            "é": "e",
-            "è": "e",
-            "ê": "e",
-            "ë": "e",
-            "É": "E",
-            "È": "E",
-            "Ê": "E",
-            "Ë": "E",
-            "á": "a",
-            "à": "a",
-            "â": "a",
-            "ä": "a",
-            "Á": "A",
-            "À": "A",
-            "Â": "A",
-            "Ä": "A",
-            "í": "i",
-            "ì": "i",
-            "î": "i",
-            "ï": "i",
-            "Í": "I",
-            "Ì": "I",
-            "Î": "I",
-            "Ï": "I",
-            "ó": "o",
-            "ò": "o",
-            "ô": "o",
-            "ö": "o",
-            "Ó": "O",
-            "Ò": "O",
-            "Ô": "O",
-            "Ö": "O",
-            "ú": "u",
-            "ù": "u",
-            "û": "u",
-            "ü": "u",
-            "Ú": "U",
-            "Ù": "U",
-            "Û": "U",
-            "Ü": "U",
-            "ý": "y",
-            "ÿ": "y",
-            "ñ": "n",
-            "Ý": "Y",
-            "Ñ": "N",
-        }
-
-        # Replace Danish characters
-        for danish_char, ascii_char in danish_to_ascii.items():
-            normalized = normalized.replace(danish_char, ascii_char)
-
-        # Remove remaining special characters and replace spaces with underscores
-        sanitized = re.sub(r"[^\w\s-]", "", normalized)
+        # Remove special characters and replace spaces with underscores
+        sanitized = re.sub(r"[^\w\s-]", "", title)
         sanitized = re.sub(r"[-\s]+", "_", sanitized)
         sanitized = sanitized.strip("_")
 
-        # Ensure the filename is not empty
-        if not sanitized:
-            sanitized = "untitled"
-
         return sanitized
-
-    def _extract_url_from_result(self, url_data: Any) -> str:
-        """Extract URL from storage service result."""
-        if isinstance(url_data, str):
-            return url_data
-        elif isinstance(url_data, dict):
-            # Handle dictionary format with signedURL/signedUrl keys
-            if "signedURL" in url_data:
-                return url_data["signedURL"]
-            elif "signedUrl" in url_data:
-                return url_data["signedUrl"]
-            elif "url" in url_data:
-                return url_data["url"]
-            else:
-                # If it's a dict but doesn't have expected keys, convert to string
-                return str(url_data)
-        else:
-            # If it's not a string or dict, convert to string
-            return str(url_data)
 
     async def get_wiki_run(self, wiki_run_id: str) -> Optional[WikiGenerationRun]:
         """Get wiki generation run by ID."""

@@ -1,6 +1,6 @@
 """Configuration for wiki generation pipeline."""
 
-from typing import Dict, Any, Optional
+from typing import Any  # noqa: F401
 from pydantic import BaseModel, Field
 
 
@@ -10,6 +10,16 @@ class WikiConfig(BaseModel):
     # Language settings
     language: str = Field("danish", description="Wiki language")
     model: str = Field("google/gemini-2.5-flash", description="LLM model to use")
+
+    # Wiki structure targets
+    min_pages: int = Field(2, description="Minimum number of pages to generate")
+    max_pages: int = Field(4, description="Maximum number of pages to generate")
+    min_queries_per_page: int = Field(
+        3, description="Minimum number of queries to generate per page"
+    )
+    max_queries_per_page: int = Field(
+        5, description="Maximum number of queries to generate per page"
+    )
 
     # Vector search settings
     similarity_threshold: float = Field(

@@ -100,10 +100,23 @@ class StorageService:
             )
 
             # Get signed URL (since bucket is private)
-            url = self.supabase.storage.from_(self.bucket_name).create_signed_url(
+            signed_url_response = self.supabase.storage.from_(
+                self.bucket_name
+            ).create_signed_url(
                 storage_path,
                 expires_in=3600 * 24 * 7,  # 7 days
             )
+
+            # Handle the signed URL response - it can be a dict with signedURL key or a string
+            if isinstance(signed_url_response, dict):
+                if "signedURL" in signed_url_response:
+                    url = signed_url_response["signedURL"]
+                elif "signedUrl" in signed_url_response:
+                    url = signed_url_response["signedUrl"]
+                else:
+                    url = str(signed_url_response)
+            else:
+                url = str(signed_url_response)
 
             logger.info(f"Uploaded file to storage: {storage_path} -> {url}")
             return url

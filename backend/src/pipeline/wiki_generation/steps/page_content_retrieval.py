@@ -1,15 +1,15 @@
 """Page content retrieval step for wiki generation pipeline."""
 
-import asyncio
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 import logging
-from uuid import UUID
 
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
+from src.config.settings import get_settings
+from src.pipeline.indexing.steps.embedding import VoyageEmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,25 @@ class PageContentRetrievalStep(PipelineStep):
         self.similarity_threshold = config.get("similarity_threshold", 0.3)
         self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
 
+        # Initialize Voyage for query embeddings (match document embeddings)
+        settings = get_settings()
+        # Force same model/dims as query pipeline to match embedding_1024
+        self.query_embedding_model = "voyage-multilingual-2"
+        self.query_embedding_dims_expected = 1024
+        try:
+            self.voyage_client = VoyageEmbeddingClient(
+                api_key=settings.voyage_api_key,
+                model=self.query_embedding_model,
+            )
+            logger.info(
+                f"[Wiki:Retrieval] Using query embedding model='{self.query_embedding_model}', expected_dims={self.query_embedding_dims_expected}"
+            )
+        except Exception as e:
+            logger.warning(
+                f"[Wiki:Retrieval] Failed to initialize VoyageEmbeddingClient: {e}"
+            )
+            self.voyage_client = None
+
     async def execute(self, input_data: Dict[str, Any]) -> StepResult:
         """Execute page content retrieval step."""
         start_time = datetime.utcnow()
@@ -39,10 +58,37 @@ class PageContentRetrievalStep(PipelineStep):
             logger.info(
                 f"Starting page content retrieval for {len(wiki_structure['pages'])} pages"
             )
+            print(
+                f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Pages to process: {len(wiki_structure['pages'])}"
+            )
 
             # Retrieve content for each page
             page_contents = {}
             total_chunks_retrieved = 0
+
+            # Diagnostics: detect sample chunk embedding length
+            chunks_with_embeddings = metadata.get("chunks_with_embeddings", [])
+            sample_len = 0
+            for ch in chunks_with_embeddings:
+                emb = ch.get("embedding_1024")
+                if emb is not None:
+                    if isinstance(emb, str):
+                        try:
+                            import ast
+
+                            emb = ast.literal_eval(emb)
+                        except Exception:
+                            emb = None
+                    if isinstance(emb, list):
+                        sample_len = len(emb)
+                        break
+            if sample_len:
+                logger.info(
+                    f"[Wiki:Retrieval] Sample chunk embedding length detected: {sample_len}; similarity_threshold={self.similarity_threshold}"
+                )
+                print(
+                    f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Sample chunk embedding length: {sample_len}"
+                )
 
             for page in wiki_structure["pages"]:
                 page_id = page["id"]
@@ -50,11 +96,20 @@ class PageContentRetrievalStep(PipelineStep):
                 queries = page.get("queries", [])
 
                 logger.info(f"Retrieving content for page: {page_title}")
+                print(
+                    f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Retrieving page '{page_title}' with {len(queries)} queries"
+                )
 
                 # Retrieve content for this page
                 page_content = await self._retrieve_page_content(queries, metadata)
                 page_contents[page_id] = page_content
                 total_chunks_retrieved += len(page_content.get("retrieved_chunks", []))
+                logger.info(
+                    f"[Wiki:Retrieval] Page '{page_title}' retrieved {len(page_content.get('retrieved_chunks', []))} chunks from {len(queries)} queries"
+                )
+                print(
+                    f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Page '{page_title}' retrieved {len(page_content.get('retrieved_chunks', []))} chunks"
+                )
 
             # Create step result
             result = StepResult(
@@ -86,6 +141,9 @@ class PageContentRetrievalStep(PipelineStep):
 
             logger.info(
                 f"Page content retrieval completed: {total_chunks_retrieved} chunks retrieved"
+            )
+            print(
+                f"✅ [DEBUG] PageContentRetrievalStep.execute() - Completed retrieval, total_chunks_retrieved={total_chunks_retrieved}"
             )
             return result
 
@@ -141,6 +199,10 @@ class PageContentRetrievalStep(PipelineStep):
                 query_embedding, chunks_with_embeddings
             )
 
+            logger.info(
+                f"[Wiki:Retrieval] Query '{query[:40]}...' retrieved {len(similar_chunks)} chunks"
+            )
+
             # Add query information to chunks
             for chunk in similar_chunks:
                 chunk["query"] = query
@@ -176,22 +238,18 @@ class PageContentRetrievalStep(PipelineStep):
         }
 
     async def _generate_query_embedding(self, query_text: str) -> List[float]:
-        """Generate embedding for query text."""
-        # This is a simplified implementation
-        # In production, you'd use Voyage AI or similar service
-        import hashlib
-        import random
-
-        # Create a deterministic "embedding" based on query text
-        # This is just for demonstration - replace with actual embedding service
-        hash_obj = hashlib.md5(query_text.encode())
-        hash_hex = hash_obj.hexdigest()
-
-        # Convert hash to list of floats (1024 dimensions)
-        random.seed(int(hash_hex[:8], 16))
-        embedding = [random.uniform(-1, 1) for _ in range(1024)]
-
-        return embedding
+        if not self.voyage_client:
+            raise ValueError("Voyage client not initialized for query embeddings")
+        embeddings = await self.voyage_client.get_embeddings([query_text])
+        vector = embeddings[0] if embeddings else []
+        if len(vector) != self.query_embedding_dims_expected:
+            logger.warning(
+                f"[Wiki:Retrieval] Query embedding dims mismatch: got {len(vector)}, expected {self.query_embedding_dims_expected}"
+            )
+        logger.info(
+            f"[Wiki:Retrieval] Generated query embedding len={len(vector)} for text='{query_text[:50]}...'"
+        )
+        return vector
 
     async def _find_similar_chunks(
         self, query_embedding: List[float], chunks_with_embeddings: List[Dict[str, Any]]
@@ -210,7 +268,7 @@ class PageContentRetrievalStep(PipelineStep):
                     import ast
 
                     chunk_embedding = ast.literal_eval(chunk_embedding)
-                except:
+                except Exception:
                     continue
 
             # Calculate cosine similarity

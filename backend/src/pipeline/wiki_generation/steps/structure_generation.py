@@ -1,12 +1,9 @@
 """Structure generation step for wiki generation pipeline."""
 
-import asyncio
 import json
-import requests
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import logging
-from uuid import UUID
 
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
@@ -79,13 +76,14 @@ class StructureGenerationStep(PipelineStep):
         try:
             metadata = input_data["metadata"]
             project_overview = input_data["project_overview"]
+            semantic_analysis = input_data.get("semantic_analysis", {})
             logger.info(
                 f"Starting structure generation for {metadata['total_documents']} documents"
             )
 
             # Generate wiki structure using LLM
             wiki_structure = await self._generate_wiki_structure(
-                project_overview, metadata
+                project_overview, semantic_analysis, metadata
             )
 
             # Validate structure
@@ -131,7 +129,7 @@ class StructureGenerationStep(PipelineStep):
 
     async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
         """Validate that input data meets step requirements."""
-        required_fields = ["metadata", "project_overview"]
+        required_fields = ["metadata", "project_overview", "semantic_analysis"]
         return all(field in input_data for field in required_fields)
 
     def estimate_duration(self, input_data: Dict[str, Any]) -> int:
@@ -139,14 +137,14 @@ class StructureGenerationStep(PipelineStep):
         return 60  # Structure generation typically takes less time than overview
 
     async def _generate_wiki_structure(
-        self, project_overview: str, metadata: Dict[str, Any]
+        self, project_overview: str, semantic_analysis: Dict, metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate wiki structure using LLM."""
         if not self.openrouter_api_key:
             raise ValueError("OpenRouter API key not configured")
 
         # Prepare prompt
-        prompt = self._create_structure_prompt(project_overview, metadata)
+        prompt = self._create_structure_prompt(project_overview, semantic_analysis, metadata)
 
         # Call LLM
         response = await self._call_openrouter_api(prompt, max_tokens=3000)
@@ -157,147 +155,125 @@ class StructureGenerationStep(PipelineStep):
         return wiki_structure
 
     def _create_structure_prompt(
-        self, project_overview: str, metadata: Dict[str, Any]
+        self, project_overview: str, semantic_analysis: Dict, metadata: Dict[str, Any]
     ) -> str:
-        """Create prompt for structure generation."""
-        language = self.config.get("language", "danish")
+        """Create prompt for structure generation - exactly matching original."""
+        # Prepare input data for LLM - exactly matching original
+        cluster_summaries = semantic_analysis.get("cluster_summaries", [])
 
-        if language == "danish":
-            prompt = f"""Du er en ekspert byggeprojektanalytiker og wiki-struktureringsspecialist. Baseret på følgende projektoversigt og metadata, opret en strategisk wiki-struktur for et byggeprojekt.
+        # Prepare document list
+        documents = metadata.get("documents", [])
+        document_list = []
+        for doc in documents:
+            filename = doc.get("filename", f"document_{doc.get('id', 'unknown')[:8]}")
+            file_size = doc.get("file_size", 0)
+            page_count = doc.get("page_count", 0)
+            document_list.append(
+                f"- {filename} ({page_count} pages, {file_size:,} bytes)"
+            )
 
-PROJEKT OVERSIGT:
+        # Prepare semantic clusters
+        cluster_list = []
+        for summary in cluster_summaries:
+            cluster_id = summary.get("cluster_id", "unknown")
+            cluster_name = summary.get("cluster_name", f"Cluster {cluster_id}")
+            chunk_count = summary.get("chunk_count", 0)
+            cluster_list.append(
+                f"- Cluster {cluster_id} ({chunk_count} chunks): {cluster_name}"
+            )
+
+        # Prepare section headers
+        section_headers = metadata.get("section_headers_distribution", {})
+        section_list = []
+        for header, count in sorted(
+            section_headers.items(), key=lambda x: x[1], reverse=True
+        )[:10]:
+            section_list.append(f"- {header}: {count} occurrences")
+
+        # Create comprehensive English prompt for strategic wiki structure - exactly matching original
+        prompt = f"""Analyze this construction project and create a wiki structure for it.
+
+# Important context to consider when deciding which sections to create
+1. The complete list of project documents:
+{chr(10).join(document_list)}
+
+2. The project overview/summary:
 {project_overview}
 
-PROJEKT METADATA:
-- Antal dokumenter: {metadata['total_documents']}
-- Antal tekstsegmenter: {metadata['total_chunks']}
-- Antal sider analyseret: {metadata['total_pages_analyzed']}
-- Billeder behandlet: {metadata['images_processed']}
-- Tabeller behandlet: {metadata['tables_processed']}
+3. Semantic analysis
+{chr(10).join(cluster_list)}
 
-DOKUMENT FILNAVNE:
-{', '.join(metadata['document_filenames'])}
+4. Sections detected
+{chr(10).join(section_list) if section_list else "No sections detected"}
 
-SEKTIONSOVERSIGT:
-{json.dumps(metadata['section_headers_distribution'], indent=2, ensure_ascii=False)}
+Use the project overview & semantic analysis most in your considerations.
 
-OPGAVE:
-Opret en strategisk wiki-struktur med 4-8 sider der fokuserer på byggeprojektets professionelle aspekter. Strukturen skal være nyttig for byggeprojektets interessenter (entreprenører, arkitekter, ingeniører, klienter).
+## Section breakdown information
+I want to create a wiki for this construction project. Determine the most logical structure for a wiki based on the project's documentation and content.
 
-KRITERIER:
-1. Mindst 1 "oversigt" side
-2. Hver side skal have 6-10 relevante forespørgsler
-3. Fokuser på strategiske, professionelle aspekter - IKKE tekniske detaljer
-4. Sider skal være logisk organiserede og overlappende
-5. Brug danske titler og beskrivelser
+IMPORTANT: The wiki content will be generated in Danish language.
 
-RETURNER OUTPUT:
-Returner din analyse i følgende JSON-format:
+# Return output 
+## Return output rules
+- Make sure each output at least have 1 "overview" page. 
 
-{{
-  "title": "Projektnavn - Projektwiki",
-  "description": "Kort beskrivelse af wiki'en",
-  "pages": [
-    {{
-      "id": "page_1",
-      "title": "Projektoversigt",
-      "description": "Omfattende oversigt over projektet",
-      "relevance_score": 10,
-      "queries": [
-        "projekt navn titel beskrivelse oversigt",
-        "byggeprojekt omfang målsætninger",
-        "projekt lokation byggeplads adresse",
-        "projektværdi budget omkostningsoverslag",
-        "bygningstype bolig erhverv industri",
-        "kvadratmeter etageareal størrelse"
-      ]
-    }},
-    {{
-      "id": "page_2", 
-      "title": "Nøgleinteressenter og Organisation",
-      "description": "Projektets interessenter og organisatoriske struktur",
-      "relevance_score": 9,
-      "queries": [
-        "entreprenør klient ejer udvikler",
-        "projektteam roller ansvar",
-        "organisationsstruktur hierarki",
-        "kommunikation rapportering",
-        "beslutningsprocesser godkendelser",
-        "kontraktforhold ansvarsfordeling"
-      ]
-    }}
-  ]
-}}
+- Make sure each page has a topic and 6-10 associated queries that will help them retrieve relevant information for that topic. Like this for overview (in the language the document is, probably danish): 
 
-VIKTIGT: Returner KUN JSON - ingen yderligere tekst eller forklaringer."""
-        else:  # English
-            prompt = f"""You are an expert construction project analyst and wiki structure specialist. Based on the following project overview and metadata, create a strategic wiki structure for a construction project.
+project_overview_queries = [
+    # Core project identity
+    "project name title description overview summary purpose",
+    "construction project scope objectives goals deliverables",
+    "project location site address building development",
+    
+    # Key participants
+    "contractor client owner developer architect engineer",
+    "project team roles responsibilities stakeholders",
+    
+    # Timeline and phases
+    "project schedule timeline milestones phases construction stages",
+    "start date completion date project duration",
+    
+    # Project scale and type
+    "project value budget cost estimate total contract",
+    "building type residential commercial industrial infrastructure",
+    "square meters floor area size dimensions scope"
+] 
 
-PROJECT OVERVIEW:
-{project_overview}
+- OPTIONAL: If a page is closely related to another page, then store that in related_pages.
 
-PROJECT METADATA:
-- Number of documents: {metadata['total_documents']}
-- Number of text segments: {metadata['total_chunks']}
-- Pages analyzed: {metadata['total_pages_analyzed']}
-- Images processed: {metadata['images_processed']}
-- Tables processed: {metadata['tables_processed']}
+- Each page should focus on a specific aspect of the construction project (e.g., project phases, safety requirements, material specifications)
 
-DOCUMENT FILENAMES:
-{', '.join(metadata['document_filenames'])}
-
-SECTION OVERVIEW:
-{json.dumps(metadata['section_headers_distribution'], indent=2, ensure_ascii=False)}
-
-TASK:
-Create a strategic wiki structure with 4-8 pages that focuses on the construction project's professional aspects. The structure should be useful for the construction project's stakeholders (contractors, architects, engineers, clients).
-
-CRITERIA:
-1. At least 1 "overview" page
-2. Each page should have 6-10 relevant queries
-3. Focus on strategic, professional aspects - NOT technical details
-4. Pages should be logically organized and overlapping
-5. Use English titles and descriptions
-
-RETURN OUTPUT:
+## Return output format
 Return your analysis in the following JSON format:
 
 {{
-  "title": "Project Name - Project Wiki",
-  "description": "Brief description of the wiki",
-  "pages": [
-    {{
-      "id": "page_1",
-      "title": "Project Overview",
-      "description": "Comprehensive project overview",
-      "relevance_score": 10,
-      "queries": [
-        "project name title description overview",
-        "construction project scope objectives goals",
-        "project location site address building",
-        "project value budget cost estimate",
-        "building type residential commercial industrial",
-        "square meters floor area size dimensions"
-      ]
-    }},
-    {{
-      "id": "page_2",
-      "title": "Key Stakeholders and Organization", 
-      "description": "Project stakeholders and organizational structure",
-      "relevance_score": 9,
-      "queries": [
-        "contractor client owner developer",
-        "project team roles responsibilities",
-        "organizational structure hierarchy",
-        "communication reporting",
-        "decision processes approvals",
-        "contractual relationships responsibility allocation"
-      ]
-    }}
-  ]
+ "title": "[Overall title for the wiki]",
+ "description": "[Brief description of the construction project]",
+ "pages": [
+   {{
+     "id": "page-1",
+     "title": "[Page title]",
+     "description": "[Brief description of what this page will cover]",
+     "proposed_queries": [
+       "[]"
+     ],
+     "related_pages": [
+       "[]"
+     ],
+     "relevance_score": "1-10",
+     "topic_argumentation": "argumentation for why this was chosen"
+   }}
+ ]
 }}
 
-IMPORTANT: Return ONLY JSON - no additional text or explanations."""
+IMPORTANT FORMATTING INSTRUCTIONS:
+- Return ONLY the valid JSON structure specified above
+- DO NOT wrap the JSON in markdown code blocks (no ``` or ```json)
+- DO NOT include any explanation text before or after the JSON
+- Ensure the JSON is properly formatted and valid
+- Start directly with {{ and end with }}
+
+Your proposed tests for step 5 seems good. Please output the json that step outputs so i can check it as well."""
 
         return prompt
 

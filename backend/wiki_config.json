@@ -1,4 +1,10 @@
 {
+  "wiki_structure": {
+    "min_pages": 2,
+    "max_pages": 4,
+    "min_queries_per_page": 3,
+    "max_queries_per_page": 5
+  },
   "vector_search": {
     "similarity_threshold": 0.7,
     "max_chunks_per_query": 10,

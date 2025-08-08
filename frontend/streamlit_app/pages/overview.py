@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import logging
+import re
 from datetime import datetime
 from utils.shared import get_backend_url
 
@@ -42,6 +43,105 @@ def _format_run_label(run):
         date_str = "No start time"
 
     return f"{upload_type.title()} - {status.title()} ({date_str}) - {run['id']}"
+
+
+def _format_wiki_run_label(wiki_run):
+    """Format a wiki run into a readable label for the dropdown"""
+    status = wiki_run.get("status", "unknown")
+    created_at = wiki_run.get("created_at", "")
+
+    if created_at:
+        try:
+            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d %H:%M")
+        except:
+            date_str = created_at[:19]
+    else:
+        date_str = "No creation time"
+
+    return f"Wiki Run - {status.title()} ({date_str}) - {wiki_run['id']}"
+
+
+def render_markdown_with_mermaid(content):
+    """Render markdown content with Mermaid diagram support"""
+    if not content:
+        return
+
+    # Check if content contains Mermaid diagrams
+    if "```mermaid" not in content:
+        # No Mermaid diagrams, just render as regular markdown
+        st.markdown(content)
+        return
+
+    # Split content into sections - handle both ```mermaid and ```mermaid\n patterns
+    sections = re.split(r"(```mermaid\s*\n.*?\n```)", content, flags=re.DOTALL)
+
+    for i, section in enumerate(sections):
+        if section.strip().startswith("```mermaid"):
+            # Extract Mermaid diagram code - handle different formats
+            mermaid_match = re.search(r"```mermaid\s*\n(.*?)\n```", section, re.DOTALL)
+            if mermaid_match:
+                diagram_code = mermaid_match.group(1).strip()
+
+                # Clean up the diagram code
+                diagram_code = re.sub(
+                    r"^\s*\n", "", diagram_code
+                )  # Remove leading empty lines
+                diagram_code = re.sub(
+                    r"\n\s*$", "", diagram_code
+                )  # Remove trailing empty lines
+
+                if diagram_code:
+                    # Render Mermaid diagram using HTML with a more compatible approach
+                    mermaid_html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+                        <style>
+                            .mermaid {{
+                                text-align: center;
+                                margin: 20px 0;
+                                background: white;
+                            }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="mermaid">
+                        {diagram_code}
+                        </div>
+                        <script>
+                            // Initialize Mermaid
+                            mermaid.initialize({{
+                                startOnLoad: true,
+                                theme: 'default',
+                                flowchart: {{
+                                    useMaxWidth: true,
+                                    htmlLabels: true
+                                }},
+                                sequence: {{
+                                    useMaxWidth: true
+                                }},
+                                gantt: {{
+                                    useMaxWidth: true
+                                }}
+                            }});
+                            
+                            // Force re-render if needed
+                            setTimeout(function() {{
+                                mermaid.init();
+                            }}, 100);
+                        </script>
+                    </body>
+                    </html>
+                    """
+
+                    # Use st.components.v1.html to render the Mermaid diagram
+                    st.components.v1.html(mermaid_html, height=400, scrolling=True)
+        else:
+            # Render regular markdown
+            if section.strip():
+                st.markdown(section)
 
 
 def render_run_selection(backend_url):
@@ -442,6 +542,232 @@ def render_query_tab(run_id_input, backend_url):
             st.warning("Please enter a question.")
 
 
+def render_wiki_tab(run_id_input, backend_url):
+    """Render the wiki tab content"""
+    st.markdown("### 📚 Wiki Generation")
+
+    headers = _get_auth_headers()
+    if not headers:
+        st.error("❌ No access token found. Please sign in again.")
+        return
+
+    try:
+        # Get existing wiki runs for this indexing run
+        wiki_runs_response = requests.get(
+            f"{backend_url}/api/wiki/runs/{run_id_input}",
+            headers=headers,
+        )
+
+        if wiki_runs_response.status_code == 200:
+            wiki_runs = wiki_runs_response.json()
+
+            # Create wiki run selection dropdown
+            wiki_run_options = {"-- Select a wiki run --": None}
+            for wiki_run in wiki_runs:
+                label = _format_wiki_run_label(wiki_run)
+                wiki_run_options[label] = wiki_run["id"]
+
+            # Add "Generate New Wiki" option
+            wiki_run_options["🚀 Generate New Wiki"] = "new"
+
+            # Display wiki run selection
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                selected_wiki_run_label = st.selectbox(
+                    "Wiki Runs:",
+                    list(wiki_run_options.keys()),
+                    index=0,
+                )
+
+            with col2:
+                if selected_wiki_run_label == "🚀 Generate New Wiki":
+                    if st.button("Generate New Wiki", type="primary"):
+                        with st.spinner("Generating new wiki..."):
+                            try:
+                                # Create new wiki run - pass index_run_id as query parameter
+                                create_response = requests.post(
+                                    f"{backend_url}/api/wiki/runs?index_run_id={run_id_input}",
+                                    headers=headers,
+                                )
+
+                                if create_response.status_code == 200:
+                                    result = create_response.json()
+                                    st.success("✅ Wiki generation started!")
+                                    st.info(
+                                        f"Wiki run ID: {result.get('index_run_id')}"
+                                    )
+                                    st.rerun()
+                                else:
+                                    st.error(
+                                        f"❌ Failed to start wiki generation: {create_response.status_code}"
+                                    )
+                                    st.text(f"Response: {create_response.text}")
+                            except Exception as e:
+                                st.error(f"❌ Error creating wiki: {str(e)}")
+
+            # Display selected wiki run content
+            if selected_wiki_run_label and selected_wiki_run_label not in [
+                "-- Select a wiki run --",
+                "🚀 Generate New Wiki",
+            ]:
+                selected_wiki_run_id = wiki_run_options[selected_wiki_run_label]
+
+                # Get wiki run status
+                status_response = requests.get(
+                    f"{backend_url}/api/wiki/runs/{selected_wiki_run_id}/status",
+                    headers=headers,
+                )
+
+                if status_response.status_code == 200:
+                    wiki_status = status_response.json()
+
+                    # Display status
+                    status_col1, status_col2, status_col3 = st.columns(3)
+                    with status_col1:
+                        st.metric(
+                            "Status", wiki_status.get("status", "Unknown").title()
+                        )
+                    with status_col2:
+                        created_at = wiki_status.get("created_at", "")
+                        if created_at:
+                            try:
+                                dt = datetime.fromisoformat(
+                                    created_at.replace("Z", "+00:00")
+                                )
+                                date_str = dt.strftime("%Y-%m-%d %H:%M")
+                            except:
+                                date_str = created_at[:19]
+                        else:
+                            date_str = "Unknown"
+                        st.metric("Created", date_str)
+                    with status_col3:
+                        completed_at = wiki_status.get("completed_at", "")
+                        if completed_at:
+                            try:
+                                dt = datetime.fromisoformat(
+                                    completed_at.replace("Z", "+00:00")
+                                )
+                                date_str = dt.strftime("%Y-%m-%d %H:%M")
+                            except:
+                                date_str = completed_at[:19]
+                        else:
+                            date_str = "Not completed"
+                        st.metric("Completed", date_str)
+
+                    # Display error if any
+                    if wiki_status.get("error_message"):
+                        st.error(f"❌ Error: {wiki_status['error_message']}")
+
+                    # If completed, display wiki content
+                    if wiki_status.get("status") == "completed":
+                        # Get wiki pages
+                        pages_response = requests.get(
+                            f"{backend_url}/api/wiki/runs/{selected_wiki_run_id}/pages",
+                            headers=headers,
+                        )
+
+                        if pages_response.status_code == 200:
+                            pages_data = pages_response.json()
+                            pages = pages_data.get("pages", [])
+
+                            if pages:
+                                st.markdown("#### 📄 Wiki Pages")
+
+                                # Create tabs for each page
+                                if len(pages) == 1:
+                                    # Single page - display directly
+                                    page = pages[0]
+                                    st.markdown(f"### {page.get('title', 'Untitled')}")
+                                    if page.get("description"):
+                                        st.markdown(f"*{page['description']}*")
+
+                                    # Get page content
+                                    content_response = requests.get(
+                                        f"{backend_url}/api/wiki/runs/{selected_wiki_run_id}/pages/{page.get('filename', 'page-1.md')}",
+                                        headers=headers,
+                                    )
+
+                                    if content_response.status_code == 200:
+                                        content_data = content_response.json()
+                                        render_markdown_with_mermaid(
+                                            content_data.get(
+                                                "content", "No content available"
+                                            )
+                                        )
+                                    else:
+                                        st.error(
+                                            f"❌ Failed to load page content: {content_response.status_code}"
+                                        )
+                                else:
+                                    # Multiple pages - create tabs
+                                    page_tabs = st.tabs(
+                                        [
+                                            page.get("title", f"Page {i+1}")
+                                            for i, page in enumerate(pages)
+                                        ]
+                                    )
+
+                                    for i, (tab, page) in enumerate(
+                                        zip(page_tabs, pages)
+                                    ):
+                                        with tab:
+                                            if page.get("description"):
+                                                st.markdown(f"*{page['description']}*")
+
+                                            # Get page content
+                                            content_response = requests.get(
+                                                f"{backend_url}/api/wiki/runs/{selected_wiki_run_id}/pages/{page.get('filename', f'page-{i+1}.md')}",
+                                                headers=headers,
+                                            )
+
+                                            if content_response.status_code == 200:
+                                                content_data = content_response.json()
+                                                render_markdown_with_mermaid(
+                                                    content_data.get(
+                                                        "content",
+                                                        "No content available",
+                                                    )
+                                                )
+                                            else:
+                                                st.error(
+                                                    f"❌ Failed to load page content: {content_response.status_code}"
+                                                )
+                            else:
+                                st.info("📭 No pages found for this wiki run.")
+                        else:
+                            st.error(
+                                f"❌ Failed to load wiki pages: {pages_response.status_code}"
+                            )
+                    else:
+                        st.info(
+                            "⏳ Wiki generation is still in progress. Please wait for completion."
+                        )
+                else:
+                    st.error(
+                        f"❌ Failed to get wiki run status: {status_response.status_code}"
+                    )
+
+        elif wiki_runs_response.status_code == 404:
+            st.info("📭 No wiki runs found for this indexing run.")
+        else:
+            st.warning(
+                f"⚠️ Could not load wiki runs (status: {wiki_runs_response.status_code})"
+            )
+            # Add more detailed error information for debugging
+            try:
+                error_detail = wiki_runs_response.json()
+                st.error(f"Error details: {error_detail}")
+            except:
+                st.error(f"Response text: {wiki_runs_response.text}")
+
+    except Exception as e:
+        st.error(f"❌ Error loading wiki: {str(e)}")
+        # Add more detailed error information for debugging
+        import traceback
+
+        st.error(f"Full error: {traceback.format_exc()}")
+
+
 def show_overview_page():
     """Show the project overview page - main orchestrator function"""
     st.markdown("## Project Overview")
@@ -470,11 +796,7 @@ def show_overview_page():
             render_query_tab(run_id_input, backend_url)
 
         with tab_wiki:
-            st.markdown("### 📚 Wiki")
-            st.info(
-                "This section will show extracted wiki/knowledge base content from the documents."
-            )
-            # You can add wiki-related content here.
+            render_wiki_tab(run_id_input, backend_url)
 
         with tab_documents:
             render_documents_tab(run_id_input, backend_url)

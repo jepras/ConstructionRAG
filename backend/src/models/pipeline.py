@@ -150,6 +150,18 @@ class WikiGenerationRun(BaseModel):
             pages_metadata = obj.get("pages_metadata", {})
             if isinstance(pages_metadata, dict):
                 obj["pages_metadata"] = []
+            elif isinstance(pages_metadata, list):
+                # Handle storage_url conversion in each page metadata
+                for page in pages_metadata:
+                    if isinstance(page, dict) and "storage_url" in page:
+                        storage_url = page["storage_url"]
+                        if isinstance(storage_url, dict):
+                            if "signedURL" in storage_url:
+                                page["storage_url"] = storage_url["signedURL"]
+                            elif "signedUrl" in storage_url:
+                                page["storage_url"] = storage_url["signedUrl"]
+                            else:
+                                page["storage_url"] = str(storage_url)
         return super().model_validate(obj)
 
     # Computed properties for timing data

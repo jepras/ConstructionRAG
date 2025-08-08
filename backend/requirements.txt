@@ -25,6 +25,7 @@ PyMuPDF==1.26.3
 numpy==1.26.4
 scipy==1.16.0
 pandas==2.3.1
+scikit-learn==1.5.1
 
 # AI/ML (for query processing - Railway still needs this)
 openai==1.97.0

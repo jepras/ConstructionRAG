@@ -190,116 +190,179 @@ class MarkdownGenerationStep(PipelineStep):
         page_content: Dict[str, Any],
         metadata: Dict[str, Any],
     ) -> str:
-        """Create prompt for markdown generation."""
-        language = self.config.get("language", "danish")
-
-        page_title = page["title"]
+        """Create prompt for markdown generation - exactly matching original."""
+        page_title = page.get("title", "Unknown Page")
         page_description = page.get("description", "")
-        queries = page.get("queries", [])
 
+        print(f"    Generating markdown for: {page_title}")
+
+        # Prepare document excerpts from retrieved chunks
         retrieved_chunks = page_content.get("retrieved_chunks", [])
-        source_documents = page_content.get("source_documents", {})
+        source_docs = page_content.get("source_documents", {})
 
-        if language == "danish":
-            prompt = f"""Du er en ekspert byggeprojektanalytiker og tekniskskriver. Generer en omfattende, professionel markdown-wiki side baseret på følgende data.
+        # Limit to top chunks to avoid token overflow
+        top_chunks = sorted(
+            retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True
+        )[:20]
 
-SIDE INFORMATION:
-- Titel: {page_title}
-- Beskrivelse: {page_description}
-- Relevante forespørgsler: {', '.join(queries)}
+        # Create document excerpts with source attribution
+        document_excerpts = []
+        source_counter = 1
+        source_map = {}  # Map document_id to footnote number
 
-PROJEKT DATA:
-- Antal dokumenter: {metadata['total_documents']}
-- Antal tekstsegmenter: {metadata['total_chunks']}
-- Antal sider analyseret: {metadata['total_pages_analyzed']}
-
-KILDE DOKUMENTER:
-{', '.join([doc.get('filename', 'Unknown') for doc in source_documents.values()])}
-
-RETRIEVED INHOLD:
-"""
-        else:  # English
-            prompt = f"""You are an expert construction project analyst and technical writer. Generate a comprehensive, professional markdown wiki page based on the following data.
-
-PAGE INFORMATION:
-- Title: {page_title}
-- Description: {page_description}
-- Relevant queries: {', '.join(queries)}
-
-PROJECT DATA:
-- Number of documents: {metadata['total_documents']}
-- Number of text segments: {metadata['total_chunks']}
-- Pages analyzed: {metadata['total_pages_analyzed']}
-
-SOURCE DOCUMENTS:
-{', '.join([doc.get('filename', 'Unknown') for doc in source_documents.values()])}
-
-RETRIEVED CONTENT:
-"""
-
-        # Add retrieved content
-        for i, chunk in enumerate(retrieved_chunks[:15]):  # Limit to 15 chunks
+        for chunk in top_chunks:
             content = chunk.get("content", "")
-            metadata_info = chunk.get("metadata", {})
-            similarity_score = chunk.get("similarity_score", 0)
+            doc_id = chunk.get("document_id", "unknown")
+            metadata_chunk = chunk.get("metadata", {})
+            page_number = (
+                metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
+            )
+            similarity = chunk.get("similarity_score", 0.0)
 
-            # Truncate content if too long
-            if len(content) > 300:
-                content = content[:300] + "..."
+            # Create source reference
+            if doc_id not in source_map:
+                source_map[doc_id] = source_counter
+                source_counter += 1
 
-            prompt += f"\n--- Chunk {i+1} (Similarity: {similarity_score:.3f}) ---\n"
-            prompt += f"Source: {metadata_info.get('source_filename', 'Unknown')}\n"
-            prompt += f"Page: {metadata_info.get('page_number', 'Unknown')}\n"
-            prompt += f"Content: {content}\n"
+            source_ref = source_map[doc_id]
 
-        if language == "danish":
-            prompt += f"""
+            excerpt = f"""
+Excerpt {len(document_excerpts)+1}:
+Source: [Document {source_ref}, page {page_number}]
+Relevance: {similarity:.3f}
+Content: {content[:600]}..."""
+            document_excerpts.append(excerpt)
 
-OPGAVE:
-Generer en omfattende, professionel markdown-wiki side for "{page_title}". Siden skal være nyttig for byggeprojektets interessenter og skal indeholde:
+        # Create source footnotes
+        footnotes = []
+        for doc_id, ref_num in source_map.items():
+            # Find document info from metadata
+            doc_info = None
+            for doc in metadata.get("documents", []):
+                if doc.get("id") == doc_id:
+                    doc_info = doc
+                    break
 
-KRITERIER:
-1. Brug markdown-formatering (overskrifter, lister, tabeller, kodeblokke)
-2. Fokuser på professionelle, strategiske aspekter - IKKE tekniske detaljer
-3. Brug dansk byggesprog og terminologi
-4. Inkluder relevante citater fra kildedokumenterne
-5. Organiser indholdet logisk med overskrifter og underoverskrifter
-6. Brug Mermaid-diagrammer for at visualisere processer eller strukturer (kun vertikale diagrammer)
-7. Inkluder en oversigt over kildedokumenterne
-8. Gør siden læsbar og professionel
+            filename = (
+                doc_info.get("filename", f"document_{doc_id[:8]}")
+                if doc_info
+                else f"document_{doc_id[:8]}"
+            )
+            footnotes.append(f"[{ref_num}] {filename}")
 
-STRUKTUR:
-- Start med en kort introduktion
-- Organiser indholdet i logiske sektioner
-- Brug overskrifter (##, ###) for at strukturere indholdet
-- Inkluder relevante citater og referencer
-- Afslut med en opsummering eller næste skridt
+        excerpts_text = "\n".join(
+            document_excerpts[:12]
+        )  # Limit excerpts to avoid token overflow
+        footnotes_text = "\n".join(footnotes)
 
-VIKTIGT: Returner KUN markdown-indhold - ingen yderligere tekst eller forklaringer."""
-        else:
-            prompt += f"""
+        # Create comprehensive English prompt for markdown generation - exactly matching original
+        prompt = f"""You are an expert construction project analyst and technical writer.
 
-TASK:
-Generate a comprehensive, professional markdown wiki page for "{page_title}". The page should be useful for the construction project's stakeholders and should include:
+Your task is to generate a comprehensive and accurate construction project wiki page in Markdown format about a specific aspect, system, or component within a given construction project.
 
-CRITERIA:
-1. Use markdown formatting (headings, lists, tables, code blocks)
-2. Focus on professional, strategic aspects - NOT technical details
-3. Use English construction terminology
-4. Include relevant citations from source documents
-5. Organize content logically with headings and subheadings
-6. Use Mermaid diagrams to visualize processes or structures (vertical diagrams only)
-7. Include an overview of source documents
-8. Make the page readable and professional
+You will be given:
 
-STRUCTURE:
-- Start with a brief introduction
-- Organize content in logical sections
-- Use headings (##, ###) to structure content
-- Include relevant citations and references
-- End with a summary or next steps
+1. The "[PAGE_TITLE]" for the page you need to create and [PAGE_DESCRIPTION].
 
-IMPORTANT: Return ONLY markdown content - no additional text or explanations."""
+2. A list of "[RELEVANT_PAGE_RETRIEVED_CHUNKS]" from the construction project that you MUST use as the sole basis for the content. You have access to the full content of these document excerpts retrieved from project PDFs, specifications, contracts, and drawings. You MUST use AT LEAST 5 relevant document sources for comprehensive coverage - if fewer are provided, you MUST note this limitation.
+
+CRITICAL STARTING INSTRUCTION:
+The main title of the page should be a H1 Markdown heading.
+
+Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
+
+1. **Introduction:** Start with a concise introduction (1-2 paragraphs) explaining the purpose, scope, and high-level overview of "{page_title}" within the context of the overall construction project. Immediately after this, provide a table of the sections on this page with name of section and a short description of each section.
+
+2. **Detailed Sections:** Break down "{page_title}" into logical sections using H2 (`##`) and H3 (`###`) Markdown headings. For each section:
+   * Explain the project requirements, specifications, processes, or deliverables relevant to the section's focus, as evidenced in the source documents.
+   * Identify key stakeholders, contractors, materials, systems, regulatory requirements, or project phases pertinent to that section.
+   * Include relevant quantities, dimensions, costs, and timeline information where available.
+
+3. **Mermaid Diagrams:**
+   * EXTENSIVELY use Mermaid diagrams (e.g., `flowchart TD`, `sequenceDiagram`, `gantt`, `graph TD`, `Entity Relationship`, `Block`, `Git`, `Pie`, `Sankey`, `Timeline`) to visually represent project workflows, construction sequences, stakeholder relationships, and process flows found in the source documents.
+   * Ensure diagrams are accurate and directly derived from information in the `[RELEVANT_PAGE_RETRIEVED_CHUNKS]`.
+   * Provide a brief explanation before or after each diagram to give context.
+   * CRITICAL: All diagrams MUST follow strict vertical orientation:
+     - Use "graph TD" (top-down) directive for flow diagrams
+     - NEVER use "graph LR" (left-right)
+     - Maximum node width should be 3-4 words
+     - For sequence diagrams:
+       - Start with "sequenceDiagram" directive on its own line
+       - Define ALL participants at the beginning (Client, Contractor, Architect, Engineer, Inspector, etc.)
+       - Use descriptive but concise participant names
+       - Use the correct arrow types:
+         - ->> for submissions/requests
+         - -->> for approvals/responses  
+         - -x for rejections/failures
+       - Include activation boxes using +/- notation
+       - Add notes for clarification using "Note over" or "Note right of"
+     - For Gantt charts:
+       - Use "gantt" directive
+       - Include project phases, milestones, and dependencies
+       - Show timeline relationships and critical path activities
+
+4. **Tables:**
+   * Use Markdown tables to summarize information such as:
+     * Key project requirements, specifications, and acceptance criteria
+     * Material quantities, types, suppliers, and delivery schedules
+     * Contractor responsibilities, deliverables, and completion dates
+     * Regulatory requirements, permits, inspections, and compliance deadlines
+     * Cost breakdowns, budget allocations, and payment milestones
+     * Quality standards, testing procedures, and documentation requirements
+     * Safety protocols, risk assessments, and mitigation measures
+
+5. **Document Excerpts (ENTIRELY OPTIONAL):**
+   * Include short, relevant excerpts directly from the `[RELEVANT_DOCUMENT_EXCERPTS]` to illustrate key project requirements, specifications, or contractual terms.
+   * Ensure excerpts are well-formatted within Markdown quote blocks.
+   * Use excerpts to support technical specifications, quality requirements, or critical project constraints.
+
+6. **Source Citations (EXTREMELY IMPORTANT):**
+   * For EVERY piece of significant information, explanation, diagram, table entry, or document excerpt, you MUST cite the specific source document(s) and relevant page numbers or sections from which the information was derived.
+   * Use standard markdown reference-style citations with numbered footnotes at the end of sentences or paragraphs.
+   * Format citations as: The project budget is €2.5 million[1][p. 5-7] where [1] links to the footnote reference. and [p. 5-7] links to the page number.
+   * Place all footnote definitions on a new line each at the bottom of each section on the page using the format:
+     [1]: contract.pdf, page 5-7
+     [2]: specifications.pdf, section 3.2  
+     [3]: drawings.dwg, sheet A1
+     [4]: safety_plan.pdf, section 4.2
+     [5]: material_specs.xlsx, concrete_sheet
+
+   For multiple sources supporting one claim, use: Construction will begin in March 2024[1][2][3]
+   IMPORTANT: You MUST cite AT LEAST 5 different source documents throughout the wiki page to ensure comprehensive coverage when available.
+
+7. **Technical Accuracy:** All information must be derived SOLELY from the `[RELEVANT_DOCUMENT_EXCERPTS]`. Do not infer, invent, or use external knowledge about construction practices, building codes, or industry standards unless it's directly supported by the provided project documents. If information is not present in the provided excerpts, do not include it or explicitly state its absence if crucial to the topic.
+
+8. **Construction Professional Language:** Use clear, professional, and concise technical language suitable for project managers, contractors, architects, engineers, inspectors, and other construction professionals working on or learning about the project. Use correct construction and engineering terminology, including Danish construction terms when they appear in the source documents.
+
+9. **Image/table summaries:** If some of the sources you retrieve are tables and images, then list them in a table format like below: 
+
+| Drawing | Area | Description |
+| :--- | :--- | :--- |
+| `112727-01_K07_H1_EK_61.101` | Basement | Shows location of main panel (HT) and main cross-field (HX). |
+| `112727-01_K07_H1_E0_61.102` | Ground floor | Routing paths in common areas, café and multi-room. |
+
+10. **Conclusion/Summary:** End with a brief summary paragraph if appropriate for "{page_title}", reiterating the key aspects covered, critical deadlines, major deliverables, and their significance within the overall construction project. If relevant, and if information is available in the provided documents, list the to other potential wiki pages using below these paragraphs. 
+
+IMPORTANT: Generate the content in Danish language.
+
+Remember:
+- Ground every claim in the provided project document excerpts
+- Prioritize accuracy and direct representation of the project's actual requirements, specifications, and constraints
+- Structure the document logically for easy understanding by construction professionals
+- Include specific quantities, dates, costs, and technical specifications when available in the documents
+- Focus on practical project information that can guide construction activities
+- Highlight critical path items, regulatory requirements, and quality control measures
+- Emphasize safety requirements and compliance obligations throughout
+
+PAGE_TITLE: {page_title}
+PAGE_DESCRIPTION: {page_description}
+RELEVANT_PAGE_RETRIEVED_CHUNKS:
+{excerpts_text}
+
+RELEVANT_DOCUMENT_EXCERPTS:
+{footnotes_text}
+
+Generate the comprehensive markdown wiki page:"""
 
         return prompt
 

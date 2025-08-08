@@ -1,0 +1,424 @@
+"""Semantic clustering step for wiki generation pipeline."""
+
+import json
+import ast
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+from collections import defaultdict
+import logging
+
+try:
+    import numpy as np
+    from sklearn.cluster import KMeans
+except ImportError:
+    print("Warning: numpy and sklearn not available, clustering will fail")
+    np = None
+    KMeans = None
+
+from ...shared.base_step import PipelineStep
+from src.models import StepResult
+from src.services.storage_service import StorageService
+from src.config.database import get_supabase_admin_client
+from src.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+class SemanticClusteringStep(PipelineStep):
+    """Step 4: Semantic clustering and LLM-based naming to identify 4-10 main topics."""
+
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        storage_service: Optional[StorageService] = None,
+        progress_tracker=None,
+    ):
+        print("🔍 [DEBUG] SemanticClusteringStep.__init__() - Starting initialization")
+        super().__init__(config, progress_tracker)
+        self.storage_service = storage_service or StorageService()
+        self.supabase = get_supabase_admin_client()
+
+        print(
+            "🔍 [DEBUG] SemanticClusteringStep.__init__() - Loading OpenRouter API key from settings"
+        )
+        # Load OpenRouter API key from settings
+        try:
+            settings = get_settings()
+            print(
+                f"🔍 [DEBUG] SemanticClusteringStep.__init__() - Settings loaded: {type(settings)}"
+            )
+            self.openrouter_api_key = settings.openrouter_api_key
+            print(
+                f"🔍 [DEBUG] SemanticClusteringStep.__init__() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
+            )
+            if self.openrouter_api_key:
+                print(
+                    f"🔍 [DEBUG] SemanticClusteringStep.__init__() - API key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
+                )
+            if not self.openrouter_api_key:
+                print(
+                    "❌ [DEBUG] SemanticClusteringStep.__init__() - OpenRouter API key not found!"
+                )
+                raise ValueError(
+                    "OPENROUTER_API_KEY not found in environment variables"
+                )
+        except Exception as e:
+            print(
+                f"❌ [DEBUG] SemanticClusteringStep.__init__() - Error loading OpenRouter API key: {e}"
+            )
+            raise
+
+        self.model = config.get("model", "google/gemini-2.5-flash")
+        self.language = config.get("language", "danish")
+        self.api_timeout = config.get("api_timeout_seconds", 30.0)
+        
+        # Semantic clustering configuration matching original
+        self.semantic_clusters_config = config.get("semantic_clusters", {
+            "min_clusters": 4, 
+            "max_clusters": 10
+        })
+        
+        print(
+            "🔍 [DEBUG] SemanticClusteringStep.__init__() - Initialization completed successfully"
+        )
+
+    async def execute(self, input_data: Dict[str, Any]) -> StepResult:
+        """Execute semantic clustering step."""
+        start_time = datetime.utcnow()
+
+        try:
+            metadata = input_data["metadata"]
+            chunks_with_embeddings = metadata["chunks_with_embeddings"]
+            logger.info(
+                f"Starting semantic clustering for {len(chunks_with_embeddings)} chunks"
+            )
+
+            # Perform semantic clustering
+            semantic_analysis = await self._perform_semantic_clustering(chunks_with_embeddings)
+
+            # Create step result
+            result = StepResult(
+                step="semantic_clustering",
+                status="completed",
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
+                summary_stats={
+                    "n_clusters": semantic_analysis.get("n_clusters", 0),
+                    "total_chunks": len(chunks_with_embeddings),
+                    "cluster_names_generated": len(semantic_analysis.get("cluster_summaries", [])),
+                },
+                sample_outputs={
+                    "cluster_examples": [
+                        {
+                            "id": summary.get("cluster_id"),
+                            "name": summary.get("cluster_name"),
+                            "chunk_count": summary.get("chunk_count", 0),
+                        }
+                        for summary in semantic_analysis.get("cluster_summaries", [])[:3]
+                    ]
+                },
+                data=semantic_analysis,
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
+            )
+
+            logger.info(
+                f"Semantic clustering completed: {semantic_analysis.get('n_clusters', 0)} clusters generated"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"Semantic clustering failed: {e}")
+            return StepResult(
+                step="semantic_clustering",
+                status="failed",
+                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
+                error_message=str(e),
+                error_details={"exception_type": type(e).__name__},
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
+            )
+
+    async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
+        """Validate that input data meets step requirements."""
+        required_fields = ["metadata"]
+        if not all(field in input_data for field in required_fields):
+            return False
+
+        metadata = input_data["metadata"]
+        required_metadata_fields = ["chunks_with_embeddings"]
+        return all(field in metadata for field in required_metadata_fields)
+
+    def estimate_duration(self, input_data: Dict[str, Any]) -> int:
+        """Estimate step duration in seconds."""
+        metadata = input_data.get("metadata", {})
+        chunks_count = len(metadata.get("chunks_with_embeddings", []))
+        # Clustering is compute-intensive: ~5 seconds per 100 chunks + LLM call
+        return max(60, (chunks_count // 100) * 5 + 30)
+
+    async def _perform_semantic_clustering(self, chunks_with_embeddings: List[Dict]) -> Dict[str, Any]:
+        """Perform semantic clustering and LLM-based naming - matches original implementation."""
+        print(
+            f"Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation..."
+        )
+
+        # Check if required libraries are available
+        if np is None or KMeans is None:
+            print("⚠️  numpy eller sklearn ikke tilgængelig - kan ikke lave clustering")
+            return {"clusters": {}, "cluster_summaries": [], "n_clusters": 0}
+
+        # Filter chunks with embeddings
+        valid_chunks = [
+            chunk for chunk in chunks_with_embeddings if chunk.get("embedding_1024") is not None
+        ]
+
+        if len(valid_chunks) == 0:
+            print("⚠️  Ingen embeddings fundet - kan ikke lave clustering")
+            return {"clusters": {}, "cluster_summaries": [], "n_clusters": 0}
+
+        print(f"Fundet {len(valid_chunks)} chunks med embeddings")
+
+        # Parse embeddings - exactly matching original implementation
+        embeddings = []
+        for chunk in valid_chunks:
+            embedding_str = chunk["embedding_1024"]
+            try:
+                if isinstance(embedding_str, str):
+                    # Use ast.literal_eval like original
+                    chunk_embedding = ast.literal_eval(embedding_str)
+                    
+                    # Ensure it's a list of floats
+                    if isinstance(chunk_embedding, list):
+                        chunk_embedding = [float(x) for x in chunk_embedding]
+                        embeddings.append(chunk_embedding)
+                    else:
+                        print(f"⚠️  Invalid embedding format for chunk {chunk['id']}")
+                        continue
+                else:
+                    embeddings.append(embedding_str)
+            except (ValueError, SyntaxError) as e:
+                print(f"⚠️  Failed to parse embedding for chunk {chunk['id']}: {e}")
+                continue
+
+        if len(embeddings) == 0:
+            print("⚠️  No valid embeddings could be parsed")
+            return {"clusters": {}, "cluster_summaries": [], "n_clusters": 0}
+
+        embeddings = np.array(embeddings)
+        print(f"Parsed {len(embeddings)} valid embeddings")
+
+        # Determine number of clusters - exactly matching original logic
+        n_chunks = len(valid_chunks)
+        n_clusters = min(
+            self.semantic_clusters_config["max_clusters"],
+            max(self.semantic_clusters_config["min_clusters"], n_chunks // 20),
+        )
+
+        print(f"Klyngedeling i {n_clusters} klynger...")
+
+        # Perform clustering - exactly matching original parameters
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        cluster_labels = kmeans.fit_predict(embeddings)
+
+        # Group chunks by cluster
+        clusters = defaultdict(list)
+        for i, label in enumerate(cluster_labels):
+            clusters[label].append(valid_chunks[i])
+
+        # Create initial cluster summaries with sample content (without names yet)
+        cluster_summaries = []
+        for cluster_id, cluster_chunks in clusters.items():
+            # Sample content for summary - exactly matching original
+            sample_content = []
+            for chunk in cluster_chunks[:3]:  # First 3 chunks as samples
+                content_preview = chunk.get("content", "")[:150]
+                sample_content.append(content_preview)
+
+            cluster_summary = {
+                "cluster_id": int(cluster_id),  # Convert numpy int32 to Python int
+                "chunk_count": len(cluster_chunks),
+                "sample_content": sample_content,
+                "representative_content": " | ".join(sample_content),
+            }
+            cluster_summaries.append(cluster_summary)
+
+        # Generate cluster names using LLM
+        cluster_names = await self._generate_cluster_names_llm(cluster_summaries)
+
+        # Add the generated names to summaries
+        for summary in cluster_summaries:
+            cluster_id = summary["cluster_id"]
+            summary["cluster_name"] = cluster_names.get(
+                cluster_id, f"Temaområde {cluster_id}"
+            )
+
+        print(f"Klynger oprettet:")
+        for summary in cluster_summaries:
+            print(
+                f"  {summary['cluster_name']} ({summary['chunk_count']} chunks): {summary['representative_content'][:100]}..."
+            )
+
+        # Convert clusters dict to have int keys instead of numpy int32
+        clusters_dict = {}
+        for cluster_id, cluster_chunks in clusters.items():
+            clusters_dict[int(cluster_id)] = cluster_chunks
+
+        return {
+            "clusters": clusters_dict,
+            "cluster_summaries": cluster_summaries,
+            "n_clusters": n_clusters,
+        }
+
+    async def _generate_cluster_names_llm(self, cluster_summaries: List[Dict[str, Any]]) -> Dict[int, str]:
+        """Generate meaningful cluster names using LLM - exactly matching original implementation."""
+        print(
+            f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger..."
+        )
+
+        # Prepare cluster samples for LLM - exactly matching original
+        cluster_samples = []
+        for summary in cluster_summaries:
+            cluster_id = summary["cluster_id"]
+            sample_content = summary.get("sample_content", [])
+
+            # Combine sample content into a representative text
+            combined_sample = " | ".join(sample_content)
+            cluster_samples.append(
+                {
+                    "cluster_id": cluster_id,
+                    "sample_text": combined_sample[
+                        :800
+                    ],  # Limit to avoid token overflow
+                }
+            )
+
+        # Create prompt for LLM to generate names - exactly matching original
+        samples_text = "\n".join(
+            [
+                f"Klynge {item['cluster_id']}: {item['sample_text']}"
+                for item in cluster_samples
+            ]
+        )
+
+        prompt = f"""Baseret på følgende dokumentindhold fra en byggeprojekt-database, generer korte, beskrivende navne for hver klynge.
+
+Navnene skal være:
+- Korte og præcise (2-4 ord)
+- Beskrivende for klyngens indhold
+- Professionelle og faglige
+- På dansk
+- Unikke (ingen gentagelser)
+
+Dokumentklynger:
+{samples_text}
+
+Generer navne i følgende format:
+Klynge 0: [Navn]
+Klynge 1: [Navn]
+...
+
+Svar kun med navnene i det specificerede format."""
+
+        try:
+            start_time = datetime.utcnow()
+            llm_response = await self._call_openrouter_api(prompt, max_tokens=500)
+            end_time = datetime.utcnow()
+
+            print(f"LLM klyngenavne genereret på {(end_time - start_time).total_seconds():.1f} sekunder")
+
+            # Parse the response to extract cluster names - exactly matching original
+            cluster_names = {}
+            for line in llm_response.strip().split("\n"):
+                if ":" in line and "Klynge" in line:
+                    try:
+                        parts = line.split(":", 1)
+                        if len(parts) == 2:
+                            cluster_part = parts[0].strip()
+                            name_part = parts[1].strip()
+
+                            # Extract cluster ID from "Klynge X" format
+                            cluster_id = int(cluster_part.split()[-1])
+                            cluster_names[cluster_id] = name_part
+
+                    except (ValueError, IndexError) as e:
+                        print(f"⚠️  Kunne ikke parse linje: '{line}' - {e}")
+                        continue
+
+            print(f"Parset {len(cluster_names)} klyngenavne fra LLM respons")
+
+            # Fallback for missing names - exactly matching original
+            for summary in cluster_summaries:
+                cluster_id = summary["cluster_id"]
+                if cluster_id not in cluster_names:
+                    fallback_name = f"Temaområde {cluster_id}"
+                    cluster_names[cluster_id] = fallback_name
+                    print(
+                        f"  Bruger fallback navn for klynge {cluster_id}: {fallback_name}"
+                    )
+
+            return cluster_names
+
+        except Exception as e:
+            print(f"⚠️  LLM klyngenavn generering fejlede: {str(e)}")
+            print(f"⚠️  Falder tilbage til generiske navne...")
+
+            # Fallback to generic names - exactly matching original
+            generic_names = [
+                "Tekniske Specifikationer",
+                "Projektdokumentation",
+                "Bygningskomponenter",
+                "Systeminstallationer",
+                "Udførselsdetaljer",
+                "Drifts- og Vedligehold",
+                "Kvalitetssikring",
+                "Sikkerhedsforhold",
+            ]
+
+            cluster_names = {}
+            for i, summary in enumerate(cluster_summaries):
+                cluster_id = summary["cluster_id"]
+                if i < len(generic_names):
+                    cluster_names[cluster_id] = generic_names[i]
+                else:
+                    cluster_names[cluster_id] = f"Temaområde {cluster_id}"
+
+            return cluster_names
+
+    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 500) -> str:
+        """Call OpenRouter API with the given prompt."""
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://constructionrag.com",
+            "X-Title": "ConstructionRAG Wiki Generator",
+        }
+
+        data = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": self.config.get("temperature", 0.3),
+        }
+
+        try:
+            import requests
+
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=self.api_timeout,
+            )
+
+            if response.status_code != 200:
+                raise Exception(
+                    f"OpenRouter API error: {response.status_code} - {response.text}"
+                )
+
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        except requests.exceptions.Timeout:
+            raise Exception(
+                f"OpenRouter API request timed out after {self.api_timeout} seconds"
+            )
+        except Exception as e:
+            raise Exception(f"OpenRouter API error: {e}")
