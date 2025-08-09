@@ -282,10 +282,20 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
    * EXTENSIVELY use Mermaid diagrams (e.g., `flowchart TD`, `sequenceDiagram`, `gantt`, `graph TD`, `Entity Relationship`, `Block`, `Git`, `Pie`, `Sankey`, `Timeline`) to visually represent project workflows, construction sequences, stakeholder relationships, and process flows found in the source documents.
    * Ensure diagrams are accurate and directly derived from information in the `[RELEVANT_PAGE_RETRIEVED_CHUNKS]`.
    * Provide a brief explanation before or after each diagram to give context.
-   * CRITICAL: All diagrams MUST follow strict vertical orientation:
-     - Use "graph TD" (top-down) directive for flow diagrams
-     - NEVER use "graph LR" (left-right)
-     - Maximum node width should be 3-4 words
+   * CRITICAL: All diagrams MUST follow strict syntax rules:
+     - Use "graph TD" (top-down) directive for flow diagrams (NEVER "graph LR")
+     - Node IDs must be simple letters/numbers (A, B, C1, D2, etc.)
+     - Node labels must be enclosed in square brackets: A[Label Text]
+     - Question/decision nodes use curly braces: B{{Decision?}}
+     - Connections use simple arrows: A --> B (NEVER use complex arrows)
+     - Maximum node label width should be 3-4 words
+     - NO special characters in node IDs (avoid spaces, hyphens, underscores in IDs)
+     - Each line must end with semicolon: A[Start] --> B[Process];
+     - Example: 
+       graph TD
+           A[Start] --> B{{Decision?}};
+           B --> C[Option 1];
+           B --> D[Option 2];
      - For sequence diagrams:
        - Start with "sequenceDiagram" directive on its own line
        - Define ALL participants at the beginning (Client, Contractor, Architect, Engineer, Inspector, etc.)

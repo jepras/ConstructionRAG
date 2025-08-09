@@ -215,7 +215,7 @@ IMPORTANT: The wiki content will be generated in Danish language.
 
 # Return output 
 ## Return output rules
-- Make sure each output at least have 1 "overview" page. 
+- Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language). Do NOT create multiple overview pages with similar names. 
 
 - Make sure each page has a topic and 6-10 associated queries that will help them retrieve relevant information for that topic. Like this for overview (in the language the document is, probably danish): 
 
@@ -407,7 +407,8 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
 
         # Ensure at least one overview page
         has_overview = any(
-            "overview" in page["title"].lower() for page in validated_pages
+            "overview" in page["title"].lower() or "oversigt" in page["title"].lower()
+            for page in validated_pages
         )
         if not has_overview:
             # Add a default overview page
