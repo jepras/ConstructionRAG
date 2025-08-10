@@ -75,7 +75,7 @@ async def test_wiki_pipeline_e2e_smoke(monkeypatch):
                 "document_ids": ["doc1"],
             }
         ),
-        "overview_generation": _DummyStep({"project_overview": {"summary": "ok"}}),
+        "overview_generation": _DummyStep({"project_overview": "Short overview"}),
         "semantic_clustering": _DummyStep({}),
         "structure_generation": _DummyStep({"wiki_structure": {}}),
         "page_content_retrieval": _DummyStep({"page_contents": {}}),
