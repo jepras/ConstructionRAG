@@ -15,7 +15,7 @@ from src.models import (
 )
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
-from .config.wiki_config import WikiConfig
+from src.services.config_service import ConfigService
 from .steps import (
     MetadataCollectionStep,
     OverviewGenerationStep,
@@ -31,15 +31,18 @@ logger = logging.getLogger(__name__)
 class WikiGenerationOrchestrator:
     """Orchestrator for wiki generation pipeline."""
 
-    def __init__(self, config: Optional[WikiConfig] = None):
-        self.config = config or WikiConfig()
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        # Load wiki config from SoT if not provided
+        self.config: Dict[str, Any] = config or ConfigService().get_effective_config(
+            "wiki"
+        )
         self.storage_service = StorageService()
         self.supabase = get_supabase_admin_client()
         self.steps = self._initialize_steps()
 
     def _initialize_steps(self) -> Dict[str, Any]:
         """Initialize pipeline steps."""
-        config_dict = self.config.model_dump()
+        config_dict = self.config
 
         return {
             "metadata_collection": MetadataCollectionStep(

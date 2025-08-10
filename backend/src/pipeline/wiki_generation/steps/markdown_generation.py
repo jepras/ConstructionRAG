@@ -13,6 +13,7 @@ from src.models import StepResult
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,14 @@ class MarkdownGenerationStep(PipelineStep):
             )
             raise
 
-        self.model = config.get("model", "google/gemini-2.5-flash")
+        wiki_cfg = ConfigService().get_effective_config("wiki")
+        gen_cfg = wiki_cfg.get("generation", {})
+        self.model = gen_cfg.get(
+            "model", config.get("model", "google/gemini-2.5-flash")
+        )
         self.language = config.get("language", "danish")
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
-        self.temperature = config.get("temperature", 0.3)
+        self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
         print(
             "🔍 [DEBUG] MarkdownGenerationStep.__init__() - Initialization completed successfully"

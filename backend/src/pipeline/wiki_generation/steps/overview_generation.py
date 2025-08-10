@@ -12,6 +12,7 @@ from src.models import StepResult
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.services.config_service import ConfigService
 
 # Reuse the production Voyage client from the indexing pipeline
 from src.pipeline.indexing.steps.embedding import VoyageEmbeddingClient
@@ -63,12 +64,15 @@ class OverviewGenerationStep(PipelineStep):
             )
             raise
 
-        # Configure embedding client for queries (force same as query pipeline: 1024 dims)
+        # Configure embedding client for queries via SoT (align with retrieval)
         voyage_settings = get_settings()
-        self.query_embedding_model = (
-            "voyage-multilingual-2"  # align with querying pipeline
+        sot_query = ConfigService().get_effective_config("query")
+        self.query_embedding_model = sot_query.get("embedding", {}).get(
+            "model", "voyage-multilingual-2"
         )
-        self.query_embedding_dims_expected = 1024  # Document column is embedding_1024
+        self.query_embedding_dims_expected = sot_query.get("embedding", {}).get(
+            "dimensions", 1024
+        )
         try:
             self.voyage_client = VoyageEmbeddingClient(
                 api_key=voyage_settings.voyage_api_key,
@@ -83,7 +87,11 @@ class OverviewGenerationStep(PipelineStep):
             )
             self.voyage_client = None
 
-        self.model = config.get("model", "google/gemini-2.5-flash")
+        # Generation model from SoT wiki generation section
+        wiki_cfg = ConfigService().get_effective_config("wiki")
+        self.model = wiki_cfg.get("generation", {}).get(
+            "model", config.get("model", "google/gemini-2.5-flash")
+        )
         self.similarity_threshold = config.get("similarity_threshold", 0.3)
         self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
         self.overview_query_count = config.get("overview_query_count", 12)
@@ -148,7 +156,9 @@ class OverviewGenerationStep(PipelineStep):
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
                     "queries_executed": len(overview_queries),
-                    "total_chunks_retrieved": len(overview_data.get("retrieved_chunks", [])),
+                    "total_chunks_retrieved": len(
+                        overview_data.get("retrieved_chunks", [])
+                    ),
                     "overview_length": len(project_overview),
                 },
                 sample_outputs={
@@ -470,7 +480,6 @@ class OverviewGenerationStep(PipelineStep):
         similar_chunks.sort(key=lambda x: x["similarity_score"], reverse=True)
         return similar_chunks[: self.max_chunks_per_query]
 
-
     async def _generate_llm_overview(
         self, overview_data: Dict[str, Any], metadata: Dict[str, Any]
     ) -> str:
@@ -502,7 +511,9 @@ class OverviewGenerationStep(PipelineStep):
 
             # Extract page number from metadata more reliably
             metadata_chunk = chunk.get("metadata", {})
-            page_number = metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
+            page_number = (
+                metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
+            )
 
             similarity_score = chunk.get("similarity_score", 0.0)
             query = chunk.get("retrieved_by_query", "")

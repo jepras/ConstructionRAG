@@ -1,12 +1,18 @@
-"""Configuration management system with async YAML loading and user overrides."""
+"""Configuration management for bridging to run storage.
 
-import yaml
+Phase 0 simplification:
+- Load effective configs from ConfigService (single JSON SoT)
+- Remove YAML loading and user overrides
+- Keep only the surface needed by existing orchestrators and run storage
+"""
+
 import asyncio
-from typing import Dict, Any, Optional
-from pathlib import Path
-from uuid import UUID
 import logging
-from pydantic import BaseModel, ValidationError
+from pathlib import Path
+from typing import Any, Dict, Optional
+from uuid import UUID
+
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +32,7 @@ class QueryConfig(BaseModel):
 
 
 class ConfigManager:
-    """Configuration manager with async operations and user overrides"""
+    """Configuration manager that bridges SoT configs to existing consumers and persists run configs."""
 
     def __init__(self, db=None):
         self.db = db
@@ -34,56 +40,12 @@ class ConfigManager:
         self._indexing_config_cache = None
         self._query_config_cache = None
 
-        # Get the directory where this config manager is located
+        # Directory reference kept in case of future file operations
         self.config_dir = Path(__file__).parent.parent
 
-    async def load_yaml_async(self, config_path: str) -> Dict[str, Any]:
-        """Async YAML file loading"""
-        try:
-            # Simulate async file reading
-            await asyncio.sleep(0.001)  # Minimal async operation
+    # YAML loading removed in Phase 0; all configs come from ConfigService
 
-            config_file = Path(config_path)
-            if not config_file.exists():
-                raise FileNotFoundError(f"Configuration file not found: {config_path}")
-
-            with open(config_file, "r", encoding="utf-8") as f:
-                config_data = yaml.safe_load(f)
-
-            return config_data
-
-        except Exception as e:
-            logger.error(f"Failed to load YAML config from {config_path}: {e}")
-            raise
-
-    async def get_user_config_overrides_async(
-        self, user_id: UUID, config_type: str, db=None
-    ) -> Dict[str, Any]:
-        """Get user configuration overrides from database (async)"""
-        if not db:
-            return {}
-
-        try:
-            # Simulate async database query
-            await asyncio.sleep(0.001)  # Minimal async operation
-
-            # This would be the actual database query
-            # result = await db.execute(
-            #     "SELECT config_key, config_value FROM user_config_overrides WHERE user_id = $1 AND config_type = $2",
-            #     user_id, config_type
-            # )
-
-            # Placeholder for actual implementation
-            overrides = {}
-            logger.info(
-                f"Retrieved config overrides for user {user_id}, type {config_type}"
-            )
-
-            return overrides
-
-        except Exception as e:
-            logger.error(f"Failed to get user config overrides: {e}")
-            return {}
+    # User overrides removed in Phase 0; use per-request overrides via service layer if needed
 
     def merge_and_validate_config_pure(
         self, defaults: Dict[str, Any], overrides: Dict[str, Any]
@@ -118,74 +80,65 @@ class ConfigManager:
     async def get_indexing_config(
         self, user_id: Optional[UUID] = None
     ) -> IndexingConfig:
-        """Get indexing configuration with user overrides using async operations"""
+        """Get indexing configuration from single SoT via ConfigService."""
         try:
-            # 1. Load YAML defaults (async file reading) - use relative path
-            config_path = (
-                self.config_dir / "indexing" / "config" / "indexing_config.yaml"
-            )
-            defaults = await self.load_yaml_async(str(config_path))
+            from src.services.config_service import ConfigService
 
-            # 2. Apply user overrides from database (async database query)
-            user_overrides = {}
-            if user_id:
-                user_overrides = await self.get_user_config_overrides_async(
-                    user_id, "indexing", self.db
-                )
-
-            # 3. Merge and validate (pure function)
-            merged_config = self.merge_and_validate_config_pure(
-                defaults, user_overrides
-            )
-
-            # 4. Validate with Pydantic
-            return IndexingConfig(**merged_config)
-
+            effective = ConfigService().get_effective_config("indexing")
+            # Map to legacy IndexingConfig shape expected by orchestrator
+            steps = {
+                "partition": effective.get("partition", {}),
+                "metadata": effective.get("metadata", {}),
+                "enrichment": effective.get("enrichment", {}),
+                "chunking": effective.get("chunking", {}),
+                "embedding": effective.get("embedding", {}),
+                "storage": effective.get("storage", {}),
+            }
+            orchestration = effective.get("orchestration", {})
+            return IndexingConfig(steps=steps, orchestration=orchestration)
         except Exception as e:
-            logger.error(f"Failed to get indexing config: {e}")
-            # Return default config on error
+            logger.error(f"Failed to get indexing config from SoT: {e}")
+            # Minimal safe fallback aligned with Phase 0 invariants
             return IndexingConfig(
                 steps={
-                    "partition": {"ocr_strategy": "auto", "extract_tables": True},
-                    "metadata": {"extract_page_structure": True},
-                    "enrichment": {"add_context_headers": True},
+                    "partition": {},
+                    "metadata": {},
+                    "enrichment": {},
                     "chunking": {"chunk_size": 1000, "overlap": 200},
-                    "embedding": {"model": "voyage-large-2", "dimensions": 1536},
-                    "storage": {"collection_prefix": "construction_docs"},
+                    "embedding": {"model": "voyage-multilingual-2", "dimensions": 1024},
+                    "storage": {},
                 },
                 orchestration={"max_concurrent_documents": 5, "fail_fast": True},
             )
 
     async def get_query_config(self, user_id: Optional[UUID] = None) -> QueryConfig:
-        """Get query configuration with user overrides using async operations"""
+        """Get query configuration from single SoT via ConfigService."""
         try:
-            # 1. Load YAML defaults (async file reading) - use relative path
-            config_path = self.config_dir / "querying" / "config" / "query_config.yaml"
-            defaults = await self.load_yaml_async(str(config_path))
+            from src.services.config_service import ConfigService
 
-            # 2. Apply user overrides from database (async database query)
-            user_overrides = {}
-            if user_id:
-                user_overrides = await self.get_user_config_overrides_async(
-                    user_id, "querying", self.db
-                )
-
-            # 3. Merge and validate (pure function)
-            merged_config = self.merge_and_validate_config_pure(
-                defaults, user_overrides
+            effective = ConfigService().get_effective_config("query")
+            steps = {
+                "query_processing": effective.get("query_processing", {}),
+                "retrieval": effective.get("retrieval", {}),
+                "generation": effective.get("generation", {}),
+                "quality_analysis": effective.get("quality_analysis", {}),
+            }
+            return QueryConfig(
+                steps=steps, orchestration=effective.get("orchestration", {})
             )
-
-            # 4. Validate with Pydantic
-            return QueryConfig(**merged_config)
-
         except Exception as e:
-            logger.error(f"Failed to get query config: {e}")
-            # Return default config on error
+            logger.error(f"Failed to get query config from SoT: {e}")
             return QueryConfig(
                 steps={
-                    "query_processing": {"semantic_expansion_count": 3},
-                    "retrieval": {"top_k": 5, "similarity_threshold": 0.7},
-                    "generation": {"model": "gpt-4", "temperature": 0.1},
+                    "query_processing": {},
+                    "retrieval": {
+                        "embedding_model": "voyage-multilingual-2",
+                        "dimensions": 1024,
+                    },
+                    "generation": {
+                        "model": "google/gemini-2.5-flash",
+                        "temperature": 0.1,
+                    },
                 },
                 orchestration={"response_timeout_seconds": 30, "fail_fast": True},
             )

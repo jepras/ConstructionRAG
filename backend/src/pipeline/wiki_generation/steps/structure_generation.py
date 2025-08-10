@@ -10,6 +10,7 @@ from src.models import StepResult
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +59,15 @@ class StructureGenerationStep(PipelineStep):
             )
             raise
 
-        self.model = config.get("model", "google/gemini-2.5-flash")
+        # Read generation settings from SoT (wiki.generation) with config fallback
+        wiki_cfg = ConfigService().get_effective_config("wiki")
+        gen_cfg = wiki_cfg.get("generation", {})
+        self.model = gen_cfg.get(
+            "model", config.get("model", "google/gemini-2.5-flash")
+        )
         self.language = config.get("language", "danish")
-        self.max_tokens = config.get(
-            "structure_max_tokens", 6000
-        )  # Increased from 3000
-        self.temperature = config.get("temperature", 0.3)
+        self.max_tokens = config.get("structure_max_tokens", 6000)
+        self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
         print(
             "🔍 [DEBUG] StructureGenerationStep.__init__() - Initialization completed successfully"
@@ -144,7 +148,9 @@ class StructureGenerationStep(PipelineStep):
             raise ValueError("OpenRouter API key not configured")
 
         # Prepare prompt
-        prompt = self._create_structure_prompt(project_overview, semantic_analysis, metadata)
+        prompt = self._create_structure_prompt(
+            project_overview, semantic_analysis, metadata
+        )
 
         # Call LLM
         response = await self._call_openrouter_api(prompt, max_tokens=3000)

@@ -22,6 +22,7 @@ try:
     from ..shared.config_manager import ConfigManager
 except Exception as e:
     raise
+from src.services.config_service import ConfigService
 
 try:
     from ..shared.models import DocumentInput, PipelineError
@@ -121,7 +122,7 @@ class IndexingOrchestrator:
     async def initialize_steps(self, user_id: Optional[UUID] = None):
         """Initialize pipeline steps with configuration"""
         try:
-            # Load configuration
+            # Load configuration (SoT overrides enforced in ConfigManager)
             if not self.config_manager:
                 raise ValueError("Config manager is None - cannot initialize steps")
 
@@ -275,13 +276,9 @@ class IndexingOrchestrator:
                 index_run_id=indexing_run.id,
             )
 
-            # Store the configuration used for this run
-            config = await self.config_manager.get_indexing_config(
-                document_input.user_id
-            )
-            await self.config_manager.store_run_config(
-                indexing_run.id, config.model_dump()
-            )
+            # Store the configuration used for this run (effective indexing config)
+            effective = ConfigService().get_effective_config("indexing")
+            await self.config_manager.store_run_config(indexing_run.id, effective)
 
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(
@@ -437,13 +434,9 @@ class IndexingOrchestrator:
                 index_run_id=indexing_run.id,
             )
 
-            # Store the configuration used for this run
-            config = await self.config_manager.get_indexing_config(
-                document_inputs[0].user_id
-            )
-            await self.config_manager.store_run_config(
-                indexing_run.id, config.model_dump()
-            )
+            # Store the configuration used for this run (effective indexing config)
+            effective = ConfigService().get_effective_config("indexing")
+            await self.config_manager.store_run_config(indexing_run.id, effective)
 
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(

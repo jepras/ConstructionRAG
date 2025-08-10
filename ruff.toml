@@ -1,0 +1,26 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = [
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "I",  # isort
+  "UP", # pyupgrade
+  "B"   # flake8-bugbear (subset)
+]
+ignore = []
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+
+[lint.isort]
+known-first-party = ["src"]
+combine-as-imports = true
+
+# NOTE: Lint is intended for new v2 code paths first. Run Ruff with explicit paths like:
+#   ruff check backend/src/api/v2 backend/src/services/config_service.py backend/src/shared/config_models.py
+

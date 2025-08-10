@@ -25,6 +25,7 @@ from .models import (
 )
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,73 @@ class QueryPipelineOrchestrator:
     """Orchestrates the complete query pipeline from input to response"""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        self.config = config or self._get_default_config()
+        if config is not None:
+            self.config = config
+        else:
+            # Load from SoT and build effective query config
+            effective = ConfigService().get_effective_config("query")
+            self.config = {
+                "query_processing": {
+                    "provider": "openrouter",
+                    "model": effective.get("generation", {}).get(
+                        "model", "google/gemini-2.5-flash"
+                    ),
+                    "fallback_models": ["anthropic/claude-3.5-haiku"],
+                    "timeout_seconds": 1.0,
+                    "max_tokens": 200,
+                    "temperature": 0.1,
+                    "variations": {
+                        "semantic_expansion": True,
+                        "hyde_document": True,
+                        "formal_variation": True,
+                        "parallel_generation": True,
+                    },
+                },
+                "retrieval": {
+                    "embedding_model": effective["embedding"]["model"],
+                    "dimensions": effective["embedding"]["dimensions"],
+                    "similarity_metric": effective.get("retrieval", {}).get(
+                        "similarity_metric", "cosine"
+                    ),
+                    "top_k": effective.get("retrieval", {}).get("top_k", 5),
+                    "similarity_thresholds": {
+                        "excellent": 0.75,
+                        "good": 0.60,
+                        "acceptable": 0.40,
+                        "minimum": 0.25,
+                    },
+                    "danish_thresholds": {
+                        "excellent": 0.70,
+                        "good": 0.55,
+                        "acceptable": 0.35,
+                        "minimum": 0.20,
+                    },
+                },
+                "generation": {
+                    "provider": "openrouter",
+                    "model": effective["generation"]["model"],
+                    "fallback_models": effective["generation"].get(
+                        "fallback_models",
+                        [
+                            "anthropic/claude-3.5-haiku",
+                            "meta-llama/llama-3.1-8b-instruct",
+                        ],
+                    ),
+                    "timeout_seconds": effective["generation"].get(
+                        "timeout_seconds", 5.0
+                    ),
+                    "max_tokens": effective["generation"].get("max_tokens", 1000),
+                    "temperature": effective["generation"].get("temperature", 0.1),
+                    "response_format": effective["generation"].get(
+                        "response_format",
+                        {
+                            "include_citations": True,
+                            "include_confidence": True,
+                            "language": "danish",
+                        },
+                    ),
+                },
+            }
         self.settings = get_settings()
         self.db = get_supabase_admin_client()
 
