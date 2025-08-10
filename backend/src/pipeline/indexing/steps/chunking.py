@@ -46,7 +46,7 @@ class IntelligentChunker:
             if hasattr(meta, "model_dump"):
                 meta = meta.model_dump()
             elif hasattr(meta, "dict"):
-                meta = meta.dict()
+                meta = meta.model_dump(exclude_none=True)
             return meta
 
         # 2. Nested in original_element (for enriched elements)
@@ -58,7 +58,7 @@ class IntelligentChunker:
                 if hasattr(meta, "model_dump"):
                     meta = meta.model_dump()
                 elif hasattr(meta, "dict"):
-                    meta = meta.dict()
+                    meta = meta.model_dump(exclude_none=True)
                 return meta
             # If it's a Pydantic model
             if hasattr(orig, "structural_metadata"):
@@ -66,7 +66,7 @@ class IntelligentChunker:
                 if hasattr(meta, "model_dump"):
                     meta = meta.model_dump()
                 elif hasattr(meta, "dict"):
-                    meta = meta.dict()
+                    meta = meta.model_dump(exclude_none=True)
                 return meta
 
         # 3. Fallback: try top-level keys

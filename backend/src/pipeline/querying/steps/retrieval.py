@@ -13,6 +13,8 @@ from ..models import SearchResult, QueryVariations
 from ...shared.base_step import PipelineStep, StepResult
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +103,7 @@ class DocumentRetriever(PipelineStep):
 
             # Create sample outputs for debugging
             sample_outputs = {
-                "search_results": [result.dict() for result in results],
+                "search_results": [r.model_dump(exclude_none=True) for r in results],
                 "results_count": len(results),
                 "top_similarity": results[0].similarity_score if results else 0.0,
             }
@@ -128,22 +130,16 @@ class DocumentRetriever(PipelineStep):
 
         except Exception as e:
             logger.error(f"Error in retrieval step: {e}")
-            return StepResult(
-                step=self.get_step_name(),
-                status="failed",
-                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Retrieval failed",
+                error_code=ErrorCode.DATABASE_ERROR,
+                details={"reason": str(e)},
+            ) from e
 
     async def search(
         self, variations: QueryVariations, indexing_run_id: Optional[str] = None
     ) -> List[SearchResult]:
         """Search documents using best query variation"""
-
-        logger.info(f"Searching documents with {len(variations.dict())} variations")
 
         # Select best variation (for now, use original)
         # TODO: Implement variation selection logic

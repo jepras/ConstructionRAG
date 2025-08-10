@@ -24,7 +24,6 @@ try:
     UNSTRUCTURED_AVAILABLE = True
 except ImportError:
     UNSTRUCTURED_AVAILABLE = False
-    logger.warning("Unstructured not available - will use PyMuPDF only")
 
 # Storage
 from src.services.storage_service import StorageService

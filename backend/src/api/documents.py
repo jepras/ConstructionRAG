@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.services.auth_service import get_current_user, get_current_user_optional
-from src.models.document import Document, DocumentStatus
+from src.models import Document, DocumentStatus
 from src.models.pipeline import UploadType, PipelineStatus
 from src.pipeline.shared.models import DocumentInput
 from src.services.storage_service import StorageService
@@ -837,36 +837,13 @@ async def get_documents_by_index_run(
             db.table("documents").select("*").in_("id", document_ids).execute()
         )
 
-        logger.info(f"📊 Documents query result: {documents_result}")
-        logger.info(
-            f"📊 Documents data length: {len(documents_result.data) if documents_result.data else 0}"
-        )
-
         if not documents_result.data:
             logger.warning(f"❌ No documents found for IDs: {document_ids}")
             return []
 
-        # Log details about each document
-        for i, doc in enumerate(documents_result.data):
-            logger.info(
-                f"📄 Document {i+1}: ID={doc.get('id')}, filename={doc.get('filename')}"
-            )
-            step_results = doc.get("step_results", {})
-            logger.info(f"  Step results keys: {list(step_results.keys())}")
-            logger.info(f"  Step results count: {len(step_results)}")
-
-            # Log specific step data
-            for step_name, step_data in step_results.items():
-                if isinstance(step_data, dict):
-                    logger.info(
-                        f"    {step_name}: status={step_data.get('status')}, keys={list(step_data.keys())}"
-                    )
-                else:
-                    logger.info(f"    {step_name}: {type(step_data)}")
-
         # Convert to Document models to trigger computed properties
         logger.info(f"🔄 Converting raw documents to Document models...")
-        from src.models.document import Document
+        from src.models import Document
 
         document_models = []
         for i, doc_data in enumerate(documents_result.data):

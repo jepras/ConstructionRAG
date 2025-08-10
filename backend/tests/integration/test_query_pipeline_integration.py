@@ -1,3 +1,26 @@
+import pytest
+
+from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
+from src.pipeline.querying.models import QueryRequest, QueryResponse
+
+
+@pytest.mark.asyncio
+async def test_query_pipeline_end_to_end_smoke(monkeypatch):
+    orchestrator = QueryPipelineOrchestrator()
+
+    # Build a minimal valid request
+    req = QueryRequest(query="Hvad er standardafstand for spær?", user_id="test-user")
+
+    # Execute the pipeline
+    resp = await orchestrator.process_query(req)
+
+    # Basic shape assertions (response model)
+    assert isinstance(resp, QueryResponse)
+    assert isinstance(resp.response, str)
+    assert isinstance(resp.search_results, list)
+    assert isinstance(resp.performance_metrics, dict)
+
+
 """
 Integration test for the complete query pipeline.
 

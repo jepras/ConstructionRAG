@@ -327,7 +327,7 @@ class WikiGenerationOrchestrator:
         )
 
         # Convert UUIDs to strings for JSON serialization
-        data_dict = wiki_run_data.dict()
+        data_dict = wiki_run_data.model_dump(exclude_none=True)
         if data_dict.get("user_id"):
             data_dict["user_id"] = str(data_dict["user_id"])
         if data_dict.get("project_id"):
