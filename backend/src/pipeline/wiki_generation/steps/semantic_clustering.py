@@ -17,6 +17,8 @@ except ImportError:
 
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
@@ -138,15 +140,11 @@ class SemanticClusteringStep(PipelineStep):
 
         except Exception as e:
             logger.error(f"Semantic clustering failed: {e}")
-            return StepResult(
-                step="semantic_clustering",
-                status="failed",
-                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Semantic clustering failed",
+                error_code=ErrorCode.EXTERNAL_API_ERROR,
+                details={"reason": str(e)},
+            ) from e
 
     async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
         """Validate that input data meets step requirements."""

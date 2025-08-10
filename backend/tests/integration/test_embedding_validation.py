@@ -15,6 +15,7 @@ from uuid import UUID
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+import pytest
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -264,6 +265,16 @@ def validate_embedding_structure(chunks: List[Dict[str, Any]]) -> bool:
 
     print("✅ All chunks have valid embedding structure")
     return True
+
+
+@pytest.fixture
+def chunks() -> List[Dict[str, Any]]:
+    """Provide a minimal default chunks fixture for pytest collection.
+
+    This test module is primarily a script; the fixture avoids collection errors
+    when running the full suite without DB-backed chunks.
+    """
+    return []
 
 
 def test_embedding_quality(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:

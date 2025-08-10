@@ -51,6 +51,21 @@ def setup_logging(log_level: str | None = None) -> None:
     root_logger.handlers = [handler]
     root_logger.setLevel(getattr(logging, log_level.upper()))
 
+    # Quiet noisy third-party loggers (HTTP/2 debug, client libraries)
+    noisy_loggers: dict[str, str] = {
+        "httpx": "WARNING",
+        "httpcore": "WARNING",
+        "hpack": "WARNING",
+        "uvicorn": "INFO",
+        "uvicorn.error": "INFO",
+        "uvicorn.access": "WARNING",
+    }
+    for logger_name, level in noisy_loggers.items():
+        lib_logger = logging.getLogger(logger_name)
+        lib_logger.setLevel(getattr(logging, level, logging.WARNING))
+        # Prevent double logging via root
+        lib_logger.propagate = False
+
 
 def get_logger(name: str) -> structlog.BoundLogger:
     """Get a structured logger instance"""

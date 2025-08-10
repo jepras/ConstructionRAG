@@ -12,6 +12,8 @@ from ..models import QueryVariations
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from src.config.settings import get_settings
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +41,7 @@ class QueryProcessor(PipelineStep):
     """Generate query variations to improve retrieval quality"""
 
     def __init__(self, config: QueryProcessingConfig):
-        super().__init__(config.dict(), None)
+        super().__init__(config.model_dump(), None)
         self.config = config
 
     async def process(self, query: str) -> QueryVariations:
@@ -222,7 +224,7 @@ Svar kun med det omskrevne spørgsmål:"""
 
             # Create sample outputs for debugging
             sample_outputs = {
-                "variations": variations.dict(),
+                "variations": variations.model_dump(exclude_none=True),
                 "original_query": input_data,
             }
 
@@ -232,7 +234,7 @@ Svar kun med det omskrevne spørgsmål:"""
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
                     "variations_generated": len(
-                        [v for v in variations.dict().values() if v]
+                        [v for v in variations.model_dump().values() if v]
                     ),
                     "original_query_length": len(input_data),
                 },
@@ -243,15 +245,11 @@ Svar kun med det omskrevne spørgsmål:"""
 
         except Exception as e:
             logger.error(f"Error in query processing step: {e}")
-            return StepResult(
-                step=self.get_step_name(),
-                status="failed",
-                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Query processing failed",
+                error_code=ErrorCode.EXTERNAL_API_ERROR,
+                details={"reason": str(e)},
+            ) from e
 
     async def validate_prerequisites_async(self, input_data: str) -> bool:
         """Validate query processing prerequisites"""

@@ -16,6 +16,8 @@ from langchain_core.messages import HumanMessage
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import PipelineError
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -388,17 +390,11 @@ class EnrichmentStep(PipelineStep):
 
         except Exception as e:
             logger.error(f"Enrichment step failed: {e}")
-            duration = (datetime.utcnow() - start_time).total_seconds()
-
-            return StepResult(
-                step="enrichment",
-                status="failed",
-                duration_seconds=duration,
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Enrichment step failed",
+                error_code=ErrorCode.EXTERNAL_API_ERROR,
+                details={"reason": str(e)},
+            ) from e
 
     async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate enrichment step prerequisites"""

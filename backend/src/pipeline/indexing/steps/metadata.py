@@ -11,6 +11,8 @@ from uuid import UUID
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import DocumentInput, PipelineError
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
@@ -759,17 +761,11 @@ class MetadataStep(PipelineStep):
             import traceback
 
             logger.error(f"Traceback: {traceback.format_exc()}")
-            duration = (datetime.utcnow() - start_time).total_seconds()
-
-            return StepResult(
-                step="metadata",
-                status="failed",
-                duration_seconds=duration,
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Metadata step failed",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                details={"reason": str(e)},
+            ) from e
 
     async def validate_prerequisites_async(self, input_data: Any) -> bool:
         """Validate metadata step prerequisites"""

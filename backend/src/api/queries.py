@@ -20,6 +20,8 @@ from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
 from src.pipeline.querying.models import QueryRequest, QueryResponse, QueryFeedback
 from src.api.auth import get_current_user
 from src.config.database import get_supabase_admin_client, get_supabase_client
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -102,21 +104,28 @@ async def process_query(
         logger.info(f"Query processed successfully")
         return response
 
+    except HTTPException as exc:
+        # Bridge legacy HTTPException to AppError for uniform envelope
+        raise AppError(
+            str(exc.detail),
+            error_code=(
+                ErrorCode.NOT_FOUND
+                if exc.status_code == 404
+                else ErrorCode.INTERNAL_ERROR
+            ),
+        )
     except Exception as e:
         logger.error(f"Error processing query: {e}")
-
-        # Store error in database
+        # Store error in database (best effort)
         try:
             await store_error_query(request, str(e))
         except Exception as db_error:
             logger.error(f"Failed to store error query: {db_error}")
-
-        # Return fallback response
-        return QueryResponse(
-            response="Beklager, der opstod en fejl under behandling af dit spørgsmål. Prøv venligst igen.",
-            search_results=[],
-            performance_metrics={"error": str(e)},
-            quality_metrics={"relevance_score": 0.0, "confidence": "low"},
+        # Raise AppError to hit centralized handler
+        raise AppError(
+            "Failed to process query",
+            error_code=ErrorCode.EXTERNAL_API_ERROR,
+            details={"reason": str(e)},
         )
 
 
@@ -205,7 +214,7 @@ async def submit_query_feedback(
         )
 
         if not result.data:
-            raise HTTPException(status_code=404, detail="Query not found")
+            raise AppError("Query not found", error_code=ErrorCode.NOT_FOUND)
 
         query_run = result.data[0]
         current_quality_metrics = query_run.get("quality_metrics", {})
@@ -239,11 +248,15 @@ async def submit_query_feedback(
 
         return FeedbackResponse(success=True, message="Feedback submitted successfully")
 
-    except HTTPException:
+    except AppError:
         raise
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
-        raise HTTPException(status_code=500, detail="Failed to submit feedback")
+        raise AppError(
+            "Failed to submit feedback",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+        )
 
 
 @router.get("/quality-dashboard", response_model=QualityDashboardResponse)
@@ -271,7 +284,7 @@ async def get_quality_dashboard(
         elif time_period == "30d":
             start_time = now - timedelta(days=30)
         else:
-            raise HTTPException(status_code=400, detail="Invalid time period")
+            raise AppError("Invalid time period", error_code=ErrorCode.VALIDATION_ERROR)
 
         # Get all queries in time period
         result = (
@@ -364,12 +377,14 @@ async def get_quality_dashboard(
             recent_queries=recent_queries,
         )
 
-    except HTTPException:
+    except AppError:
         raise
     except Exception as e:
         logger.error(f"Error getting quality dashboard: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to retrieve quality dashboard"
+        raise AppError(
+            "Failed to retrieve quality dashboard",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
         )
 
 

@@ -1,13 +1,12 @@
 from .user import UserProfile, UserProfileCreate, UserProfileUpdate
-from .document import (
+from .domain.document import (
     Document,
-    DocumentChunk,
     DocumentStatus,
     DocumentCreate,
     DocumentUpdate,
-    DocumentChunkCreate,
     DocumentWithChunks,
 )
+from .domain.document_chunk import DocumentChunk, DocumentChunkCreate
 from .pipeline import (
     # Legacy models for backward compatibility
     PipelineRun,

@@ -24,6 +24,9 @@ from .models import (
     QueryRun,
     QualityMetrics,
     SearchResult,
+    to_query_variations,
+    to_search_results,
+    to_query_response,
 )
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
@@ -219,8 +222,7 @@ class QueryPipelineOrchestrator:
             run_logger.info(f"Query processing completed in {step1_duration:.2f}s")
 
             # Get variations from sample_outputs
-            variations_data = query_result.sample_outputs.get("variations", {})
-            variations = QueryVariations(**variations_data)
+            variations = to_query_variations(query_result.sample_outputs)
 
             # Step 2: Document Retrieval
             run_logger.info("Step 2: Retrieving relevant documents...")
@@ -244,10 +246,7 @@ class QueryPipelineOrchestrator:
             run_logger.info(f"Retrieval completed in {step2_duration:.2f}s")
 
             # Get search results from sample_outputs and convert to SearchResult objects
-            search_results_data = retrieval_result.sample_outputs.get(
-                "search_results", []
-            )
-            search_results = [SearchResult(**result) for result in search_results_data]
+            search_results = to_search_results(retrieval_result.sample_outputs)
 
             # Step 3: Response Generation
             run_logger.info("Step 3: Generating response...")
@@ -262,8 +261,7 @@ class QueryPipelineOrchestrator:
             run_logger.info(f"Generation completed in {step3_duration:.2f}s")
 
             # Get response from sample_outputs
-            response_data = generation_result.sample_outputs.get("response", {})
-            response = QueryResponse(**response_data)
+            response = to_query_response(generation_result.sample_outputs)
 
             # Add step timings to the response
             response.step_timings = step_timings
@@ -346,9 +344,11 @@ class QueryPipelineOrchestrator:
                 "id": query_run_id,
                 "user_id": request.user_id,
                 "original_query": request.query,
-                "query_variations": variations.dict() if variations else None,
+                "query_variations": (
+                    variations.model_dump(exclude_none=True) if variations else None
+                ),
                 "search_results": (
-                    [result.dict() for result in search_results]
+                    [result.model_dump(exclude_none=True) for result in search_results]
                     if search_results
                     else None
                 ),
@@ -357,7 +357,7 @@ class QueryPipelineOrchestrator:
                     response.performance_metrics if response else None
                 ),
                 "quality_metrics": (
-                    response.quality_metrics.dict()
+                    response.quality_metrics.model_dump(exclude_none=True)
                     if response and response.quality_metrics
                     else None
                 ),

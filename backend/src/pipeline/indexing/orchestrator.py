@@ -66,6 +66,12 @@ except Exception as e:
     raise
 
 logger = logging.getLogger(__name__)
+from .models import (
+    to_partition_output,
+    to_metadata_output,
+    to_enrichment_output,
+    to_chunking_output,
+)
 
 
 class IndexingOrchestrator:
@@ -336,12 +342,28 @@ class IndexingOrchestrator:
                     )
                     return False
 
-                # Update current data for next step
-                # Pass the data field from StepResult, not the entire StepResult object
+                # Update current data for next step using typed adapters
                 if hasattr(result, "data") and result.data is not None:
-                    current_data = result.data
+                    if isinstance(step, PartitionStep):
+                        current_data = to_partition_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    elif isinstance(step, MetadataStep):
+                        current_data = to_metadata_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    elif isinstance(step, EnrichmentStep):
+                        current_data = to_enrichment_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    elif isinstance(step, ChunkingStep):
+                        current_data = to_chunking_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    else:
+                        current_data = result.data
                     logger.info(
-                        f"🔍 Orchestrator passing result.data to next step: type={type(result.data)}"
+                        f"🔍 Orchestrator passing typed data to next step: type={type(current_data)}"
                     )
                 else:
                     current_data = result
@@ -592,7 +614,28 @@ class IndexingOrchestrator:
                     )
                     return False
 
-                current_data = result
+                # Prepare typed data for next step
+                if hasattr(result, "data") and result.data is not None:
+                    if isinstance(step, PartitionStep):
+                        current_data = to_partition_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    elif isinstance(step, MetadataStep):
+                        current_data = to_metadata_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    elif isinstance(step, EnrichmentStep):
+                        current_data = to_enrichment_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    elif isinstance(step, ChunkingStep):
+                        current_data = to_chunking_output(result.data).model_dump(
+                            exclude_none=True
+                        )
+                    else:
+                        current_data = result.data
+                else:
+                    current_data = result
 
             print(
                 f"✅ Completed individual steps for document {document_input.document_id}"

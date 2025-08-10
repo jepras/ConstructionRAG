@@ -24,7 +24,6 @@ try:
     UNSTRUCTURED_AVAILABLE = True
 except ImportError:
     UNSTRUCTURED_AVAILABLE = False
-    logger.warning("Unstructured not available - will use PyMuPDF only")
 
 # Storage
 from src.services.storage_service import StorageService
@@ -33,6 +32,8 @@ from src.services.storage_service import StorageService
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import DocumentInput, PipelineError
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 
 
 class PartitionStep(PipelineStep):
@@ -605,17 +606,11 @@ class PartitionStep(PipelineStep):
 
         except Exception as e:
             logger.error(f"Partition step failed: {e}")
-            duration = (datetime.utcnow() - start_time).total_seconds()
-
-            return StepResult(
-                step="partition",
-                status="failed",
-                duration_seconds=duration,
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Partition step failed",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                details={"reason": str(e)},
+            ) from e
         finally:
             # Clean up downloaded temporary files
             if downloaded_file_path and os.path.exists(downloaded_file_path):

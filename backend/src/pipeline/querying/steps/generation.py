@@ -14,6 +14,8 @@ from ..models import (
     QualityDecision,
 )
 from src.config.settings import get_settings
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +74,7 @@ class ResponseGenerator(PipelineStep):
                 sample_outputs={
                     "response_preview": response.response[:200] + "...",
                     "sources_count": len(response.search_results),
-                    "response": response.dict(),
+                    "response": response.model_dump(exclude_none=True),
                 },
                 started_at=start_time,
                 completed_at=datetime.utcnow(),
@@ -80,15 +82,11 @@ class ResponseGenerator(PipelineStep):
 
         except Exception as e:
             logger.error(f"Error in generation step: {e}")
-            return StepResult(
-                step=self.get_step_name(),
-                status="failed",
-                duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
-                error_message=str(e),
-                error_details={"exception_type": type(e).__name__},
-                started_at=start_time,
-                completed_at=datetime.utcnow(),
-            )
+            raise AppError(
+                "Generation failed",
+                error_code=ErrorCode.EXTERNAL_API_ERROR,
+                details={"reason": str(e)},
+            ) from e
 
     async def generate_response(
         self, search_results: List[SearchResult]

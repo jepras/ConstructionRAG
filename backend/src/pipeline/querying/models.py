@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
@@ -102,3 +102,31 @@ class QueryRun(BaseModel):
     performance_metrics: Optional[Dict[str, Any]] = None
     quality_metrics: Optional[Dict[str, Any]] = None
     created_at: Optional[datetime] = None
+
+
+# --- Adapters: convert sample_outputs dicts into typed models ---
+
+
+def to_query_variations(sample_outputs: Dict[str, Any]) -> QueryVariations:
+    variations_data = sample_outputs.get("variations", {}) or {}
+    if isinstance(variations_data, QueryVariations):
+        return variations_data
+    return QueryVariations(**variations_data)
+
+
+def to_search_results(sample_outputs: Dict[str, Any]) -> List[SearchResult]:
+    raw = sample_outputs.get("search_results", []) or []
+    results: List[SearchResult] = []
+    for item in raw:
+        if isinstance(item, SearchResult):
+            results.append(item)
+        else:
+            results.append(SearchResult(**item))
+    return results
+
+
+def to_query_response(sample_outputs: Dict[str, Any]) -> "QueryResponse":
+    response_data = sample_outputs.get("response", {}) or {}
+    if isinstance(response_data, QueryResponse):
+        return response_data
+    return QueryResponse(**response_data)
