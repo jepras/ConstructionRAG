@@ -20,6 +20,7 @@ from src.models import StepResult
 from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -68,16 +69,19 @@ class SemanticClusteringStep(PipelineStep):
             )
             raise
 
-        self.model = config.get("model", "google/gemini-2.5-flash")
+        wiki_cfg = ConfigService().get_effective_config("wiki")
+        gen_cfg = wiki_cfg.get("generation", {})
+        self.model = gen_cfg.get(
+            "model", config.get("model", "google/gemini-2.5-flash")
+        )
         self.language = config.get("language", "danish")
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        
+
         # Semantic clustering configuration matching original
-        self.semantic_clusters_config = config.get("semantic_clusters", {
-            "min_clusters": 4, 
-            "max_clusters": 10
-        })
-        
+        self.semantic_clusters_config = config.get(
+            "semantic_clusters", {"min_clusters": 4, "max_clusters": 10}
+        )
+
         print(
             "🔍 [DEBUG] SemanticClusteringStep.__init__() - Initialization completed successfully"
         )
@@ -94,7 +98,9 @@ class SemanticClusteringStep(PipelineStep):
             )
 
             # Perform semantic clustering
-            semantic_analysis = await self._perform_semantic_clustering(chunks_with_embeddings)
+            semantic_analysis = await self._perform_semantic_clustering(
+                chunks_with_embeddings
+            )
 
             # Create step result
             result = StepResult(
@@ -104,7 +110,9 @@ class SemanticClusteringStep(PipelineStep):
                 summary_stats={
                     "n_clusters": semantic_analysis.get("n_clusters", 0),
                     "total_chunks": len(chunks_with_embeddings),
-                    "cluster_names_generated": len(semantic_analysis.get("cluster_summaries", [])),
+                    "cluster_names_generated": len(
+                        semantic_analysis.get("cluster_summaries", [])
+                    ),
                 },
                 sample_outputs={
                     "cluster_examples": [
@@ -113,7 +121,9 @@ class SemanticClusteringStep(PipelineStep):
                             "name": summary.get("cluster_name"),
                             "chunk_count": summary.get("chunk_count", 0),
                         }
-                        for summary in semantic_analysis.get("cluster_summaries", [])[:3]
+                        for summary in semantic_analysis.get("cluster_summaries", [])[
+                            :3
+                        ]
                     ]
                 },
                 data=semantic_analysis,
@@ -155,7 +165,9 @@ class SemanticClusteringStep(PipelineStep):
         # Clustering is compute-intensive: ~5 seconds per 100 chunks + LLM call
         return max(60, (chunks_count // 100) * 5 + 30)
 
-    async def _perform_semantic_clustering(self, chunks_with_embeddings: List[Dict]) -> Dict[str, Any]:
+    async def _perform_semantic_clustering(
+        self, chunks_with_embeddings: List[Dict]
+    ) -> Dict[str, Any]:
         """Perform semantic clustering and LLM-based naming - matches original implementation."""
         print(
             f"Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation..."
@@ -168,7 +180,9 @@ class SemanticClusteringStep(PipelineStep):
 
         # Filter chunks with embeddings
         valid_chunks = [
-            chunk for chunk in chunks_with_embeddings if chunk.get("embedding_1024") is not None
+            chunk
+            for chunk in chunks_with_embeddings
+            if chunk.get("embedding_1024") is not None
         ]
 
         if len(valid_chunks) == 0:
@@ -185,7 +199,7 @@ class SemanticClusteringStep(PipelineStep):
                 if isinstance(embedding_str, str):
                     # Use ast.literal_eval like original
                     chunk_embedding = ast.literal_eval(embedding_str)
-                    
+
                     # Ensure it's a list of floats
                     if isinstance(chunk_embedding, list):
                         chunk_embedding = [float(x) for x in chunk_embedding]
@@ -268,7 +282,9 @@ class SemanticClusteringStep(PipelineStep):
             "n_clusters": n_clusters,
         }
 
-    async def _generate_cluster_names_llm(self, cluster_summaries: List[Dict[str, Any]]) -> Dict[int, str]:
+    async def _generate_cluster_names_llm(
+        self, cluster_summaries: List[Dict[str, Any]]
+    ) -> Dict[int, str]:
         """Generate meaningful cluster names using LLM - exactly matching original implementation."""
         print(
             f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger..."
@@ -323,7 +339,9 @@ Svar kun med navnene i det specificerede format."""
             llm_response = await self._call_openrouter_api(prompt, max_tokens=500)
             end_time = datetime.utcnow()
 
-            print(f"LLM klyngenavne genereret på {(end_time - start_time).total_seconds():.1f} sekunder")
+            print(
+                f"LLM klyngenavne genereret på {(end_time - start_time).total_seconds():.1f} sekunder"
+            )
 
             # Parse the response to extract cluster names - exactly matching original
             cluster_names = {}

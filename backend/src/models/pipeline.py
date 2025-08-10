@@ -111,7 +111,7 @@ class WikiGenerationRun(BaseModel):
         WikiGenerationStatus.PENDING, description="Wiki generation status"
     )
     language: str = Field("danish", description="Wiki language")
-    model: str = Field("google/gemini-2.5-flash", description="LLM model used")
+    model: str = Field(..., description="LLM model used (from SoT)")
     step_results: Dict[str, StepResult] = Field(
         default_factory=dict, description="Detailed results from each step"
     )
@@ -408,14 +408,19 @@ class PipelineConfig(BaseModel):
 
     chunk_size: int = Field(1000, description="Text chunk size")
     chunk_overlap: int = Field(200, description="Chunk overlap size")
-    embedding_model: str = Field("voyage-large-2", description="Embedding model name")
-    embedding_dimensions: int = Field(1536, description="Embedding dimensions")
+    # Values should be read from SoT; no runtime defaults here
+    embedding_model: str = Field(..., description="Embedding model name (from SoT)")
+    embedding_dimensions: int = Field(
+        ..., description="Embedding dimensions (from SoT)"
+    )
     retrieval_top_k: int = Field(5, description="Number of chunks to retrieve")
     similarity_threshold: float = Field(
         0.7, description="Similarity threshold for retrieval"
     )
-    generation_model: str = Field("gpt-4", description="Generation model name")
-    generation_temperature: float = Field(0.1, description="Generation temperature")
+    generation_model: str = Field(..., description="Generation model name (from SoT)")
+    generation_temperature: float = Field(
+        ..., description="Generation temperature (from SoT)"
+    )
     generation_max_tokens: int = Field(
         2000, description="Maximum tokens for generation"
     )

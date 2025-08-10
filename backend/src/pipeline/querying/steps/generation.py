@@ -22,7 +22,7 @@ class GenerationConfig(BaseModel):
     """Configuration for the generation step"""
 
     provider: str = "openrouter"
-    model: str = "google/gemini-2.5-flash"
+    model: str  # must be provided by orchestrator (SoT)
     fallback_models: List[str] = [
         "anthropic/claude-3.5-haiku",
         "meta-llama/llama-3.1-8b-instruct",

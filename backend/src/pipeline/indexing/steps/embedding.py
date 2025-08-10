@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class VoyageEmbeddingClient:
     """Client for Voyage AI embedding API"""
 
-    def __init__(self, api_key: str, model: str = "voyage-multimodal-3"):
+    def __init__(self, api_key: str, model: str):
         self.api_key = api_key
         self.model = model
         self.base_url = "https://api.voyageai.com/v1/embeddings"
@@ -107,9 +107,9 @@ class EmbeddingStep(PipelineStep):
             if not api_key:
                 raise ValueError("Voyage API key not provided in config or environment")
 
-        self.voyage_client = VoyageEmbeddingClient(
-            api_key=api_key, model=config.get("model", "voyage-multimodal-3")
-        )
+        # Model from SoT: orchestrator provided config already includes embedding settings
+        model_name = config.get("model") or "voyage-multilingual-2"
+        self.voyage_client = VoyageEmbeddingClient(api_key=api_key, model=model_name)
 
         # Configuration
         self.batch_size = config.get("batch_size", 100)

@@ -78,27 +78,27 @@ class QueryPipelineOrchestrator:
                 },
                 "generation": {
                     "provider": "openrouter",
-                    "model": effective.get("generation", {}).get(
-                        "model", "google/gemini-2.5-flash"
+                    "model": effective["generation"]["model"],
+                    "fallback_models": effective["generation"].get(
+                        "fallback_models",
+                        [
+                            "anthropic/claude-3.5-haiku",
+                            "meta-llama/llama-3.1-8b-instruct",
+                        ],
                     ),
-                    "fallback_models": [
-                        "anthropic/claude-3.5-haiku",
-                        "meta-llama/llama-3.1-8b-instruct",
-                    ],
-                    "timeout_seconds": effective.get("generation", {}).get(
+                    "timeout_seconds": effective["generation"].get(
                         "timeout_seconds", 5.0
                     ),
-                    "max_tokens": effective.get("generation", {}).get(
-                        "max_tokens", 1000
+                    "max_tokens": effective["generation"].get("max_tokens", 1000),
+                    "temperature": effective["generation"].get("temperature", 0.1),
+                    "response_format": effective["generation"].get(
+                        "response_format",
+                        {
+                            "include_citations": True,
+                            "include_confidence": True,
+                            "language": "danish",
+                        },
                     ),
-                    "temperature": effective.get("generation", {}).get(
-                        "temperature", 0.1
-                    ),
-                    "response_format": {
-                        "include_citations": True,
-                        "include_confidence": True,
-                        "language": "danish",
-                    },
                 },
             }
         self.settings = get_settings()

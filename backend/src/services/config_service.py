@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import os
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, ValidationError
@@ -25,9 +26,18 @@ class ConfigService:
         self.settings = get_settings()
 
         if config_path is None:
-            # backend/src/services/config_service.py → repo_root is parents[3]
-            repo_root = Path(__file__).resolve().parents[3]
-            config_path = repo_root / "config" / "pipeline" / "pipeline_config.json"
+            # 1) Allow explicit override via env
+            env_path = os.environ.get("PIPELINE_CONFIG_PATH")
+            if env_path:
+                config_path = Path(env_path)
+            else:
+                # 2) Discover by walking parents to locate repo root that contains config/pipeline/pipeline_config.json
+                discovered = self._discover_config_path()
+                config_path = (
+                    discovered
+                    if discovered
+                    else Path.cwd() / "config" / "pipeline" / "pipeline_config.json"
+                )
 
         self.config_path: Path = config_path
         self._raw_config: Optional[Dict[str, Any]] = None
@@ -58,12 +68,26 @@ class ConfigService:
         - SoT file present and valid
         - Embedding invariants
         - Critical secrets present in non-development environments
+        - Required generation settings present in SoT (query)
         """
         # Load once to trigger file presence and JSON validity
         _ = self._load_config()
         _ = self.get_effective_config("indexing")
         _ = self.get_effective_config("query")
         _ = self.get_effective_config("wiki")
+
+        # Require generation settings for query pipeline from SoT
+        query_cfg = self.get_effective_config("query")
+        gen_cfg = query_cfg.get("generation") or {}
+        if not gen_cfg.get("model"):
+            raise ConfigServiceError(
+                "Missing required setting: query.generation.model in SoT"
+            )
+        fb = gen_cfg.get("fallback_models")
+        if not isinstance(fb, list) or not fb:
+            raise ConfigServiceError(
+                "Missing required setting: query.generation.fallback_models (non-empty list) in SoT"
+            )
 
         # Secrets check (non-development only)
         if self.settings.environment != "development":
@@ -101,6 +125,22 @@ class ConfigService:
 
         # mypy: _raw_config is set if we didn't raise
         return dict(self._raw_config)  # shallow copy
+
+    def _discover_config_path(self) -> Optional[Path]:
+        """Search parent directories for config/pipeline/pipeline_config.json.
+
+        Handles different layouts like /app/src/... (Docker) or repo-local paths.
+        """
+        target_rel = Path("config") / "pipeline" / "pipeline_config.json"
+        here = Path(__file__).resolve()
+        for parent in [here.parent] + list(here.parents):
+            candidate = parent / target_rel
+            if candidate.exists():
+                return candidate
+        # Also try project root when running from /app (common in Docker)
+        if (Path("/app") / target_rel).exists():
+            return Path("/app") / target_rel
+        return None
 
     @staticmethod
     def _deep_merge(base: Dict[str, Any], other: Dict[str, Any]) -> Dict[str, Any]:
