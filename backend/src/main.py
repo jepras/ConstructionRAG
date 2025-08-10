@@ -1,17 +1,23 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import uvicorn
-from datetime import datetime
 import os
-import sys
-from typing import Optional
+from datetime import datetime
 
-# Import configuration
-try:
-    from src.config.settings import get_settings
-except Exception as e:
-    raise
+import uvicorn
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from src.api import auth_router, documents, pipeline, queries, wiki
+from src.config.settings import get_settings
+from src.middleware.error_handler import (
+    app_error_handler,
+    general_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
+from src.middleware.request_id import RequestIdMiddleware
+from src.utils.exceptions import AppError
+from src.utils.logging import setup_logging
 
 # Create FastAPI app
 app = FastAPI(
@@ -31,18 +37,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Setup logging and request ID middleware
+setup_logging()
+app.add_middleware(RequestIdMiddleware)
+
+# Register exception handlers
+app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
 
 @app.on_event("startup")
 async def validate_startup_config() -> None:
     """Fail-fast validation for config and critical environment."""
-    try:
-        from src.services.config_service import ConfigService, ConfigServiceError
+    from src.services.config_service import ConfigService
 
-        cfg = ConfigService()
-        cfg.validate_startup()
-    except Exception as e:  # noqa: BLE001 - allow fail-fast bubbling
-        # Re-raise to prevent app from starting with invalid config
-        raise e
+    cfg = ConfigService()
+    cfg.validate_startup()
 
 
 # Health check endpoint
@@ -90,32 +102,6 @@ async def debug_env():
         ),
     }
 
-
-# Include API routers
-try:
-    from src.api import auth_router
-except Exception as e:
-    raise
-
-try:
-    from src.api import pipeline
-except Exception as e:
-    raise
-
-try:
-    from src.api import queries
-except Exception as e:
-    raise
-
-try:
-    from src.api import documents
-except Exception as e:
-    raise
-
-try:
-    from src.api import wiki
-except Exception as e:
-    raise
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])

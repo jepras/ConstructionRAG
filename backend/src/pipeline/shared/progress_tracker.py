@@ -7,8 +7,11 @@ from uuid import UUID
 from datetime import datetime
 from src.models import StepResult
 
+from src.middleware.request_id import get_request_id
+from src.utils.logging import get_logger
+
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProgressTracker:
@@ -19,6 +22,12 @@ class ProgressTracker:
         self.db = db
         self.total_steps = 6  # partition, metadata, enrich, chunk, embed, store
         self.completed_steps = 0
+        # Bind context for all tracker logs
+        self._logger = logger.bind(
+            run_id=str(indexing_run_id),
+            pipeline_type="indexing",
+            request_id=get_request_id(),
+        )
 
     async def update_step_progress_async(
         self, step: str, status: str, result: StepResult
@@ -110,15 +119,23 @@ class ProgressTracker:
             }
 
             if status == "completed":
-                print(
-                    f"✅ Step {step} completed for run {self.run_id} ({result.duration_seconds:.1f}s)"
+                self._logger.info(
+                    "Step completed",
+                    step=step,
+                    duration_seconds=result.duration_seconds,
                 )
             elif status == "failed":
-                print(
-                    f"❌ Step {step} failed for run {self.run_id}: {result.error_message if hasattr(result, 'error_message') else 'Unknown error'}"
+                self._logger.error(
+                    "Step failed",
+                    step=step,
+                    error_message=(
+                        result.error_message
+                        if hasattr(result, "error_message")
+                        else "Unknown error"
+                    ),
                 )
             else:
-                print(f"🔄 Step {step} {status} for run {self.run_id}")
+                self._logger.info("Step status update", step=step, status=status)
 
         except Exception as e:
             print(f"❌ Failed to log progress: {e}")
@@ -147,9 +164,7 @@ class ProgressTracker:
                 print(f"❌ Failed to mark pipeline as failed for run {self.run_id}")
                 return
 
-            print(
-                f"❌ Marked pipeline as failed for run {self.run_id}: {error_message}"
-            )
+            self._logger.error("Pipeline marked failed", error_message=error_message)
 
         except Exception as e:
             print(f"❌ Failed to mark pipeline as failed: {e}")

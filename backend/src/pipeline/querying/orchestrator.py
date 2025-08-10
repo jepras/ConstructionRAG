@@ -8,6 +8,8 @@ from uuid import uuid4
 from datetime import datetime
 
 from ..shared.base_step import PipelineStep, StepResult
+from src.middleware.request_id import get_request_id
+from src.utils.logging import get_logger
 from ..shared.progress_tracker import ProgressTracker
 from .steps.query_processing import (
     QueryProcessor,
@@ -27,7 +29,7 @@ from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 from src.services.config_service import ConfigService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class QueryPipelineOrchestrator:
@@ -185,17 +187,25 @@ class QueryPipelineOrchestrator:
         start_time = datetime.utcnow()
         query_run_id = str(uuid4())
 
+        # Bind structured context once per run
+        rid = get_request_id()
+        run_logger = logger.bind(
+            request_id=rid, pipeline_type="query", run_id=query_run_id
+        )
+
         # Track step timings
         step_timings = {}
 
-        logger.info(f"🔍 Starting query pipeline for query: {request.query[:50]}...")
-        logger.info(f"🔍 Request user_id: {request.user_id}")
-        logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
-        logger.info(f"🔍 Request type: {type(request)}")
+        run_logger.info(
+            f"🔍 Starting query pipeline for query: {request.query[:50]}..."
+        )
+        run_logger.info(f"🔍 Request user_id: {request.user_id}")
+        run_logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
+        run_logger.info(f"🔍 Request type: {type(request)}")
 
         try:
             # Step 1: Query Processing
-            logger.info("Step 1: Processing query variations...")
+            run_logger.info("Step 1: Processing query variations...")
             step1_start = datetime.utcnow()
 
             query_result = await self.query_processor.execute(request.query)
@@ -206,19 +216,19 @@ class QueryPipelineOrchestrator:
 
             step1_duration = (datetime.utcnow() - step1_start).total_seconds()
             step_timings["query_processing"] = step1_duration
-            logger.info(f"Query processing completed in {step1_duration:.2f}s")
+            run_logger.info(f"Query processing completed in {step1_duration:.2f}s")
 
             # Get variations from sample_outputs
             variations_data = query_result.sample_outputs.get("variations", {})
             variations = QueryVariations(**variations_data)
 
             # Step 2: Document Retrieval
-            logger.info("Step 2: Retrieving relevant documents...")
+            run_logger.info("Step 2: Retrieving relevant documents...")
             step2_start = datetime.utcnow()
 
             # Pass indexing_run_id to retrieval step if provided
             if request.indexing_run_id:
-                logger.info(
+                run_logger.info(
                     f"Querying specific indexing run: {request.indexing_run_id}"
                 )
                 retrieval_result = await self.retriever.execute(
@@ -231,7 +241,7 @@ class QueryPipelineOrchestrator:
 
             step2_duration = (datetime.utcnow() - step2_start).total_seconds()
             step_timings["retrieval"] = step2_duration
-            logger.info(f"Retrieval completed in {step2_duration:.2f}s")
+            run_logger.info(f"Retrieval completed in {step2_duration:.2f}s")
 
             # Get search results from sample_outputs and convert to SearchResult objects
             search_results_data = retrieval_result.sample_outputs.get(
@@ -240,7 +250,7 @@ class QueryPipelineOrchestrator:
             search_results = [SearchResult(**result) for result in search_results_data]
 
             # Step 3: Response Generation
-            logger.info("Step 3: Generating response...")
+            run_logger.info("Step 3: Generating response...")
             step3_start = datetime.utcnow()
 
             generation_result = await self.generator.execute(search_results)
@@ -249,7 +259,7 @@ class QueryPipelineOrchestrator:
 
             step3_duration = (datetime.utcnow() - step3_start).total_seconds()
             step_timings["generation"] = step3_duration
-            logger.info(f"Generation completed in {step3_duration:.2f}s")
+            run_logger.info(f"Generation completed in {step3_duration:.2f}s")
 
             # Get response from sample_outputs
             response_data = generation_result.sample_outputs.get("response", {})
@@ -274,15 +284,15 @@ class QueryPipelineOrchestrator:
                 step_timings=step_timings,
             )
 
-            logger.info(
+            run_logger.info(
                 f"Query pipeline completed successfully in {response_time_ms}ms"
             )
-            logger.info(f"Step timings: {step_timings}")
+            run_logger.info(f"Step timings: {step_timings}")
 
             return response
 
         except Exception as e:
-            logger.error(f"Query pipeline failed: {e}")
+            run_logger.error(f"Query pipeline failed: {e}")
 
             # Store failed query run
             await self._store_query_run(
@@ -327,7 +337,9 @@ class QueryPipelineOrchestrator:
         """Store query run in the database"""
 
         try:
-            logger.info(f"🔍 Storing query run with ID: {query_run_id}")
+            logger.bind(run_id=query_run_id).info(
+                f"🔍 Storing query run with ID: {query_run_id}"
+            )
             logger.info(f"🔍 Request user_id: {request.user_id}")
             logger.info(f"🔍 Request type: {type(request)}")
             query_run_data = {
@@ -359,12 +371,16 @@ class QueryPipelineOrchestrator:
             result = self.db.table("query_runs").insert(query_run_data).execute()
 
             if result.data:
-                logger.info(f"Query run stored with ID: {query_run_id}")
+                logger.bind(run_id=query_run_id).info(
+                    f"Query run stored with ID: {query_run_id}"
+                )
             else:
-                logger.warning(f"Failed to store query run: {result.error}")
+                logger.bind(run_id=query_run_id).warning(
+                    f"Failed to store query run: {result.error}"
+                )
 
         except Exception as e:
-            logger.error(f"Error storing query run: {e}")
+            logger.bind(run_id=query_run_id).error(f"Error storing query run: {e}")
 
     async def get_pipeline_status(self, query_run_id: str) -> Dict[str, Any]:
         """Get the status of a specific query pipeline run"""

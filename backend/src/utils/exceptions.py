@@ -1,58 +1,66 @@
 from typing import Optional, Any, Dict
+from datetime import datetime
+
+from src.shared.errors import ErrorCode, status_for_error_code
 
 
-class ConstructionRAGException(Exception):
-    """Base exception for ConstructionRAG application"""
+class AppError(Exception):
+    """Base application exception with minimal consistent fields"""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: ErrorCode = ErrorCode.INTERNAL_ERROR,
+        details: Optional[Dict[str, Any]] = None,
+        request_id: Optional[str] = None,
+        status_code: Optional[int] = None,
+    ) -> None:
         self.message = message
+        self.error_code = error_code
         self.details = details or {}
+        self.request_id = request_id
+        self.status_code = status_code or status_for_error_code(error_code)
+        self.timestamp = datetime.utcnow()
         super().__init__(self.message)
 
+    def to_response(self) -> Dict[str, Any]:
+        return {
+            "code": self.error_code.value,
+            "message": self.message,
+            "details": self.details or None,
+            "request_id": self.request_id,
+            "timestamp": self.timestamp.isoformat(),
+        }
 
-class ConfigurationError(ConstructionRAGException):
-    """Raised when there's a configuration error"""
 
+class ConfigurationError(AppError):
     pass
 
 
-class DatabaseError(ConstructionRAGException):
-    """Raised when there's a database error"""
-
+class DatabaseError(AppError):
     pass
 
 
-class FileProcessingError(ConstructionRAGException):
-    """Raised when there's an error processing files"""
-
+class FileProcessingError(AppError):
     pass
 
 
-class PipelineError(ConstructionRAGException):
-    """Raised when there's an error in the pipeline"""
-
+class PipelineError(AppError):
     pass
 
 
-class APIError(ConstructionRAGException):
-    """Raised when there's an external API error"""
-
+class APIError(AppError):
     pass
 
 
-class ValidationError(ConstructionRAGException):
-    """Raised when there's a validation error"""
-
+class ValidationError(AppError):
     pass
 
 
-class AuthenticationError(ConstructionRAGException):
-    """Raised when there's an authentication error"""
-
+class AuthenticationError(AppError):
     pass
 
 
-class StorageError(Exception):
-    """Exception raised for errors in the storage service."""
-
+class StorageError(AppError):
     pass

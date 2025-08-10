@@ -28,7 +28,9 @@ from src.services.storage_service import StorageService
 from src.services.pipeline_service import PipelineService
 from src.pipeline.indexing.orchestrator import get_indexing_orchestrator
 from src.config.database import get_supabase_admin_client
-from src.utils.exceptions import StorageError
+from src.utils.exceptions import StorageError, ValidationError, AppError
+from src.middleware.request_id import get_request_id
+from src.shared.errors import ErrorCode
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -91,19 +93,49 @@ async def upload_email_pdf(
 
     # Validate files
     if not files:
-        raise HTTPException(400, "At least one PDF file is required")
+        raise ValidationError(
+            "At least one PDF file is required",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            details={"field_errors": [{"field": "files", "message": "Required"}]},
+            request_id=get_request_id(),
+        )
 
     if len(files) > 10:  # Limit to 10 files per upload
-        raise HTTPException(400, "Maximum 10 PDF files allowed per upload")
+        raise ValidationError(
+            "Maximum 10 PDF files allowed per upload",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            details={
+                "field_errors": [
+                    {"field": "files", "message": "At most 10 files per upload"}
+                ]
+            },
+            request_id=get_request_id(),
+        )
 
     for file in files:
         if not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(
-                400, f"Only PDF files are supported. Found: {file.filename}"
+            raise ValidationError(
+                f"Only PDF files are supported. Found: {file.filename}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                details={
+                    "field_errors": [
+                        {"field": "file", "message": "Only PDF files are supported"}
+                    ]
+                },
+                request_id=get_request_id(),
             )
 
         if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit per file
-            raise HTTPException(400, f"File {file.filename} must be less than 50MB")
+            raise ValidationError(
+                f"File {file.filename} must be less than 50MB",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                details={
+                    "field_errors": [
+                        {"field": "file", "message": "Must be less than 50MB"}
+                    ]
+                },
+                request_id=get_request_id(),
+            )
 
     index_run_id = str(uuid4())
 
@@ -238,12 +270,17 @@ async def upload_email_pdf(
             expires_at=(datetime.utcnow() + timedelta(days=30)).isoformat(),
         )
 
-    except StorageError as e:
-        logger.error(f"Storage error during email upload: {e}")
-        raise HTTPException(500, f"Storage error: {str(e)}")
+    except StorageError:
+        raise
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Error during email upload: {e}")
-        raise HTTPException(500, f"Upload failed: {str(e)}")
+        raise AppError(
+            "Upload failed",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        )
 
 
 # User Project Upload Endpoints (Authenticated)
@@ -283,7 +320,11 @@ async def upload_project_document(
         )
 
         if not project_result.data:
-            raise HTTPException(404, "Project not found or access denied")
+            raise AppError(
+                "Project not found or access denied",
+                error_code=ErrorCode.NOT_FOUND,
+                request_id=get_request_id(),
+            )
 
         project = project_result.data[0]
 
@@ -343,7 +384,11 @@ async def upload_project_document(
         document_result = db.table("documents").insert(document_data).execute()
 
         if not document_result.data:
-            raise HTTPException(500, "Failed to create document record")
+            raise AppError(
+                "Failed to create document record",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                request_id=get_request_id(),
+            )
 
         # Create temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
@@ -387,12 +432,17 @@ async def upload_project_document(
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
 
-    except StorageError as e:
-        logger.error(f"Storage error during project upload: {e}")
-        raise HTTPException(500, f"Storage error: {str(e)}")
+    except StorageError:
+        raise
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Error during project upload: {e}")
-        raise HTTPException(500, f"Upload failed: {str(e)}")
+        raise AppError(
+            "Upload failed",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        )
 
 
 @router.post(
@@ -440,7 +490,11 @@ async def upload_project_documents(
         )
 
         if not project_result.data:
-            raise HTTPException(404, "Project not found or access denied")
+            raise AppError(
+                "Project not found or access denied",
+                error_code=ErrorCode.NOT_FOUND,
+                request_id=get_request_id(),
+            )
 
         project = project_result.data[0]
 
@@ -511,8 +565,10 @@ async def upload_project_documents(
                 )
 
                 if not doc_result.data:
-                    raise HTTPException(
-                        500, f"Failed to store document record for {file.filename}"
+                    raise AppError(
+                        f"Failed to store document record for {file.filename}",
+                        error_code=ErrorCode.INTERNAL_ERROR,
+                        request_id=get_request_id(),
                     )
 
                 # Collect document data for unified processing
@@ -548,12 +604,17 @@ async def upload_project_documents(
             message=f"{len(files)} PDF(s) uploaded successfully. Processing started.",
         )
 
-    except StorageError as e:
-        logger.error(f"Storage error during project upload: {e}")
-        raise HTTPException(500, f"Storage error: {str(e)}")
+    except StorageError:
+        raise
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Error during project upload: {e}")
-        raise HTTPException(500, f"Upload failed: {str(e)}")
+        raise AppError(
+            "Upload failed",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        )
 
 
 @router.get("/projects/{project_id}/documents", response_model=DocumentListResponse)
@@ -580,7 +641,11 @@ async def get_project_documents(
         )
 
         if not project_result.data:
-            raise HTTPException(404, "Project not found or access denied")
+            raise AppError(
+                "Project not found or access denied",
+                error_code=ErrorCode.NOT_FOUND,
+                request_id=get_request_id(),
+            )
 
         # Get documents with pagination
         documents_result = (
@@ -606,9 +671,15 @@ async def get_project_documents(
             has_more=(offset + limit) < total_count,
         )
 
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Error getting project documents: {e}")
-        raise HTTPException(500, f"Failed to get documents: {str(e)}")
+        raise AppError(
+            "Failed to get documents",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        )
 
 
 @router.get(
@@ -637,7 +708,11 @@ async def get_project_document(
         )
 
         if not document_result.data:
-            raise HTTPException(404, "Document not found or access denied")
+            raise AppError(
+                "Document not found or access denied",
+                error_code=ErrorCode.NOT_FOUND,
+                request_id=get_request_id(),
+            )
 
         document = document_result.data[0]
 
@@ -654,9 +729,15 @@ async def get_project_document(
 
         return document
 
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Error getting project document: {e}")
-        raise HTTPException(500, f"Failed to get document: {str(e)}")
+        raise AppError(
+            "Failed to get document",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        )
 
 
 @router.delete("/projects/{project_id}/documents/{document_id}")
@@ -683,7 +764,11 @@ async def delete_project_document(
         )
 
         if not document_result.data:
-            raise HTTPException(404, "Document not found or access denied")
+            raise AppError(
+                "Document not found or access denied",
+                error_code=ErrorCode.NOT_FOUND,
+                request_id=get_request_id(),
+            )
 
         document = document_result.data[0]
 
@@ -694,9 +779,15 @@ async def delete_project_document(
 
         return {"message": "Document deleted successfully"}
 
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Error deleting project document: {e}")
-        raise HTTPException(500, f"Failed to delete document: {str(e)}")
+        raise AppError(
+            "Failed to delete document",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        )
 
 
 # Background processing functions
