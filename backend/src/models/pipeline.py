@@ -1,8 +1,11 @@
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
-from pydantic import BaseModel, Field
-from uuid import UUID
+from datetime import datetime
 from enum import Enum
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from src.models.base import AccessLevel
 
 
 class UploadType(str, Enum):
@@ -51,31 +54,31 @@ class StepResult(BaseModel):
     duration_seconds: float = Field(description="Step execution time in seconds")
 
     # Summary statistics
-    summary_stats: Dict[str, Any] = Field(
+    summary_stats: dict[str, Any] = Field(
         default_factory=dict,
         description="Key metrics (e.g., chunks created, avg sizes)",
     )
 
     # Sample outputs for debugging
-    sample_outputs: Dict[str, Any] = Field(
+    sample_outputs: dict[str, Any] = Field(
         default_factory=dict,
         description="First 3-5 examples of generated content for debugging",
     )
 
     # Real data for downstream processing
-    data: Optional[Dict[str, Any]] = Field(
+    data: dict[str, Any] | None = Field(
         None, description="Complete data structure for downstream steps"
     )
 
     # Error information
-    error_message: Optional[str] = Field(None, description="Error message if failed")
-    error_details: Optional[Dict[str, Any]] = Field(
+    error_message: str | None = Field(None, description="Error message if failed")
+    error_details: dict[str, Any] | None = Field(
         None, description="Detailed error info"
     )
 
     # Timestamps
     started_at: datetime = Field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = Field(None)
+    completed_at: datetime | None = Field(None)
 
     class Config:
         json_encoders = {
@@ -89,10 +92,8 @@ class WikiPageMetadata(BaseModel):
     title: str = Field(description="Page title")
     filename: str = Field(description="Markdown filename")
     storage_path: str = Field(description="Storage path to the markdown file")
-    storage_url: Optional[str] = Field(
-        None, description="Signed URL to the markdown file"
-    )
-    file_size: Optional[int] = Field(None, description="File size in bytes")
+    storage_url: str | None = Field(None, description="Signed URL to the markdown file")
+    file_size: int | None = Field(None, description="File size in bytes")
     order: int = Field(description="Page order in the wiki")
 
 
@@ -104,33 +105,36 @@ class WikiGenerationRun(BaseModel):
     upload_type: UploadType = Field(
         UploadType.USER_PROJECT, description="Type of upload"
     )
-    user_id: Optional[UUID] = Field(None, description="User ID for user projects")
-    project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
-    upload_id: Optional[str] = Field(None, description="Upload ID for email uploads")
+    user_id: UUID | None = Field(None, description="User ID for user projects")
+    access_level: AccessLevel = Field(
+        default=AccessLevel.PRIVATE, description="Access control level"
+    )
+    project_id: UUID | None = Field(None, description="Project ID for user projects")
+    upload_id: str | None = Field(None, description="Upload ID for email uploads")
     status: WikiGenerationStatus = Field(
         WikiGenerationStatus.PENDING, description="Wiki generation status"
     )
     language: str = Field("danish", description="Wiki language")
     model: str = Field(..., description="LLM model used (from SoT)")
-    step_results: Dict[str, StepResult] = Field(
+    step_results: dict[str, StepResult] = Field(
         default_factory=dict, description="Detailed results from each step"
     )
-    wiki_structure: Dict[str, Any] = Field(
+    wiki_structure: dict[str, Any] = Field(
         default_factory=dict, description="Generated wiki structure"
     )
-    pages_metadata: List[WikiPageMetadata] = Field(
+    pages_metadata: list[WikiPageMetadata] = Field(
         default_factory=list, description="Metadata for generated pages"
     )
-    storage_path: Optional[str] = Field(
+    storage_path: str | None = Field(
         None, description="Base storage path for this wiki run"
     )
     started_at: datetime = Field(
         default_factory=datetime.utcnow, description="Wiki generation start timestamp"
     )
-    completed_at: Optional[datetime] = Field(
+    completed_at: datetime | None = Field(
         None, description="Wiki generation completion timestamp"
     )
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         None, description="Error message if wiki generation failed"
     )
     created_at: datetime = Field(
@@ -166,7 +170,7 @@ class WikiGenerationRun(BaseModel):
 
     # Computed properties for timing data
     @property
-    def step_timings(self) -> Dict[str, float]:
+    def step_timings(self) -> dict[str, float]:
         """Extract step timings from step_results"""
         if not self.step_results:
             return {}
@@ -201,30 +205,35 @@ class IndexingRun(BaseModel):
     upload_type: UploadType = Field(
         UploadType.USER_PROJECT, description="Type of upload"
     )
-
-    project_id: Optional[UUID] = Field(None, description="Project ID for user projects")
+    user_id: UUID | None = Field(
+        None, description="Owner user ID (nullable for anonymous)"
+    )
+    access_level: AccessLevel = Field(
+        default=AccessLevel.PRIVATE, description="Access control level"
+    )
+    project_id: UUID | None = Field(None, description="Project ID for user projects")
     status: PipelineStatus = Field(
         PipelineStatus.PENDING, description="Indexing run status"
     )
-    step_results: Dict[str, StepResult] = Field(
+    step_results: dict[str, StepResult] = Field(
         default_factory=dict, description="Detailed results from each step"
     )
     started_at: datetime = Field(
         default_factory=datetime.utcnow, description="Indexing start timestamp"
     )
-    completed_at: Optional[datetime] = Field(
+    completed_at: datetime | None = Field(
         None, description="Indexing completion timestamp"
     )
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         None, description="Error message if indexing failed"
     )
-    pipeline_config: Optional[Dict[str, Any]] = Field(
+    pipeline_config: dict[str, Any] | None = Field(
         None, description="Pipeline configuration used for this run"
     )
 
     # Computed properties for timing data
     @property
-    def step_timings(self) -> Dict[str, float]:
+    def step_timings(self) -> dict[str, float]:
         """Extract step timings from step_results"""
         if not self.step_results:
             return {}
@@ -251,19 +260,24 @@ class QueryRun(BaseModel):
     """Query pipeline run model matching the query_runs table"""
 
     id: UUID = Field(description="Query run unique identifier")
-    user_id: UUID = Field(description="User ID from Supabase Auth")
-    project_id: Optional[UUID] = Field(
+    user_id: UUID | None = Field(
+        None, description="User ID from Supabase Auth (nullable for anonymous)"
+    )
+    access_level: AccessLevel = Field(
+        default=AccessLevel.PRIVATE, description="Access control level"
+    )
+    project_id: UUID | None = Field(
         None, description="Future: group queries by project"
     )
     query_text: str = Field(description="User's query text")
-    response_text: Optional[str] = Field(None, description="Generated response text")
-    retrieval_metadata: Dict[str, Any] = Field(
+    response_text: str | None = Field(None, description="Generated response text")
+    retrieval_metadata: dict[str, Any] = Field(
         default_factory=dict, description="Search results, confidence scores"
     )
-    response_time_ms: Optional[int] = Field(
+    response_time_ms: int | None = Field(
         None, description="Response time in milliseconds"
     )
-    step_timings: Optional[Dict[str, float]] = Field(
+    step_timings: dict[str, float] | None = Field(
         None, description="Individual step execution times in seconds"
     )
     created_at: datetime = Field(
@@ -284,7 +298,7 @@ class UserConfigOverride(BaseModel):
     config_key: str = Field(
         description="Configuration key (e.g., 'chunking.chunk_size')"
     )
-    config_value: Dict[str, Any] = Field(description="Configuration value")
+    config_value: dict[str, Any] = Field(description="Configuration value")
     updated_at: datetime = Field(
         default_factory=datetime.utcnow, description="Last update timestamp"
     )
@@ -303,16 +317,16 @@ class PipelineRun(BaseModel):
     status: PipelineStatus = Field(
         PipelineStatus.PENDING, description="Pipeline run status"
     )
-    step_results: Dict[str, Any] = Field(
+    step_results: dict[str, Any] = Field(
         default_factory=dict, description="Results from each pipeline step"
     )
     started_at: datetime = Field(
         default_factory=datetime.utcnow, description="Pipeline start timestamp"
     )
-    completed_at: Optional[datetime] = Field(
+    completed_at: datetime | None = Field(
         None, description="Pipeline completion timestamp"
     )
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         None, description="Error message if pipeline failed"
     )
 
@@ -327,9 +341,9 @@ class PipelineStepResult(BaseModel):
     step: PipelineStep
     status: PipelineStatus
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
@@ -345,10 +359,10 @@ class PipelineRunCreate(BaseModel):
 class PipelineRunUpdate(BaseModel):
     """Model for updating an existing pipeline run"""
 
-    status: Optional[PipelineStatus] = None
-    step_results: Optional[Dict[str, Any]] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    status: PipelineStatus | None = None
+    step_results: dict[str, Any] | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
 
 
 # Enhanced create/update models for new pipeline types
@@ -356,20 +370,20 @@ class IndexingRunCreate(BaseModel):
     """Model for creating a new indexing run"""
 
     upload_type: UploadType = UploadType.USER_PROJECT
-    project_id: Optional[UUID] = None
+    project_id: UUID | None = None
     status: PipelineStatus = PipelineStatus.PENDING
 
 
 class IndexingRunUpdate(BaseModel):
     """Model for updating an existing indexing run"""
 
-    status: Optional[PipelineStatus] = None
-    step_results: Optional[Dict[str, StepResult]] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    upload_type: Optional[UploadType] = None
-    project_id: Optional[UUID] = None
-    pipeline_config: Optional[Dict[str, Any]] = None
+    status: PipelineStatus | None = None
+    step_results: dict[str, StepResult] | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    upload_type: UploadType | None = None
+    project_id: UUID | None = None
+    pipeline_config: dict[str, Any] | None = None
 
 
 class QueryRunCreate(BaseModel):
@@ -377,15 +391,15 @@ class QueryRunCreate(BaseModel):
 
     user_id: UUID
     query_text: str
-    project_id: Optional[UUID] = None
+    project_id: UUID | None = None
 
 
 class QueryRunUpdate(BaseModel):
     """Model for updating an existing query run"""
 
-    response_text: Optional[str] = None
-    retrieval_metadata: Optional[Dict[str, Any]] = None
-    response_time_ms: Optional[int] = None
+    response_text: str | None = None
+    retrieval_metadata: dict[str, Any] | None = None
+    response_time_ms: int | None = None
 
 
 class UserConfigOverrideCreate(BaseModel):
@@ -394,13 +408,13 @@ class UserConfigOverrideCreate(BaseModel):
     user_id: UUID
     config_type: str
     config_key: str
-    config_value: Dict[str, Any]
+    config_value: dict[str, Any]
 
 
 class UserConfigOverrideUpdate(BaseModel):
     """Model for updating an existing user config override"""
 
-    config_value: Dict[str, Any]
+    config_value: dict[str, Any]
 
 
 class PipelineConfig(BaseModel):
@@ -432,7 +446,7 @@ class Project(BaseModel):
     id: UUID = Field(description="Project unique identifier")
     user_id: UUID = Field(description="User ID from Supabase Auth")
     name: str = Field(description="Project name")
-    description: Optional[str] = Field(None, description="Project description")
+    description: str | None = Field(None, description="Project description")
     created_at: datetime = Field(
         default_factory=datetime.utcnow, description="Project creation timestamp"
     )
@@ -451,16 +465,16 @@ class EmailUpload(BaseModel):
     id: str = Field(description="Upload ID from storage path")
     email: str = Field(description="User email address")
     filename: str = Field(description="Original filename")
-    file_size: Optional[int] = Field(None, description="File size in bytes")
+    file_size: int | None = Field(None, description="File size in bytes")
     status: str = Field("processing", description="Upload status")
-    public_url: Optional[str] = Field(None, description="Generated page URL")
-    processing_results: Dict[str, Any] = Field(
+    public_url: str | None = Field(None, description="Generated page URL")
+    processing_results: dict[str, Any] = Field(
         default_factory=dict, description="Processing results"
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow, description="Upload creation timestamp"
     )
-    completed_at: Optional[datetime] = Field(
+    completed_at: datetime | None = Field(
         None, description="Processing completion timestamp"
     )
     expires_at: datetime = Field(
@@ -480,14 +494,14 @@ class ProjectCreate(BaseModel):
 
     user_id: UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ProjectUpdate(BaseModel):
     """Model for updating an existing project"""
 
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
 
 
 class EmailUploadCreate(BaseModel):
@@ -496,16 +510,16 @@ class EmailUploadCreate(BaseModel):
     id: str
     email: str
     filename: str
-    file_size: Optional[int] = None
+    file_size: int | None = None
 
 
 class EmailUploadUpdate(BaseModel):
     """Model for updating an existing email upload"""
 
-    status: Optional[str] = None
-    public_url: Optional[str] = None
-    processing_results: Optional[Dict[str, Any]] = None
-    completed_at: Optional[datetime] = None
+    status: str | None = None
+    public_url: str | None = None
+    processing_results: dict[str, Any] | None = None
+    completed_at: datetime | None = None
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
@@ -537,9 +551,9 @@ class WikiGenerationRunCreate(BaseModel):
 
     indexing_run_id: UUID
     upload_type: UploadType = UploadType.USER_PROJECT
-    user_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    upload_id: Optional[str] = None
+    user_id: UUID | None = None
+    project_id: UUID | None = None
+    upload_id: str | None = None
     language: str = "danish"
     model: str = "google/gemini-2.5-flash"
     status: WikiGenerationStatus = WikiGenerationStatus.PENDING
@@ -548,13 +562,13 @@ class WikiGenerationRunCreate(BaseModel):
 class WikiGenerationRunUpdate(BaseModel):
     """Model for updating an existing wiki generation run"""
 
-    status: Optional[WikiGenerationStatus] = None
-    step_results: Optional[Dict[str, StepResult]] = None
-    wiki_structure: Optional[Dict[str, Any]] = None
-    pages_metadata: Optional[List[WikiPageMetadata]] = None
-    storage_path: Optional[str] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    status: WikiGenerationStatus | None = None
+    step_results: dict[str, StepResult] | None = None
+    wiki_structure: dict[str, Any] | None = None
+    pages_metadata: list[WikiPageMetadata] | None = None
+    storage_path: str | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
 
 
 class WikiPageMetadataCreate(BaseModel):
@@ -563,17 +577,17 @@ class WikiPageMetadataCreate(BaseModel):
     title: str
     filename: str
     storage_path: str
-    storage_url: Optional[str] = None
-    file_size: Optional[int] = None
+    storage_url: str | None = None
+    file_size: int | None = None
     order: int
 
 
 class WikiPageMetadataUpdate(BaseModel):
     """Model for updating wiki page metadata"""
 
-    title: Optional[str] = None
-    filename: Optional[str] = None
-    storage_path: Optional[str] = None
-    storage_url: Optional[str] = None
-    file_size: Optional[int] = None
-    order: Optional[int] = None
+    title: str | None = None
+    filename: str | None = None
+    storage_path: str | None = None
+    storage_url: str | None = None
+    file_size: int | None = None
+    order: int | None = None

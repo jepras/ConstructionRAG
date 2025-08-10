@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, computed_field
 
-from ..base import BaseDocument
+from src.models.base import AccessLevel, BaseDocument
 from .document_chunk import DocumentChunk
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,9 @@ class Document(BaseDocument):
 
     id: UUID = Field(description="Document unique identifier")
     user_id: UUID | None = Field(None, description="Owner user ID from Supabase Auth")
+    access_level: AccessLevel = Field(
+        default=AccessLevel.PRIVATE, description="Access control level"
+    )
     status: DocumentStatus = Field(
         DocumentStatus.PENDING, description="Processing status"
     )
