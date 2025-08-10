@@ -24,6 +24,14 @@ from .steps import (
     PageContentRetrievalStep,
     MarkdownGenerationStep,
 )
+from .models import (
+    to_metadata_output,
+    to_overview_output,
+    to_semantic_output,
+    to_structure_output,
+    to_page_contents_output,
+    to_markdown_output,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +131,9 @@ class WikiGenerationOrchestrator:
             print(
                 "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 completed successfully"
             )
-            metadata = metadata_result.data
+            metadata = to_metadata_output(metadata_result.data).model_dump(
+                exclude_none=True
+            )
 
             # Step 2: Overview Generation
             print(
@@ -148,7 +158,7 @@ class WikiGenerationOrchestrator:
             print(
                 "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 completed successfully"
             )
-            project_overview = overview_result.data["project_overview"]
+            project_overview = to_overview_output(overview_result.data).project_overview
 
             # Step 3: Semantic Clustering
             print(
@@ -173,7 +183,9 @@ class WikiGenerationOrchestrator:
             print(
                 "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 completed successfully"
             )
-            semantic_analysis = clustering_result.data
+            semantic_analysis = to_semantic_output(clustering_result.data).model_dump(
+                exclude_none=True
+            )
 
             # Step 4: Structure Generation
             print(
@@ -200,7 +212,7 @@ class WikiGenerationOrchestrator:
             print(
                 "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 completed successfully"
             )
-            wiki_structure = structure_result.data
+            wiki_structure = to_structure_output(structure_result.data).wiki_structure
 
             # Step 5: Page Content Retrieval
             print(
@@ -226,7 +238,7 @@ class WikiGenerationOrchestrator:
             print(
                 "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 completed successfully"
             )
-            page_contents = content_result.data
+            page_contents = to_page_contents_output(content_result.data).page_contents
 
             # Step 6: Markdown Generation
             print(
@@ -253,7 +265,7 @@ class WikiGenerationOrchestrator:
             print(
                 "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 completed successfully"
             )
-            generated_pages = markdown_result.data
+            generated_pages = to_markdown_output(markdown_result.data).generated_pages
 
             # Step 7: Save to Storage
             print(
