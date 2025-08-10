@@ -85,5 +85,3 @@ def to_chunking_output(data: dict[str, Any]) -> ChunkingOutput:
 
 def to_embedding_output(data: dict[str, Any]) -> EmbeddingOutput:
     return EmbeddingOutput(**data)
-
-
