@@ -138,6 +138,21 @@ class ConfigManager:
                 defaults, user_overrides
             )
 
+            # 3b. Override embedding settings from central SoT via ConfigService (Phase 0 invariant)
+            try:
+                from src.services.config_service import ConfigService
+
+                effective = ConfigService().get_effective_config("indexing")
+                embedding_from_sot = effective.get("embedding", {})
+                merged_config.setdefault("steps", {})
+                merged_config["steps"]["embedding"] = {
+                    **merged_config["steps"].get("embedding", {}),
+                    **embedding_from_sot,
+                }
+            except Exception:
+                # If ConfigService fails here, startup would already fail; keep merged_config as-is
+                pass
+
             # 4. Validate with Pydantic
             return IndexingConfig(**merged_config)
 
@@ -150,7 +165,8 @@ class ConfigManager:
                     "metadata": {"extract_page_structure": True},
                     "enrichment": {"add_context_headers": True},
                     "chunking": {"chunk_size": 1000, "overlap": 200},
-                    "embedding": {"model": "voyage-large-2", "dimensions": 1536},
+                    # Phase 0 invariant fallback
+                    "embedding": {"model": "voyage-multilingual-2", "dimensions": 1024},
                     "storage": {"collection_prefix": "construction_docs"},
                 },
                 orchestration={"max_concurrent_documents": 5, "fail_fast": True},
@@ -175,6 +191,22 @@ class ConfigManager:
                 defaults, user_overrides
             )
 
+            # 3b. Override retrieval embedding model/dimensions from SoT
+            try:
+                from src.services.config_service import ConfigService
+
+                effective = ConfigService().get_effective_config("query")
+                embedding = effective.get("embedding", {})
+                steps = merged_config.setdefault("query_pipeline", {})
+                retrieval = steps.setdefault("retrieval", {})
+                # Normalize keys
+                if embedding.get("model"):
+                    retrieval["embedding_model"] = embedding["model"]
+                if embedding.get("dimensions"):
+                    retrieval["dimensions"] = embedding["dimensions"]
+            except Exception:
+                pass
+
             # 4. Validate with Pydantic
             return QueryConfig(**merged_config)
 
@@ -184,7 +216,13 @@ class ConfigManager:
             return QueryConfig(
                 steps={
                     "query_processing": {"semantic_expansion_count": 3},
-                    "retrieval": {"top_k": 5, "similarity_threshold": 0.7},
+                    # Phase 0 invariant fallback
+                    "retrieval": {
+                        "embedding_model": "voyage-multilingual-2",
+                        "dimensions": 1024,
+                        "top_k": 5,
+                        "similarity_threshold": 0.7,
+                    },
                     "generation": {"model": "gpt-4", "temperature": 0.1},
                 },
                 orchestration={"response_timeout_seconds": 30, "fail_fast": True},
