@@ -1,7 +1,5 @@
-from pydantic_settings import BaseSettings
 from pydantic import field_validator
-from typing import Optional, List, Union
-import os
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -13,21 +11,21 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Database (Supabase)
-    supabase_url: Optional[str] = None
-    supabase_anon_key: Optional[str] = None
-    supabase_service_role_key: Optional[str] = None
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None
+    supabase_service_role_key: str | None = None
 
     # AI/ML APIs
-    openai_api_key: Optional[str] = None
-    openrouter_api_key: Optional[str] = None
-    voyage_api_key: Optional[str] = None
-    langchain_api_key: Optional[str] = None
-    langchain_tracing_v2: Optional[str] = None
-    langchain_project: Optional[str] = None
+    openai_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    voyage_api_key: str | None = None
+    langchain_api_key: str | None = None
+    langchain_tracing_v2: str | None = None
+    langchain_project: str | None = None
 
     # Beam Integration
-    beam_webhook_url: Optional[str] = None
-    beam_auth_token: Optional[str] = None
+    beam_webhook_url: str | None = None
+    beam_auth_token: str | None = None
 
     # Application
     app_name: str = "ConstructionRAG"
@@ -38,17 +36,13 @@ class Settings(BaseSettings):
     port: int = 8000
 
     # CORS - handle both string and list formats
-    cors_origins: Union[str, List[str]] = ["*"]
+    cors_origins: str | list[str] = ["*"]
 
     # File upload
     max_file_size: int = 100 * 1024 * 1024  # 100MB
-    allowed_file_types: Union[str, List[str]] = [".pdf"]
+    allowed_file_types: str | list[str] = [".pdf"]
 
-    # Pipeline configuration
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
-    embedding_model: str = "voyage-large-2"
-    embedding_dimensions: int = 1536
+    # Pipeline configuration moved to SoT (config/pipeline/pipeline_config.json)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -71,7 +65,7 @@ class Settings(BaseSettings):
 
 
 # Global settings instance
-_settings: Optional[Settings] = None
+_settings: Settings | None = None
 
 
 def get_settings() -> Settings:

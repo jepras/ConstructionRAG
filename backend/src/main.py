@@ -5,6 +5,7 @@ import uvicorn
 from datetime import datetime
 import os
 import sys
+from typing import Optional
 
 # Import configuration
 try:
@@ -29,6 +30,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def validate_startup_config() -> None:
+    """Fail-fast validation for config and critical environment."""
+    try:
+        from src.services.config_service import ConfigService, ConfigServiceError
+
+        cfg = ConfigService()
+        cfg.validate_startup()
+    except Exception as e:  # noqa: BLE001 - allow fail-fast bubbling
+        # Re-raise to prevent app from starting with invalid config
+        raise e
 
 
 # Health check endpoint

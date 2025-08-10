@@ -1,0 +1,19 @@
+{
+  "defaults": {
+    "chunking": { "chunk_size": 1000, "overlap": 200 },
+    "embedding": { "model": "voyage-multilingual-2", "dimensions": 1024, "batch_size": 100 },
+    "retrieval": { "method": "hybrid", "top_k": 5, "similarity_threshold": 0.7 },
+    "generation": { "model": "google/gemini-2.5-flash", "temperature": 0.1, "max_tokens": 1000 },
+    "orchestration": { "max_concurrent_documents": 5, "step_timeout_minutes": 30 }
+  },
+  "indexing": {
+    "chunking": { "strategy": "semantic" }
+  },
+  "query": {
+    "retrieval": { "similarity_metric": "cosine" }
+  },
+  "wiki": {
+    "generation": { "temperature": 0.2 }
+  }
+}
+
