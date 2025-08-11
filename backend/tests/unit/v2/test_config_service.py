@@ -1,8 +1,35 @@
-from pathlib import Path
-import json
+from __future__ import annotations
+
+import os
+
 import pytest
 
 from src.services.config_service import ConfigService, ConfigServiceError
+
+
+def test_config_service_loads_effective_indexing_config(monkeypatch):
+    svc = ConfigService()
+    cfg = svc.get_effective_config("indexing")
+    assert cfg["embedding"]["model"] == "voyage-multilingual-2"
+    assert cfg["embedding"]["dimensions"] == 1024
+
+
+def test_config_service_enforces_embedding_invariants(monkeypatch, tmp_path):
+    bad = tmp_path / "pipeline_config.json"
+    bad.write_text(
+        '{"defaults": {"embedding": {"model": "X", "dimensions": 1536}}, "indexing": {}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PIPELINE_CONFIG_PATH", str(bad))
+    try:
+        with pytest.raises(ConfigServiceError):
+            ConfigService().get_effective_config("indexing")
+    finally:
+        os.environ.pop("PIPELINE_CONFIG_PATH", None)
+
+
+import json
+from pathlib import Path
 
 
 def test_effective_configs_and_invariants_from_sot():

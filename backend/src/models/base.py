@@ -36,9 +36,7 @@ class BaseDocument(BaseModel):
     file_size: int | None = Field(None, ge=0, description="File size in bytes")
     file_path: str | None = Field(None, description="Supabase Storage path")
     page_count: int | None = Field(None, ge=1, description="Number of pages in PDF")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
 
 class BaseDocumentChunk(BaseModel):

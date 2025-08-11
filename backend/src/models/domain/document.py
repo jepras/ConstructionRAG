@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, computed_field
 
 from src.models.base import AccessLevel, BaseDocument
+
 from .document_chunk import DocumentChunk
 
 logger = logging.getLogger(__name__)
@@ -30,29 +31,17 @@ class Document(BaseDocument):
 
     id: UUID = Field(description="Document unique identifier")
     user_id: UUID | None = Field(None, description="Owner user ID from Supabase Auth")
-    access_level: AccessLevel = Field(
-        default=AccessLevel.PRIVATE, description="Access control level"
-    )
-    status: DocumentStatus = Field(
-        DocumentStatus.PENDING, description="Processing status"
-    )
-    error_message: str | None = Field(
-        None, description="Error message if processing failed"
-    )
+    access_level: AccessLevel = Field(default=AccessLevel.PRIVATE, description="Access control level")
+    status: DocumentStatus = Field(DocumentStatus.PENDING, description="Processing status")
+    error_message: str | None = Field(None, description="Error message if processing failed")
     # Step results from indexing pipeline
-    step_results: dict[str, Any] = Field(
-        default_factory=dict, description="Step results from indexing pipeline"
-    )
+    step_results: dict[str, Any] = Field(default_factory=dict, description="Step results from indexing pipeline")
     indexing_status: str | None = Field(
         None,
         description="Current indexing status (pending, running, completed, failed)",
     )
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Document creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Document last update timestamp"
-    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Document creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Document last update timestamp")
 
     # Computed properties for timing data
     @computed_field(return_type=dict[str, float])
@@ -101,13 +90,9 @@ class Document(BaseDocument):
         ]
 
         # Find the first step that is not completed or is failed
-        for _i, (full_name, simple_name) in enumerate(
-            zip(step_order_full, step_order_simple, strict=False)
-        ):
+        for _i, (full_name, simple_name) in enumerate(zip(step_order_full, step_order_simple, strict=False)):
             # Check if step exists in either naming convention
-            step_data = self.step_results.get(full_name) or self.step_results.get(
-                simple_name
-            )
+            step_data = self.step_results.get(full_name) or self.step_results.get(simple_name)
 
             if not step_data:
                 return simple_name  # Next step to run
@@ -144,6 +129,4 @@ class DocumentUpdate(BaseDocument):
 class DocumentWithChunks(Document):
     """Document model including its chunks"""
 
-    chunks: list[DocumentChunk] = Field(
-        default_factory=list, description="Document chunks"
-    )
+    chunks: list[DocumentChunk] = Field(default_factory=list, description="Document chunks")

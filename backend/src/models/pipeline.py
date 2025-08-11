@@ -66,24 +66,18 @@ class StepResult(BaseModel):
     )
 
     # Real data for downstream processing
-    data: dict[str, Any] | None = Field(
-        None, description="Complete data structure for downstream steps"
-    )
+    data: dict[str, Any] | None = Field(None, description="Complete data structure for downstream steps")
 
     # Error information
     error_message: str | None = Field(None, description="Error message if failed")
-    error_details: dict[str, Any] | None = Field(
-        None, description="Detailed error info"
-    )
+    error_details: dict[str, Any] | None = Field(None, description="Detailed error info")
 
     # Timestamps
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: datetime | None = Field(None)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if hasattr(v, "isoformat") else str(v)
-        }
+        json_encoders = {datetime: lambda v: v.isoformat() if hasattr(v, "isoformat") else str(v)}
 
 
 class WikiPageMetadata(BaseModel):
@@ -102,41 +96,21 @@ class WikiGenerationRun(BaseModel):
 
     id: UUID = Field(description="Wiki generation run unique identifier")
     indexing_run_id: UUID = Field(description="Associated indexing run ID")
-    upload_type: UploadType = Field(
-        UploadType.USER_PROJECT, description="Type of upload"
-    )
+    upload_type: UploadType = Field(UploadType.USER_PROJECT, description="Type of upload")
     user_id: UUID | None = Field(None, description="User ID for user projects")
-    access_level: AccessLevel = Field(
-        default=AccessLevel.PRIVATE, description="Access control level"
-    )
+    access_level: AccessLevel = Field(default=AccessLevel.PRIVATE, description="Access control level")
     project_id: UUID | None = Field(None, description="Project ID for user projects")
     upload_id: str | None = Field(None, description="Upload ID for email uploads")
-    status: WikiGenerationStatus = Field(
-        WikiGenerationStatus.PENDING, description="Wiki generation status"
-    )
+    status: WikiGenerationStatus = Field(WikiGenerationStatus.PENDING, description="Wiki generation status")
     language: str = Field("danish", description="Wiki language")
     model: str = Field(..., description="LLM model used (from SoT)")
-    step_results: dict[str, StepResult] = Field(
-        default_factory=dict, description="Detailed results from each step"
-    )
-    wiki_structure: dict[str, Any] = Field(
-        default_factory=dict, description="Generated wiki structure"
-    )
-    pages_metadata: list[WikiPageMetadata] = Field(
-        default_factory=list, description="Metadata for generated pages"
-    )
-    storage_path: str | None = Field(
-        None, description="Base storage path for this wiki run"
-    )
-    started_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Wiki generation start timestamp"
-    )
-    completed_at: datetime | None = Field(
-        None, description="Wiki generation completion timestamp"
-    )
-    error_message: str | None = Field(
-        None, description="Error message if wiki generation failed"
-    )
+    step_results: dict[str, StepResult] = Field(default_factory=dict, description="Detailed results from each step")
+    wiki_structure: dict[str, Any] = Field(default_factory=dict, description="Generated wiki structure")
+    pages_metadata: list[WikiPageMetadata] = Field(default_factory=list, description="Metadata for generated pages")
+    storage_path: str | None = Field(None, description="Base storage path for this wiki run")
+    started_at: datetime = Field(default_factory=datetime.utcnow, description="Wiki generation start timestamp")
+    completed_at: datetime | None = Field(None, description="Wiki generation completion timestamp")
+    error_message: str | None = Field(None, description="Error message if wiki generation failed")
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         description="Wiki generation creation timestamp",
@@ -202,34 +176,16 @@ class IndexingRun(BaseModel):
     """Indexing pipeline run model matching the indexing_runs table"""
 
     id: UUID = Field(description="Indexing run unique identifier")
-    upload_type: UploadType = Field(
-        UploadType.USER_PROJECT, description="Type of upload"
-    )
-    user_id: UUID | None = Field(
-        None, description="Owner user ID (nullable for anonymous)"
-    )
-    access_level: AccessLevel = Field(
-        default=AccessLevel.PRIVATE, description="Access control level"
-    )
+    upload_type: UploadType = Field(UploadType.USER_PROJECT, description="Type of upload")
+    user_id: UUID | None = Field(None, description="Owner user ID (nullable for anonymous)")
+    access_level: AccessLevel = Field(default=AccessLevel.PRIVATE, description="Access control level")
     project_id: UUID | None = Field(None, description="Project ID for user projects")
-    status: PipelineStatus = Field(
-        PipelineStatus.PENDING, description="Indexing run status"
-    )
-    step_results: dict[str, StepResult] = Field(
-        default_factory=dict, description="Detailed results from each step"
-    )
-    started_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Indexing start timestamp"
-    )
-    completed_at: datetime | None = Field(
-        None, description="Indexing completion timestamp"
-    )
-    error_message: str | None = Field(
-        None, description="Error message if indexing failed"
-    )
-    pipeline_config: dict[str, Any] | None = Field(
-        None, description="Pipeline configuration used for this run"
-    )
+    status: PipelineStatus = Field(PipelineStatus.PENDING, description="Indexing run status")
+    step_results: dict[str, StepResult] = Field(default_factory=dict, description="Detailed results from each step")
+    started_at: datetime = Field(default_factory=datetime.utcnow, description="Indexing start timestamp")
+    completed_at: datetime | None = Field(None, description="Indexing completion timestamp")
+    error_message: str | None = Field(None, description="Error message if indexing failed")
+    pipeline_config: dict[str, Any] | None = Field(None, description="Pipeline configuration used for this run")
 
     # Computed properties for timing data
     @property
@@ -260,29 +216,15 @@ class QueryRun(BaseModel):
     """Query pipeline run model matching the query_runs table"""
 
     id: UUID = Field(description="Query run unique identifier")
-    user_id: UUID | None = Field(
-        None, description="User ID from Supabase Auth (nullable for anonymous)"
-    )
-    access_level: AccessLevel = Field(
-        default=AccessLevel.PRIVATE, description="Access control level"
-    )
-    project_id: UUID | None = Field(
-        None, description="Future: group queries by project"
-    )
+    user_id: UUID | None = Field(None, description="User ID from Supabase Auth (nullable for anonymous)")
+    access_level: AccessLevel = Field(default=AccessLevel.PRIVATE, description="Access control level")
+    project_id: UUID | None = Field(None, description="Future: group queries by project")
     query_text: str = Field(description="User's query text")
     response_text: str | None = Field(None, description="Generated response text")
-    retrieval_metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Search results, confidence scores"
-    )
-    response_time_ms: int | None = Field(
-        None, description="Response time in milliseconds"
-    )
-    step_timings: dict[str, float] | None = Field(
-        None, description="Individual step execution times in seconds"
-    )
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Query creation timestamp"
-    )
+    retrieval_metadata: dict[str, Any] = Field(default_factory=dict, description="Search results, confidence scores")
+    response_time_ms: int | None = Field(None, description="Response time in milliseconds")
+    step_timings: dict[str, float] | None = Field(None, description="Individual step execution times in seconds")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Query creation timestamp")
 
     class Config:
         from_attributes = True
@@ -295,13 +237,9 @@ class UserConfigOverride(BaseModel):
     id: UUID = Field(description="Override unique identifier")
     user_id: UUID = Field(description="User ID from Supabase Auth")
     config_type: str = Field(description="'indexing' or 'querying'")
-    config_key: str = Field(
-        description="Configuration key (e.g., 'chunking.chunk_size')"
-    )
+    config_key: str = Field(description="Configuration key (e.g., 'chunking.chunk_size')")
     config_value: dict[str, Any] = Field(description="Configuration value")
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Last update timestamp"
-    )
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
     class Config:
         from_attributes = True
@@ -314,21 +252,11 @@ class PipelineRun(BaseModel):
 
     id: UUID = Field(description="Pipeline run unique identifier")
     document_id: UUID = Field(description="Associated document ID")
-    status: PipelineStatus = Field(
-        PipelineStatus.PENDING, description="Pipeline run status"
-    )
-    step_results: dict[str, Any] = Field(
-        default_factory=dict, description="Results from each pipeline step"
-    )
-    started_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Pipeline start timestamp"
-    )
-    completed_at: datetime | None = Field(
-        None, description="Pipeline completion timestamp"
-    )
-    error_message: str | None = Field(
-        None, description="Error message if pipeline failed"
-    )
+    status: PipelineStatus = Field(PipelineStatus.PENDING, description="Pipeline run status")
+    step_results: dict[str, Any] = Field(default_factory=dict, description="Results from each pipeline step")
+    started_at: datetime = Field(default_factory=datetime.utcnow, description="Pipeline start timestamp")
+    completed_at: datetime | None = Field(None, description="Pipeline completion timestamp")
+    error_message: str | None = Field(None, description="Error message if pipeline failed")
 
     class Config:
         from_attributes = True
@@ -424,20 +352,12 @@ class PipelineConfig(BaseModel):
     chunk_overlap: int = Field(200, description="Chunk overlap size")
     # Values should be read from SoT; no runtime defaults here
     embedding_model: str = Field(..., description="Embedding model name (from SoT)")
-    embedding_dimensions: int = Field(
-        ..., description="Embedding dimensions (from SoT)"
-    )
+    embedding_dimensions: int = Field(..., description="Embedding dimensions (from SoT)")
     retrieval_top_k: int = Field(5, description="Number of chunks to retrieve")
-    similarity_threshold: float = Field(
-        0.7, description="Similarity threshold for retrieval"
-    )
+    similarity_threshold: float = Field(0.7, description="Similarity threshold for retrieval")
     generation_model: str = Field(..., description="Generation model name (from SoT)")
-    generation_temperature: float = Field(
-        ..., description="Generation temperature (from SoT)"
-    )
-    generation_max_tokens: int = Field(
-        2000, description="Maximum tokens for generation"
-    )
+    generation_temperature: float = Field(..., description="Generation temperature (from SoT)")
+    generation_max_tokens: int = Field(2000, description="Maximum tokens for generation")
 
 
 class Project(BaseModel):
@@ -447,12 +367,8 @@ class Project(BaseModel):
     user_id: UUID = Field(description="User ID from Supabase Auth")
     name: str = Field(description="Project name")
     description: str | None = Field(None, description="Project description")
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Project creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Project last update timestamp"
-    )
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Project creation timestamp")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Project last update timestamp")
 
     class Config:
         from_attributes = True
@@ -468,19 +384,11 @@ class EmailUpload(BaseModel):
     file_size: int | None = Field(None, description="File size in bytes")
     status: str = Field("processing", description="Upload status")
     public_url: str | None = Field(None, description="Generated page URL")
-    processing_results: dict[str, Any] = Field(
-        default_factory=dict, description="Processing results"
-    )
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Upload creation timestamp"
-    )
-    completed_at: datetime | None = Field(
-        None, description="Processing completion timestamp"
-    )
+    processing_results: dict[str, Any] = Field(default_factory=dict, description="Processing results")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Upload creation timestamp")
+    completed_at: datetime | None = Field(None, description="Processing completion timestamp")
     expires_at: datetime = Field(
-        default_factory=lambda: datetime.utcnow().replace(
-            day=datetime.utcnow().day + 30
-        ),
+        default_factory=lambda: datetime.utcnow().replace(day=datetime.utcnow().day + 30),
         description="Upload expiration timestamp",
     )
 

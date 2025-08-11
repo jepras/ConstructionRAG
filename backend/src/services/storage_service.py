@@ -1,14 +1,12 @@
 """Storage service for handling Supabase Storage operations."""
 
-import os
-import asyncio
-from pathlib import Path
-from typing import Optional, Dict, Any, Union, List
-from uuid import UUID
 import logging
 from enum import Enum
+from pathlib import Path
+from typing import Any
+from uuid import UUID
 
-from src.config.database import get_supabase_admin_client
+from src.services.storage_client_resolver import StorageClientResolver
 from src.utils.exceptions import StorageError
 
 
@@ -25,8 +23,10 @@ logger = logging.getLogger(__name__)
 class StorageService:
     """Service for managing file storage operations in Supabase Storage."""
 
-    def __init__(self, bucket_name: str = "pipeline-assets"):
-        self.supabase = get_supabase_admin_client()
+    def __init__(self, bucket_name: str = "pipeline-assets", resolver: StorageClientResolver | None = None):
+        # Phase 4 default: always admin client via resolver; Phase 5 will switch based on context
+        self._resolver = resolver or StorageClientResolver()
+        self.supabase = self._resolver.get_client()
         self.bucket_name = bucket_name  # Allow custom bucket name
 
     @classmethod
@@ -68,9 +68,9 @@ class StorageService:
 
     async def upload_file(
         self,
-        file_path: Optional[str],
+        file_path: str | None,
         storage_path: str,
-        content_type: Optional[str] = None,
+        content_type: str | None = None,
     ) -> str:
         """Upload a file to Supabase Storage and return the public URL."""
         try:
@@ -100,9 +100,7 @@ class StorageService:
             )
 
             # Get signed URL (since bucket is private)
-            signed_url_response = self.supabase.storage.from_(
-                self.bucket_name
-            ).create_signed_url(
+            signed_url_response = self.supabase.storage.from_(self.bucket_name).create_signed_url(
                 storage_path,
                 expires_in=3600 * 24 * 7,  # 7 days
             )
@@ -132,10 +130,10 @@ class StorageService:
         page_num: int,
         complexity: str,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Upload an extracted page image and return metadata with URL."""
         try:
             filename = Path(image_path).name
@@ -170,10 +168,10 @@ class StorageService:
         document_id: UUID,
         table_id: str,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Upload a table image and return metadata with URL."""
         try:
             filename = Path(image_path).name
@@ -206,18 +204,16 @@ class StorageService:
         file_path: str,
         filename: str,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-        content_type: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
         """Upload a generated file (markdown, etc.) to the generated folder."""
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = (
-                    f"email-uploads/index-runs/{index_run_id}/generated/{filename}"
-                )
+                storage_path = f"email-uploads/index-runs/{index_run_id}/generated/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{filename}"
 
@@ -241,17 +237,15 @@ class StorageService:
         file_path: str,
         filename: str,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Upload the original PDF file."""
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = (
-                    f"email-uploads/index-runs/{index_run_id}/pdfs/{filename}"
-                )
+                storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}"
 
@@ -276,18 +270,16 @@ class StorageService:
         filename: str,
         step: str,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-        content_type: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
         """Upload a temporary processing file."""
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = (
-                    f"email-uploads/index-runs/{index_run_id}/temp/{step}/{filename}"
-                )
+                storage_path = f"email-uploads/index-runs/{index_run_id}/temp/{step}/{filename}"
             else:  # USER_PROJECT
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/temp/{step}/{filename}"
 
@@ -309,39 +301,37 @@ class StorageService:
 
     async def upload_wiki_page(
         self,
-        file_path: Optional[str],
+        file_path: str | None,
         filename: str,
         wiki_run_id: UUID,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-        content: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+        content: str | None = None,
+    ) -> dict[str, Any]:
         """Upload a wiki page markdown file."""
         try:
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                storage_path = (
+                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                )
 
             # If content is provided, create a temporary file
             if content is not None:
-                import tempfile
                 import os
+                import tempfile
 
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".md", delete=False, encoding="utf-8"
-                ) as temp_file:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as temp_file:
                     temp_file.write(content)
                     temp_file_path = temp_file.name
 
                 try:
                     # Upload the temporary file
-                    url = await self.upload_file(
-                        temp_file_path, storage_path, "text/markdown"
-                    )
+                    url = await self.upload_file(temp_file_path, storage_path, "text/markdown")
                 finally:
                     # Clean up temporary file
                     if os.path.exists(temp_file_path):
@@ -368,10 +358,10 @@ class StorageService:
         metadata_content: str,
         wiki_run_id: UUID,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Upload wiki metadata JSON file."""
         try:
             filename = "wiki_metadata.json"
@@ -380,27 +370,23 @@ class StorageService:
             if upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                storage_path = (
+                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                )
 
             # Create a temporary file with the JSON content
-            import tempfile
             import os
+            import tempfile
 
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8"
-            ) as temp_file:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as temp_file:
                 temp_file.write(metadata_content)
                 temp_file_path = temp_file.name
 
             try:
                 # Use the existing upload_file method which handles content types properly
-                url = await self.upload_file(
-                    temp_file_path, storage_path, "text/markdown"
-                )
+                url = await self.upload_file(temp_file_path, storage_path, "text/markdown")
 
-                logger.info(
-                    f"Uploaded wiki metadata to storage: {storage_path} -> {url}"
-                )
+                logger.info(f"Uploaded wiki metadata to storage: {storage_path} -> {url}")
 
                 # Return metadata
                 return {
@@ -424,9 +410,9 @@ class StorageService:
         wiki_run_id: UUID,
         filename: str,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
     ) -> str:
         """Get the content of a wiki page markdown file."""
         try:
@@ -434,19 +420,17 @@ class StorageService:
             if upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                storage_path = (
+                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                )
 
             # Get file content
-            result = self.supabase.storage.from_(self.bucket_name).download(
-                storage_path
-            )
+            result = self.supabase.storage.from_(self.bucket_name).download(storage_path)
 
             if result:
                 return result.decode("utf-8")
             else:
-                raise StorageError(
-                    f"Failed to download wiki page content: {storage_path}"
-                )
+                raise StorageError(f"Failed to download wiki page content: {storage_path}")
 
         except Exception as e:
             logger.error(f"Failed to get wiki page content: {e}")
@@ -456,17 +440,15 @@ class StorageService:
         self,
         wiki_run_id: UUID,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
-    ) -> List[Dict[str, Any]]:
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
         """List all wiki pages for a specific wiki run."""
         try:
             # Create base path based on upload type
             if upload_type == UploadType.EMAIL:
-                base_path = (
-                    f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-                )
+                base_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
             else:  # USER_PROJECT
                 base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
 
@@ -498,17 +480,15 @@ class StorageService:
         self,
         wiki_run_id: UUID,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
     ) -> bool:
         """Create the storage folder structure for wiki generation."""
         try:
             if upload_type == UploadType.EMAIL:
                 # Create email upload wiki structure
-                base_path = (
-                    f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-                )
+                base_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
             else:  # USER_PROJECT
                 # Create user project wiki structure
                 base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
@@ -530,17 +510,15 @@ class StorageService:
         self,
         wiki_run_id: UUID,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
     ) -> bool:
         """Delete entire wiki run directory and all its contents."""
         try:
             # Create base path based on upload type
             if upload_type == UploadType.EMAIL:
-                base_path = (
-                    f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-                )
+                base_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
             else:  # USER_PROJECT
                 base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
 
@@ -561,12 +539,8 @@ class StorageService:
 
             # Delete all files
             if file_paths:
-                result = self.supabase.storage.from_(self.bucket_name).remove(
-                    file_paths
-                )
-                logger.info(
-                    f"Deleted {len(file_paths)} files from wiki directory: {base_path}"
-                )
+                result = self.supabase.storage.from_(self.bucket_name).remove(file_paths)
+                logger.info(f"Deleted {len(file_paths)} files from wiki directory: {base_path}")
 
             return True
 
@@ -577,9 +551,9 @@ class StorageService:
     async def create_storage_structure(
         self,
         upload_type: UploadType,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        index_run_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
     ) -> bool:
         """Create the storage folder structure for the upload type."""
         try:
@@ -604,9 +578,7 @@ class StorageService:
                 ]
             else:  # USER_PROJECT
                 # Create user project structure (unchanged)
-                base_path = (
-                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}"
-                )
+                base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}"
                 folders = [
                     f"{base_path}/pdfs",
                     f"{base_path}/generated",
@@ -648,9 +620,7 @@ class StorageService:
     async def delete_file(self, storage_path: str) -> bool:
         """Delete a file from Supabase Storage."""
         try:
-            result = self.supabase.storage.from_(self.bucket_name).remove(
-                [storage_path]
-            )
+            result = self.supabase.storage.from_(self.bucket_name).remove([storage_path])
             logger.info(f"Deleted file from storage: {storage_path}")
             return True
         except Exception as e:
@@ -678,12 +648,8 @@ class StorageService:
 
             # Delete all files in the run directory
             if file_paths:
-                result = self.supabase.storage.from_(self.bucket_name).remove(
-                    file_paths
-                )
-                logger.info(
-                    f"Deleted {len(file_paths)} files from run directory: {run_path}"
-                )
+                result = self.supabase.storage.from_(self.bucket_name).remove(file_paths)
+                logger.info(f"Deleted {len(file_paths)} files from run directory: {run_path}")
 
             return True
 
@@ -700,7 +666,7 @@ class StorageService:
             logger.error(f"Failed to list files in {folder_path}: {e}")
             return []
 
-    async def get_run_storage_usage(self, run_id: UUID) -> Dict[str, Any]:
+    async def get_run_storage_usage(self, run_id: UUID) -> dict[str, Any]:
         """Get storage usage statistics for a specific run."""
         try:
             run_path = str(run_id)
