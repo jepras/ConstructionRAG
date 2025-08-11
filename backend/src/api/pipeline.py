@@ -620,3 +620,116 @@ async def get_indexing_run(
         "step_results": run.step_results,
         "pipeline_config": run.pipeline_config,
     }
+
+
+@flat_router.get("/indexing-runs/{run_id}/progress", response_model=dict[str, Any])
+async def get_flat_indexing_run_progress(
+    run_id: UUID,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
+):
+    """Flat progress endpoint mirroring the pipeline progress, with optional auth."""
+    reader = PipelineReadService()
+    run = await pipeline_service.get_indexing_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Indexing run not found")
+    if current_user:
+        allowed = reader.get_run_for_user(str(run_id), current_user["id"])
+        if not allowed:
+            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+    else:
+        if getattr(run, "upload_type", None) != "email":
+            raise HTTPException(status_code=403, detail="Access denied: Authentication required")
+
+    documents_result = (
+        pipeline_service.supabase.table("indexing_run_documents")
+        .select("document_id")
+        .eq("indexing_run_id", str(run_id))
+        .execute()
+    )
+    document_ids = [doc["document_id"] for doc in (documents_result.data or [])]
+
+    document_status: dict[str, Any] = {}
+    if document_ids:
+        documents_result = (
+            pipeline_service.supabase.table("documents")
+            .select("id, filename, step_results")
+            .in_("id", document_ids)
+            .execute()
+        )
+        for doc in documents_result.data or []:
+            doc_id = doc["id"]
+            step_results = doc.get("step_results", {})
+            completed_steps = len([s for s in step_results.values() if s.get("status") == "completed"])
+            total_steps = 5
+            document_status[doc_id] = {
+                "filename": doc["filename"],
+                "completed_steps": completed_steps,
+                "total_steps": total_steps,
+                "progress_percentage": ((completed_steps / total_steps * 100) if total_steps > 0 else 0),
+                "current_step": _get_current_step(step_results),
+                "step_results": step_results,
+            }
+
+    total_docs = len(document_status)
+    completed_docs = sum(1 for status in document_status.values() if status["progress_percentage"] >= 100)
+
+    run_step_results = run.step_results or {}
+    if run_step_results and hasattr(next(iter(run_step_results.values()), {}), "status"):
+        run_step_results_dict = {
+            step_name: {
+                "status": step.status,
+                "duration_seconds": step.duration_seconds,
+                "summary_stats": step.summary_stats,
+                "completed_at": (step.completed_at.isoformat() if step.completed_at else None),
+                "error_message": (step.error_message if hasattr(step, "error_message") else None),
+            }
+            for step_name, step in run_step_results.items()
+        }
+    else:
+        run_step_results_dict = run_step_results
+
+    completed_run_steps = len([s for s in run_step_results_dict.values() if s.get("status") == "completed"])
+    total_run_steps = 1
+
+    all_step_results: dict[str, Any] = {}
+    if document_status:
+        all_document_steps = set()
+        for ds in document_status.values():
+            all_document_steps.update(ds["step_results"].keys())
+        for step_name in all_document_steps:
+            completed_count = sum(
+                1
+                for ds in document_status.values()
+                if ds["step_results"].get(step_name, {}).get("status") == "completed"
+            )
+            total_count = len(document_status)
+            all_step_results[f"document_{step_name}"] = {
+                "status": ("completed" if completed_count == total_count else "running"),
+                "completed_documents": completed_count,
+                "total_documents": total_count,
+                "progress_percentage": ((completed_count / total_count * 100) if total_count > 0 else 0),
+                "step_type": "document_level",
+            }
+
+    for step_name, step_data in run_step_results_dict.items():
+        all_step_results[f"run_{step_name}"] = {**step_data, "step_type": "batch_level"}
+
+    return {
+        "run_id": str(run_id),
+        "status": run.status,
+        "upload_type": run.upload_type,
+        "progress": {
+            "documents_processed": completed_docs,
+            "total_documents": total_docs,
+            "documents_percentage": ((completed_docs / total_docs * 100) if total_docs > 0 else 0),
+            "run_steps_completed": completed_run_steps,
+            "total_run_steps": total_run_steps,
+            "run_steps_percentage": ((completed_run_steps / total_run_steps * 100) if total_run_steps > 0 else 0),
+        },
+        "document_status": document_status,
+        "step_results": all_step_results,
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "error_message": run.error_message,
+    }
