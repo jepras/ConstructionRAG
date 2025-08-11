@@ -36,6 +36,9 @@ class QueryService:
         try:
             # If specific run is targeted, rely on run-level scoping via join table
             if indexing_run_id:
+                self.logger.info(f"🔍 Resolving access for indexing_run_id: {indexing_run_id}")
+                self.logger.info(f"🔍 User context: {user['id'] if user else 'anonymous'}")
+
                 # For anonymous: verify the run is public/auth and from email uploads
                 # For authenticated: ensure ownership or public/auth
                 run_res = (
@@ -45,17 +48,33 @@ class QueryService:
                     .limit(1)
                     .execute()
                 )
+
+                self.logger.info(f"🔍 Database query result: {run_res.data}")
+                self.logger.info(f"🔍 Query status: {getattr(run_res, 'status', 'unknown')}")
+
                 if not run_res.data:
+                    self.logger.error(f"❌ No indexing run found for ID: {indexing_run_id}")
                     raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
 
                 run = run_res.data[0]
+                self.logger.info(f"🔍 Run data: {run}")
+
                 if user is None:
+                    self.logger.info(
+                        f"🔍 Anonymous user check - access_level: {run.get('access_level')}, upload_type: {run.get('upload_type')}"
+                    )
                     if run.get("access_level") not in {"public", "auth"} or run.get("upload_type") != "email":
+                        self.logger.error(
+                            f"❌ Access denied for anonymous user - access_level: {run.get('access_level')}, upload_type: {run.get('upload_type')}"
+                        )
                         raise AppError("Access denied", error_code=ErrorCode.AUTHORIZATION_FAILED)
+                    self.logger.info("✅ Anonymous user access granted")
                 else:
+                    self.logger.info(f"🔍 Authenticated user check - user_id: {user['id']}")
                     # Owner check for project runs; allow public/auth for non-project runs
                     project_id = run.get("project_id")
                     if project_id:
+                        self.logger.info(f"🔍 Checking project ownership for project_id: {project_id}")
                         proj = (
                             self.db.table("projects")
                             .select("id")
@@ -65,8 +84,14 @@ class QueryService:
                             .execute()
                         )
                         if not proj.data:
+                            self.logger.error(f"❌ Project ownership check failed for project_id: {project_id}")
                             raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
+                        self.logger.info("✅ Project ownership verified")
+                    else:
+                        self.logger.info("✅ No project_id - allowing access")
+
                 # We will filter by run via join table in retrieval; return None to skip document id filter
+                self.logger.info("✅ Access control passed - returning None for document filtering")
                 return None
 
             # No specific run provided → resolve accessible documents

@@ -5,7 +5,7 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
     env_file:
       - backend/.env
     volumes:
@@ -13,7 +13,7 @@ services:
       - /app/__pycache__
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -35,7 +35,7 @@ services:
       - backend
     command: streamlit run streamlit_app/main.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8501/_stcore/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -43,4 +43,4 @@ services:
 
 networks:
   default:
-    name: constructionrag-network 
+    name: constructionrag-network

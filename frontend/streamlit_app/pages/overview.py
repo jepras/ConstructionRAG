@@ -1,15 +1,16 @@
-import streamlit as st
-import requests
 import logging
 import re
 from datetime import datetime
+
+import requests
+import streamlit as st
 from utils.shared import get_backend_url
 
 logger = logging.getLogger(__name__)
 
 
 def _get_auth_headers():
-    """Get authentication headers for API requests"""
+    """Get authentication headers for API requests (optional)."""
     access_token = st.session_state.get("access_token")
     if not access_token:
         return None
@@ -17,13 +18,7 @@ def _get_auth_headers():
 
 
 def _check_authentication():
-    """Check if user is authenticated"""
-    if (
-        not st.session_state.get("auth_manager")
-        or not st.session_state.auth_manager.is_authenticated()
-    ):
-        st.error("🔐 Please sign in to view overview.")
-        return False
+    """Auth optional in v2; keep helper for optional headers/UI only."""
     return True
 
 
@@ -84,12 +79,8 @@ def render_markdown_with_mermaid(content):
                 diagram_code = mermaid_match.group(1).strip()
 
                 # Clean up the diagram code
-                diagram_code = re.sub(
-                    r"^\s*\n", "", diagram_code
-                )  # Remove leading empty lines
-                diagram_code = re.sub(
-                    r"\n\s*$", "", diagram_code
-                )  # Remove trailing empty lines
+                diagram_code = re.sub(r"^\s*\n", "", diagram_code)  # Remove leading empty lines
+                diagram_code = re.sub(r"\n\s*$", "", diagram_code)  # Remove trailing empty lines
 
                 if diagram_code:
                     # Render Mermaid diagram using HTML with a more compatible approach
@@ -147,18 +138,16 @@ def render_markdown_with_mermaid(content):
 def render_run_selection(backend_url):
     """Render the run selection dropdown and return the selected run ID"""
     headers = _get_auth_headers()
-    if not headers:
-        st.error("❌ No access token found. Please sign in again.")
-        return None
 
     try:
         # Get recent indexing runs (last 5)
         logger.info("🔍 Fetching recent indexing runs...")
-        runs_response = requests.get(
-            f"{backend_url}/api/pipeline/indexing/runs", headers=headers
-        )
+        if headers:
+            runs_response = requests.get(f"{backend_url}/api/indexing-runs", headers=headers)
+        else:
+            runs_response = None
 
-        if runs_response.status_code == 200:
+        if runs_response is not None and runs_response.status_code == 200:
             runs = runs_response.json()
             logger.info(f"📊 Found {len(runs)} indexing runs")
 
@@ -176,17 +165,12 @@ def render_run_selection(backend_url):
                     index=1,  # Start with the first actual run (index 1) instead of placeholder (index 0)
                 )
 
-                if (
-                    selected_run_label
-                    and selected_run_label != "-- Select from recent runs --"
-                ):
+                if selected_run_label and selected_run_label != "-- Select from recent runs --":
                     run_id_input = run_options[selected_run_label]
                     logger.info(f"🎯 Selected run ID: {run_id_input}")
                 else:
                     # If somehow the placeholder is selected, default to the first run
-                    first_run_label = list(run_options.keys())[
-                        1
-                    ]  # Skip the placeholder
+                    first_run_label = list(run_options.keys())[1]  # Skip the placeholder
                     run_id_input = run_options[first_run_label]
                     logger.info(f"🎯 Auto-selected latest run ID: {run_id_input}")
 
@@ -197,12 +181,14 @@ def render_run_selection(backend_url):
         else:
             st.warning(
                 f"⚠️ Could not load recent runs (status: {runs_response.status_code})"
+                if runs_response
+                else "⚠️ Sign in to see your recent runs"
             )
-            st.info("💡 You can still enter a run ID manually above.")
+            st.info("💡 You can still enter a run ID manually below.")
             return None
     except Exception as e:
         st.warning(f"⚠️ Could not load recent runs: {str(e)}")
-        st.info("💡 You can still enter a run ID manually above.")
+        st.info("💡 You can still enter a run ID manually below.")
         return None
 
 
@@ -236,14 +222,12 @@ def render_overview_tab(run_id_input, backend_url):
     """Render the overview tab with progress data and run status"""
 
     headers = _get_auth_headers()
-    if not headers:
-        return
 
     try:
         # Get indexing run progress and step results
         logger.info(f"📊 Fetching progress data for run ID: {run_id_input}")
         progress_response = requests.get(
-            f"{backend_url}/api/pipeline/indexing/runs/{run_id_input}/progress",
+            f"{backend_url}/api/indexing-runs/{run_id_input}/progress",
             headers=headers,
         )
 
@@ -277,15 +261,16 @@ def render_overview_tab(run_id_input, backend_url):
                 st.markdown("##### 🔧 Step Results")
                 st.json(step_results)
 
+        elif progress_response.status_code == 401:
+            st.warning("⚠️ Access denied. This run may require authentication or may not be an email upload.")
+            st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
         elif progress_response.status_code == 404:
             st.info("No progress data found for this indexing run.")
             logger.warning(f"⚠️ No progress data found for run ID: {run_id_input}")
         else:
             st.error(f"Failed to load progress data: {progress_response.status_code}")
             st.error(f"Response: {progress_response.text}")
-            logger.error(
-                f"❌ Progress API failed: {progress_response.status_code} - {progress_response.text}"
-            )
+            logger.error(f"❌ Progress API failed: {progress_response.status_code} - {progress_response.text}")
 
     except Exception as e:
         st.error(f"Error loading progress data: {str(e)}")
@@ -297,9 +282,7 @@ def render_document_step_tab(step_results, step_name, step_key, doc_name):
     step_results_data = step_results.get(step_key, {})
 
     if step_results_data:
-        logger.info(
-            f"📋 {step_name} results for {doc_name}: {len(step_results_data)} fields"
-        )
+        logger.info(f"📋 {step_name} results for {doc_name}: {len(step_results_data)} fields")
 
         # Display summary stats if available
         summary_stats = step_results_data.get("summary_stats", {})
@@ -335,17 +318,13 @@ def render_document_details(document, backend_url):
         ) = st.tabs(["Partition", "Metadata", "Enrich", "Chunk"])
 
         with subtab_partition:
-            render_document_step_tab(
-                step_results, "Partition", "PartitionStep", doc_name
-            )
+            render_document_step_tab(step_results, "Partition", "PartitionStep", doc_name)
 
         with subtab_metadata:
             render_document_step_tab(step_results, "Metadata", "MetadataStep", doc_name)
 
         with subtab_enrich:
-            render_document_step_tab(
-                step_results, "Enrichment", "EnrichmentStep", doc_name
-            )
+            render_document_step_tab(step_results, "Enrichment", "EnrichmentStep", doc_name)
 
         with subtab_chunk:
             render_document_step_tab(step_results, "Chunking", "ChunkingStep", doc_name)
@@ -356,23 +335,27 @@ def render_documents_tab(run_id_input, backend_url):
     st.markdown("### 📄 Documents")
 
     headers = _get_auth_headers()
-    if not headers:
-        return
 
     try:
         # Get documents for this indexing run
         logger.info(f"📄 Fetching documents for run ID: {run_id_input}")
         documents_response = requests.get(
-            f"{backend_url}/api/documents/by-index-run/{run_id_input}",
+            f"{backend_url}/api/documents?index_run_id={run_id_input}",
             headers=headers,
         )
 
-        logger.info(
-            f"📡 Documents API response status: {documents_response.status_code}"
-        )
+        logger.info(f"📡 Documents API response status: {documents_response.status_code}")
 
         if documents_response.status_code == 200:
-            documents = documents_response.json()
+            response_data = documents_response.json()
+
+            # Handle v2 API response structure: {"documents": [...], "total_count": X, "has_more": false}
+            if isinstance(response_data, dict) and "documents" in response_data:
+                documents = response_data["documents"]
+            else:
+                # Fallback: assume direct array response (v1 style)
+                documents = response_data if isinstance(response_data, list) else []
+
             logger.info(f"📄 Found {len(documents)} documents")
 
             if documents:
@@ -381,12 +364,13 @@ def render_documents_tab(run_id_input, backend_url):
             else:
                 st.info("No documents found for this indexing run.")
                 logger.warning(f"⚠️ No documents found for run ID: {run_id_input}")
+        elif documents_response.status_code == 401:
+            st.warning("⚠️ Access denied. This run may require authentication or may not be an email upload.")
+            st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
         else:
             st.error(f"Failed to load documents: {documents_response.status_code}")
             st.error(f"Response: {documents_response.text}")
-            logger.error(
-                f"❌ Documents API failed: {documents_response.status_code} - {documents_response.text}"
-            )
+            logger.error(f"❌ Documents API failed: {documents_response.status_code} - {documents_response.text}")
 
     except Exception as e:
         st.error(f"Error loading documents: {str(e)}")
@@ -398,14 +382,12 @@ def render_config_tab(run_id_input, backend_url):
     st.markdown("### ⚙️ Pipeline Configuration")
 
     headers = _get_auth_headers()
-    if not headers:
-        return
 
     try:
         # Get pipeline configuration for this indexing run
         logger.info(f"⚙️ Fetching pipeline status for run ID: {run_id_input}")
         status_response = requests.get(
-            f"{backend_url}/api/pipeline/indexing/runs/{run_id_input}/status",
+            f"{backend_url}/api/indexing-runs/{run_id_input}",
             headers=headers,
         )
 
@@ -438,15 +420,16 @@ def render_config_tab(run_id_input, backend_url):
 
             st.json(status_info)
 
+        elif status_response.status_code == 401:
+            st.warning("⚠️ Access denied. This run may require authentication or may not be an email upload.")
+            st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
         elif status_response.status_code == 404:
             st.info("No status data found for this indexing run.")
             logger.warning(f"⚠️ No status data found for run ID: {run_id_input}")
         else:
             st.error(f"Failed to load status data: {status_response.status_code}")
             st.error(f"Response: {status_response.text}")
-            logger.error(
-                f"❌ Status API failed: {status_response.status_code} - {status_response.text}"
-            )
+            logger.error(f"❌ Status API failed: {status_response.status_code} - {status_response.text}")
 
     except Exception as e:
         st.error(f"Error loading status data: {str(e)}")
@@ -458,8 +441,6 @@ def render_query_tab(run_id_input, backend_url):
     st.markdown("### 🔍 Query")
 
     headers = _get_auth_headers()
-    if not headers:
-        return
 
     # Query input
     query = st.text_area(
@@ -472,13 +453,9 @@ def render_query_tab(run_id_input, backend_url):
         if query:
             with st.spinner("Searching for answers..."):
                 try:
-                    # Make query request with indexing run ID
                     query_response = requests.post(
-                        f"{backend_url}/api/query/",
-                        json={
-                            "query": query,
-                            "indexing_run_id": run_id_input,
-                        },
+                        f"{backend_url}/api/queries",
+                        json={"query": query, "indexing_run_id": run_id_input},
                         headers=headers,
                         timeout=30,
                     )
@@ -497,9 +474,7 @@ def render_query_tab(run_id_input, backend_url):
                             for i, source in enumerate(result["search_results"], 1):
                                 content = source.get("content", "")
                                 page_number = source.get("page_number", "N/A")
-                                source_filename = source.get(
-                                    "source_filename", "Unknown"
-                                )
+                                source_filename = source.get("source_filename", "Unknown")
                                 similarity_score = source.get("similarity_score", 0.0)
 
                                 # Create a snippet (first line + next 50 chars)
@@ -507,13 +482,7 @@ def render_query_tab(run_id_input, backend_url):
                                 first_line = lines[0] if lines else ""
                                 snippet = first_line
                                 if len(content) > len(first_line) + 50:
-                                    snippet += (
-                                        " "
-                                        + content[
-                                            len(first_line) : len(first_line) + 50
-                                        ].strip()
-                                        + "..."
-                                    )
+                                    snippet += " " + content[len(first_line) : len(first_line) + 50].strip() + "..."
 
                                 # Format similarity score as percentage
                                 similarity_percent = f"{similarity_score * 100:.1f}%"
@@ -532,6 +501,11 @@ def render_query_tab(run_id_input, backend_url):
                                         disabled=True,
                                     )
 
+                    elif query_response.status_code == 401:
+                        st.warning(
+                            "⚠️ Access denied. This run may require authentication or may not be an email upload."
+                        )
+                        st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
                     else:
                         st.error(f"❌ Query failed: {query_response.status_code}")
                         st.text(f"Response: {query_response.text}")
@@ -547,9 +521,6 @@ def render_wiki_tab(run_id_input, backend_url):
     st.markdown("### 📚 Wiki Generation")
 
     headers = _get_auth_headers()
-    if not headers:
-        st.error("❌ No access token found. Please sign in again.")
-        return
 
     try:
         # Get existing wiki runs for this indexing run
@@ -593,14 +564,10 @@ def render_wiki_tab(run_id_input, backend_url):
                                 if create_response.status_code == 200:
                                     result = create_response.json()
                                     st.success("✅ Wiki generation started!")
-                                    st.info(
-                                        f"Wiki run ID: {result.get('index_run_id')}"
-                                    )
+                                    st.info(f"Wiki run ID: {result.get('index_run_id')}")
                                     st.rerun()
                                 else:
-                                    st.error(
-                                        f"❌ Failed to start wiki generation: {create_response.status_code}"
-                                    )
+                                    st.error(f"❌ Failed to start wiki generation: {create_response.status_code}")
                                     st.text(f"Response: {create_response.text}")
                             except Exception as e:
                                 st.error(f"❌ Error creating wiki: {str(e)}")
@@ -624,16 +591,12 @@ def render_wiki_tab(run_id_input, backend_url):
                     # Display status
                     status_col1, status_col2, status_col3 = st.columns(3)
                     with status_col1:
-                        st.metric(
-                            "Status", wiki_status.get("status", "Unknown").title()
-                        )
+                        st.metric("Status", wiki_status.get("status", "Unknown").title())
                     with status_col2:
                         created_at = wiki_status.get("created_at", "")
                         if created_at:
                             try:
-                                dt = datetime.fromisoformat(
-                                    created_at.replace("Z", "+00:00")
-                                )
+                                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
                                 date_str = dt.strftime("%Y-%m-%d %H:%M")
                             except:
                                 date_str = created_at[:19]
@@ -644,12 +607,10 @@ def render_wiki_tab(run_id_input, backend_url):
                         completed_at = wiki_status.get("completed_at", "")
                         if completed_at:
                             try:
-                                dt = datetime.fromisoformat(
-                                    completed_at.replace("Z", "+00:00")
-                                )
+                                dt = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
                                 date_str = dt.strftime("%Y-%m-%d %H:%M")
                             except:
-                                date_str = completed_at[:19]
+                                date_str = created_at[:19]
                         else:
                             date_str = "Not completed"
                         st.metric("Completed", date_str)
@@ -690,43 +651,31 @@ def render_wiki_tab(run_id_input, backend_url):
                                     if content_response.status_code == 200:
                                         content_data = content_response.json()
                                         render_markdown_with_mermaid(
-                                            content_data.get(
-                                                "content", "No content available"
-                                            )
+                                            content_data.get("content", "No content available")
                                         )
                                     else:
-                                        st.error(
-                                            f"❌ Failed to load page content: {content_response.status_code}"
-                                        )
+                                        st.error(f"❌ Failed to load page content: {content_response.status_code}")
                                 else:
                                     # Multiple pages - create tabs
                                     page_tabs = st.tabs(
-                                        [
-                                            page.get("title", f"Page {i+1}")
-                                            for i, page in enumerate(pages)
-                                        ]
+                                        [page.get("title", f"Page {i + 1}") for i, page in enumerate(pages)]
                                     )
 
-                                    for i, (tab, page) in enumerate(
-                                        zip(page_tabs, pages)
-                                    ):
+                                    for i, (tab, page) in enumerate(zip(page_tabs, pages, strict=False)):
                                         with tab:
                                             if page.get("description"):
                                                 st.markdown(f"*{page['description']}*")
 
                                             # Get page content
                                             content_response = requests.get(
-                                                f"{backend_url}/api/wiki/runs/{selected_wiki_run_id}/pages/{page.get('filename', f'page-{i+1}.md')}",
+                                                f"{backend_url}/api/wiki/runs/{selected_wiki_run_id}/pages/{page.get('filename', f'page-{i + 1}.md')}",
                                                 headers=headers,
                                             )
 
                                             if content_response.status_code == 200:
                                                 content_data = content_response.json()
                                                 render_markdown_with_mermaid(
-                                                    content_data.get(
-                                                        "content",
-                                                        "No content available",
-                                                    )
+                                                    content_data.get("content", "No content available")
                                                 )
                                             else:
                                                 st.error(
@@ -735,24 +684,19 @@ def render_wiki_tab(run_id_input, backend_url):
                             else:
                                 st.info("📭 No pages found for this wiki run.")
                         else:
-                            st.error(
-                                f"❌ Failed to load wiki pages: {pages_response.status_code}"
-                            )
+                            st.error(f"❌ Failed to load wiki pages: {pages_response.status_code}")
                     else:
-                        st.info(
-                            "⏳ Wiki generation is still in progress. Please wait for completion."
-                        )
+                        st.info("⏳ Wiki generation is still in progress. Please wait for completion.")
                 else:
-                    st.error(
-                        f"❌ Failed to get wiki run status: {status_response.status_code}"
-                    )
+                    st.error(f"❌ Failed to get wiki run status: {status_response.status_code}")
 
+        elif wiki_runs_response.status_code == 401:
+            st.warning("⚠️ Access denied. This run may require authentication or may not be an email upload.")
+            st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
         elif wiki_runs_response.status_code == 404:
             st.info("📭 No wiki runs found for this indexing run.")
         else:
-            st.warning(
-                f"⚠️ Could not load wiki runs (status: {wiki_runs_response.status_code})"
-            )
+            st.warning(f"⚠️ Could not load wiki runs (status: {wiki_runs_response.status_code})")
             # Add more detailed error information for debugging
             try:
                 error_detail = wiki_runs_response.json()
@@ -781,6 +725,23 @@ def show_overview_page():
 
     # Render run selection and get selected run ID
     run_id_input = render_run_selection(backend_url)
+
+    # If no run ID from dropdown, allow manual entry
+    if not run_id_input:
+        st.markdown("### 📝 Manual Run ID Entry")
+        st.info("Enter an Index Run ID from the Upload or Progress page to view details.")
+        manual_run_id = st.text_input(
+            "Index Run ID:",
+            placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000",
+            help="Enter the Index Run ID from your document upload or progress tracking",
+        )
+
+        if manual_run_id and manual_run_id.strip():
+            run_id_input = manual_run_id.strip()
+            st.success(f"✅ Using run ID: {run_id_input}")
+        else:
+            st.info("💡 Enter a valid Index Run ID above to continue.")
+            return
 
     # Show selected run info and tabs
     if run_id_input:

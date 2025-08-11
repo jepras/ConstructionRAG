@@ -1,6 +1,7 @@
-import streamlit as st
-import requests
 import logging
+
+import requests
+import streamlit as st
 from utils.shared import get_backend_url
 
 logger = logging.getLogger(__name__)
@@ -9,74 +10,59 @@ logger = logging.getLogger(__name__)
 def show_query_page():
     """Show the query interface page"""
     st.markdown("## Query Your Project")
-    st.markdown(
-        "Ask questions about your construction project and get AI-powered answers."
-    )
+    st.markdown("Ask questions about your construction project and get AI-powered answers.")
 
-    # Check authentication first
-    from components import require_auth_decorator
-
+    # Authentication is optional in v2
     auth_manager = st.session_state.auth_manager
-
-    if not auth_manager.is_authenticated():
-        st.error("🔐 Please sign in to access the query interface.")
-        st.info("Use the sidebar to navigate to the Authentication page.")
-        return
-
-    # Show user info
     user_info = auth_manager.get_current_user()
     if user_info and user_info.get("user"):
         user = user_info["user"]
-        st.success(f"✅ Signed in as: {user.get('email', 'N/A')}")
+        st.info(f"Signed in as: {user.get('email', 'N/A')}")
 
     # Load available indexing runs
     try:
         backend_url = get_backend_url()
         access_token = st.session_state.get("access_token")
+        headers = {"Authorization": f"Bearer {access_token}"} if access_token else None
 
-        if not access_token:
-            st.error("❌ No access token found. Please sign in again.")
-            return
-
-        headers = {"Authorization": f"Bearer {access_token}"}
-
-        # Get all indexing runs
-        response = requests.get(
-            f"{backend_url}/api/pipeline/indexing/runs", headers=headers, timeout=10
-        )
-
-        if response.status_code == 200:
-            indexing_runs = response.json()
+        indexing_runs = []
+        if headers:
+            response = requests.get(f"{backend_url}/api/indexing-runs", headers=headers, timeout=10)
+            if response.status_code == 200:
+                indexing_runs = response.json()
 
             # Show all runs for debugging (not just completed ones)
             all_runs = indexing_runs
 
-            if all_runs:
+            if all_runs or st.session_state.get("last_index_run_id"):
                 st.markdown("### 📄 Available Processed Documents")
-
-                # Create dropdown for indexing run selection
-                run_options = []
-                for run in all_runs:
-                    upload_type = run.get("upload_type", "unknown")
-                    started_at = run.get("started_at", "Unknown")
-
-                    # Format the display name
-                    if upload_type == "email":
-                        display_name = f"Email Upload - {started_at[:10]}"
-                    else:
-                        display_name = f"Project Document - {started_at[:10]}"
-
-                    run_options.append((display_name, run["id"]))
-
-                if run_options:
+                selected_run_id = None
+                if all_runs:
+                    # Create dropdown for indexing run selection (auth users)
+                    run_options = []
+                    for run in all_runs:
+                        upload_type = run.get("upload_type", "unknown")
+                        started_at = run.get("started_at", "Unknown")
+                        display_name = (
+                            f"Email Upload - {started_at[:10]}"
+                            if upload_type == "email"
+                            else f"Project Document - {started_at[:10]}"
+                        )
+                        run_options.append((display_name, run["id"]))
                     selected_run_display, selected_run_id = st.selectbox(
                         "Choose a processed document to query:",
                         options=run_options,
                         format_func=lambda x: x[0],
                         help="Select a document that has been processed and is ready for querying",
                     )
+                else:
+                    # Anonymous users: allow manual run ID entry (for email uploads)
+                    st.info("Enter the Index Run ID from the Upload or Progress page.")
+                    default_id = st.session_state.get("last_index_run_id", "")
+                    selected_run_id = st.text_input("Index Run ID", value=default_id)
 
-                    st.success(f"✅ Selected: {selected_run_display}")
+                if selected_run_id:
+                    st.success(f"✅ Selected run: {selected_run_id}")
 
                     # Query input
                     st.markdown("---")
@@ -91,12 +77,10 @@ def show_query_page():
                             with st.spinner("Searching for answers..."):
                                 try:
                                     # Make query request with indexing run ID
+                                    query_payload = {"query": query, "indexing_run_id": selected_run_id}
                                     query_response = requests.post(
-                                        f"{backend_url}/api/query/",
-                                        json={
-                                            "query": query,
-                                            "indexing_run_id": selected_run_id,
-                                        },
+                                        f"{backend_url}/api/queries",
+                                        json=query_payload,
                                         headers=headers,
                                         timeout=30,
                                     )
@@ -107,11 +91,7 @@ def show_query_page():
 
                                         # Display the response
                                         st.markdown("### Answer:")
-                                        st.write(
-                                            result.get(
-                                                "response", "No response received"
-                                            )
-                                        )
+                                        st.write(result.get("response", "No response received"))
 
                                         # Display metadata if available
                                         if result.get("search_results"):
@@ -122,31 +102,18 @@ def show_query_page():
                                             ):
                                                 # Extract source information
                                                 content = source.get("content", "")
-                                                page_number = source.get(
-                                                    "page_number", "N/A"
-                                                )
-                                                source_filename = source.get(
-                                                    "source_filename", "Unknown"
-                                                )
-                                                similarity_score = source.get(
-                                                    "similarity_score", 0.0
-                                                )
+                                                page_number = source.get("page_number", "N/A")
+                                                source_filename = source.get("source_filename", "Unknown")
+                                                similarity_score = source.get("similarity_score", 0.0)
 
                                                 # Determine content type based on metadata
                                                 content_type = "Text"
                                                 if (
-                                                    source.get("metadata", {}).get(
-                                                        "element_category"
-                                                    )
+                                                    source.get("metadata", {}).get("element_category")
                                                     == "ExtractedPage"
                                                 ):
                                                     content_type = "Image"
-                                                elif (
-                                                    source.get("metadata", {}).get(
-                                                        "element_category"
-                                                    )
-                                                    == "List"
-                                                ):
+                                                elif source.get("metadata", {}).get("element_category") == "List":
                                                     content_type = "List"
 
                                                 # Create a snippet (first line + next 50 chars)
@@ -156,25 +123,16 @@ def show_query_page():
                                                 if len(content) > len(first_line) + 50:
                                                     snippet += (
                                                         " "
-                                                        + content[
-                                                            len(first_line) : len(
-                                                                first_line
-                                                            )
-                                                            + 50
-                                                        ].strip()
+                                                        + content[len(first_line) : len(first_line) + 50].strip()
                                                         + "..."
                                                     )
 
                                                 # Format similarity score as percentage
-                                                similarity_percent = (
-                                                    f"{similarity_score * 100:.1f}%"
-                                                )
+                                                similarity_percent = f"{similarity_score * 100:.1f}%"
 
                                                 # Calculate content length
                                                 content_length = len(content)
-                                                content_length_str = (
-                                                    f"{content_length:,} chars"
-                                                )
+                                                content_length_str = f"{content_length:,} chars"
 
                                                 # Create expandable source with summary
                                                 with st.expander(
@@ -203,33 +161,22 @@ def show_query_page():
                                                     step,
                                                     duration,
                                                 ) in step_timings.items():
-                                                    st.text(
-                                                        f"• {step.replace('_', ' ').title()}: {duration:.2f}s"
-                                                    )
+                                                    st.text(f"• {step.replace('_', ' ').title()}: {duration:.2f}s")
 
                                                 # Calculate total from step timings
                                                 total_steps = sum(step_timings.values())
-                                                st.text(
-                                                    f"• Total Pipeline Steps: {total_steps:.2f}s"
-                                                )
+                                                st.text(f"• Total Pipeline Steps: {total_steps:.2f}s")
 
                                                 # Show overhead (difference between total and step sum)
                                                 total_time = (
-                                                    result["performance_metrics"].get(
-                                                        "response_time_ms", 0
-                                                    )
-                                                    / 1000
+                                                    result["performance_metrics"].get("response_time_ms", 0) / 1000
                                                 )
                                                 overhead = total_time - total_steps
                                                 if overhead > 0:
-                                                    st.text(
-                                                        f"• Overhead (DB, network, etc.): {overhead:.2f}s"
-                                                    )
+                                                    st.text(f"• Overhead (DB, network, etc.): {overhead:.2f}s")
 
                                     else:
-                                        st.error(
-                                            f"❌ Query failed: {query_response.status_code}"
-                                        )
+                                        st.error(f"❌ Query failed: {query_response.status_code}")
                                         st.text(f"Response: {query_response.text}")
 
                                 except Exception as e:
@@ -239,9 +186,7 @@ def show_query_page():
                 else:
                     st.info("No completed indexing runs found.")
             else:
-                st.info(
-                    "📄 No processed documents found. Upload and process documents first."
-                )
+                st.info("📄 No processed documents found. Upload and process documents first.")
 
         else:
             st.error(f"❌ Failed to load indexing runs: {response.status_code}")

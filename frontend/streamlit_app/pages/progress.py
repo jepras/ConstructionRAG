@@ -21,45 +21,32 @@ def show_progress_page():
     st.markdown("## 📊 Indexing Run Progress")
     st.markdown("Track the progress of your document processing runs.")
 
-    # Check authentication first
+    # Authentication optional in v2
     auth_manager = st.session_state.auth_manager
-
-    if not auth_manager.is_authenticated():
-        st.error("🔐 Please sign in to view progress.")
-        st.info("Use the sidebar to navigate to the Authentication page.")
-        return
-
-    # Show user info
     user_info = auth_manager.get_current_user()
     if user_info and user_info.get("user"):
         user = user_info["user"]
-        st.success(f"✅ Signed in as: {user.get('email', 'N/A')}")
+        st.info(f"Signed in as: {user.get('email', 'N/A')}")
 
     try:
         # Get backend URL and access token
         backend_url = get_backend_url()
         access_token = st.session_state.get("access_token")
 
-        if not access_token:
-            st.error("❌ No access token found. Please sign in again.")
-            return
+        headers = {"Authorization": f"Bearer {access_token}"} if access_token else None
 
-        # Prepare headers
-        headers = {"Authorization": f"Bearer {access_token}"}
+        # Get all indexing runs (only if authenticated)
+        runs = []
+        if headers:
+            runs_response = requests.get(f"{backend_url}/api/indexing-runs", headers=headers)
+            if runs_response.status_code != 200:
+                st.error(f"❌ Failed to load indexing runs: {runs_response.status_code}")
+                st.error(f"Response: {runs_response.text}")
+                return
+            runs = runs_response.json()
 
-        # Get all indexing runs
-        runs_response = requests.get(f"{backend_url}/api/indexing-runs", headers=headers)
-
-        if runs_response.status_code != 200:
-            st.error(f"❌ Failed to load indexing runs: {runs_response.status_code}")
-            st.error(f"Response: {runs_response.text}")
-            return
-
-        runs = runs_response.json()
-
-        if not runs:
-            st.info("📭 No indexing runs found. Upload some documents to see progress here.")
-            return
+        if not runs and not st.session_state.get("last_index_run_id"):
+            st.info("📭 No indexing runs found. You can still paste a run ID from the Upload page.")
 
         # Create dropdown for run selection
         st.subheader("Select Indexing Run")
@@ -86,16 +73,19 @@ def show_progress_page():
 
         selected_run_label = st.selectbox(
             "Choose an indexing run:",
-            list(run_options.keys()),
-            index=0,  # Default to the first option (the placeholder)
+            list(run_options.keys()) if runs else ["-- Enter a run ID below --"],
+            index=0,
             help="Select an indexing run to view its progress",
         )
 
-        if selected_run_label and selected_run_label != "-- Select an indexing run --":
+        run_id = None
+        if runs and selected_run_label and selected_run_label != "-- Select an indexing run --":
             run_id = run_options[selected_run_label]
+        else:
+            run_id = st.text_input("Or paste an Index Run ID", value=st.session_state.get("last_index_run_id", ""))
 
             # Get detailed status for selected run
-            status_response = requests.get(f"{backend_url}/api/pipeline/indexing/runs/{run_id}/status", headers=headers)
+            status_response = requests.get(f"{backend_url}/api/indexing-runs/{run_id}", headers=headers)
 
             if status_response.status_code == 200:
                 run_data = status_response.json()
@@ -127,10 +117,23 @@ def show_progress_page():
 
                 # Get documents for this indexing run (unified approach)
                 # Use flat documents listing for email runs when anonymous later; keep existing for now
-                documents_response = requests.get(f"{backend_url}/api/documents/by-index-run/{run_id}", headers=headers)
+                # For v2, anonymous flow can list docs by index_run_id if it's an email upload
+                if headers:
+                    documents_response = requests.get(
+                        f"{backend_url}/api/documents?index_run_id={run_id}", headers=headers
+                    )
+                else:
+                    documents_response = requests.get(f"{backend_url}/api/documents?index_run_id={run_id}")
 
                 if documents_response.status_code == 200:
-                    documents = documents_response.json()
+                    response_data = documents_response.json()
+
+                    # Handle v2 API response structure: {"documents": [...], "total_count": X, "has_more": false}
+                    if isinstance(response_data, dict) and "documents" in response_data:
+                        documents = response_data["documents"]
+                    else:
+                        # Fallback: assume direct array response (v1 style)
+                        documents = response_data if isinstance(response_data, list) else []
 
                     if documents:
                         # Display document progress (unified for all upload types)
@@ -186,11 +189,19 @@ def show_progress_page():
                         display_embedding_results(run_data)
                     else:
                         st.info("No documents found for this indexing run")
+                elif documents_response.status_code == 401:
+                    st.warning("⚠️ Access denied. This run may require authentication or may not be an email upload.")
+                    st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
                 else:
                     st.error(f"Failed to load documents: {documents_response.status_code}")
+                    st.error(f"Response: {documents_response.text}")
 
+            elif status_response.status_code == 401:
+                st.error("❌ Access denied. This run may require authentication or may not be an email upload.")
+                st.info("💡 Email uploads can be viewed anonymously. Project uploads require signing in.")
             else:
                 st.error(f"❌ Failed to load run status: {status_response.status_code}")
+                st.error(f"Response: {status_response.text}")
 
     except Exception as e:
         logger.error(f"❌ Error in progress page: {str(e)}")

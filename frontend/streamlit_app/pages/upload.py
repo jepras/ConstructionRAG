@@ -12,10 +12,8 @@ def show_upload_page():
     st.markdown("## Upload Construction Documents")
     st.markdown("Upload your construction PDFs to start building your project knowledge base.")
 
-    # Authentication optional for email uploads
+    # Authentication optional in v2 (email uploads allowed for anon)
     auth_manager = st.session_state.auth_manager
-
-    # Show user info
     user_info = auth_manager.get_current_user()
     if user_info and user_info.get("user"):
         user = user_info["user"]
@@ -31,7 +29,7 @@ def show_upload_page():
 
     if not email:
         st.warning("⚠️ Please enter an email address to continue.")
-        return
+        # allow user to still pick files and submit; we'll validate on submit
 
     # File uploader
     uploaded_files = st.file_uploader(
@@ -84,11 +82,11 @@ def show_upload_page():
 
                     # Upload all files in single request to unified endpoint
                     response = requests.post(
-                        f"{backend_url}/api/email-uploads",
+                        f"{backend_url}/api/uploads",
                         files=files,
                         data=data,
                         headers=headers,
-                        timeout=60,  # Increased timeout for multiple files
+                        timeout=60,
                     )
 
                     # Debug response
