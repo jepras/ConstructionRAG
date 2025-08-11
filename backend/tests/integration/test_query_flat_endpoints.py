@@ -3,6 +3,7 @@ import os
 import httpx
 import pytest
 from dotenv import load_dotenv
+from fastapi.testclient import TestClient
 
 # Load environment variables from .env file
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
@@ -98,3 +99,18 @@ async def test_error_envelope_and_request_id(monkeypatch):
         assert "error" in data
         assert set(["code", "message", "request_id", "timestamp"]).issubset(data["error"].keys())
         assert r.headers.get("X-Request-ID") == "err-1"
+
+
+@pytest.mark.skipif(_env_missing(), reason="Supabase env not configured")
+def test_create_indexing_run_contract_smoke(monkeypatch):
+    # Avoid startup validation coupling
+    from src.services import config_service
+
+    monkeypatch.setattr(config_service.ConfigService, "validate_startup", lambda self: None)
+
+    from src.main import app
+
+    client = TestClient(app)
+    # No auth header → expect 401/403 envelope from middleware
+    resp = client.post("/api/indexing-runs")
+    assert resp.status_code in {401, 403}

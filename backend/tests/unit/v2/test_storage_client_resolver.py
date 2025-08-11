@@ -13,5 +13,7 @@ from src.services.storage_client_resolver import StorageClientResolver
 )
 def test_storage_client_resolver_returns_client():
     resolver = StorageClientResolver()
-    client = resolver.get_client(user_id=None)
-    assert client is not None
+    client_default = resolver.get_client(user_id=None)
+    assert client_default is not None
+    client_trusted = resolver.get_client(trusted=True)
+    assert client_trusted is not None

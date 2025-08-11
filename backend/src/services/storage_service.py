@@ -24,10 +24,10 @@ class StorageService:
     """Service for managing file storage operations in Supabase Storage."""
 
     def __init__(self, bucket_name: str = "pipeline-assets", resolver: StorageClientResolver | None = None):
-        # Phase 4 default: always admin client via resolver; Phase 5 will switch based on context
         self._resolver = resolver or StorageClientResolver()
+        # Default to anon client for safety; methods will resolve per-operation
         self.supabase = self._resolver.get_client()
-        self.bucket_name = bucket_name  # Allow custom bucket name
+        self.bucket_name = bucket_name
 
     @classmethod
     def create_test_storage(cls):
@@ -37,14 +37,15 @@ class StorageService:
     async def ensure_bucket_exists(self) -> bool:
         """Ensure the storage bucket exists, create if it doesn't."""
         try:
-            # Try to get bucket info
-            result = self.supabase.storage.get_bucket(self.bucket_name)
+            # Use admin for bucket management
+            admin = self._resolver.get_client(trusted=True, operation="ensure_bucket")
+            result = admin.storage.get_bucket(self.bucket_name)
             logger.info(f"Storage bucket '{self.bucket_name}' exists")
             return True
         except Exception:
             try:
-                # Create bucket if it doesn't exist
-                result = self.supabase.storage.create_bucket(
+                admin = self._resolver.get_client(trusted=True, operation="ensure_bucket")
+                result = admin.storage.create_bucket(
                     self.bucket_name,
                     options={
                         "public": False,  # Private bucket
@@ -92,15 +93,17 @@ class StorageService:
                 if not content_type:
                     content_type = self._get_content_type(file_path)
 
-            # Upload file
-            result = self.supabase.storage.from_(self.bucket_name).upload(
+            # Server-side uploads require admin client to bypass storage RLS
+            client = self._resolver.get_client(trusted=True, operation="upload")
+            result = client.storage.from_(self.bucket_name).upload(
                 path=storage_path,
                 file=file_content,
                 file_options={"content-type": content_type},
             )
 
-            # Get signed URL (since bucket is private)
-            signed_url_response = self.supabase.storage.from_(self.bucket_name).create_signed_url(
+            # Get signed URL (bucket is private) with admin privileges
+            admin = self._resolver.get_client(trusted=True)
+            signed_url_response = admin.storage.from_(self.bucket_name).create_signed_url(
                 storage_path,
                 expires_in=3600 * 24 * 7,  # 7 days
             )
@@ -425,7 +428,8 @@ class StorageService:
                 )
 
             # Get file content
-            result = self.supabase.storage.from_(self.bucket_name).download(storage_path)
+            admin = self._resolver.get_client(trusted=True)
+            result = admin.storage.from_(self.bucket_name).download(storage_path)
 
             if result:
                 return result.decode("utf-8")
@@ -539,7 +543,8 @@ class StorageService:
 
             # Delete all files
             if file_paths:
-                result = self.supabase.storage.from_(self.bucket_name).remove(file_paths)
+                admin = self._resolver.get_client(trusted=True, operation="delete")
+                result = admin.storage.from_(self.bucket_name).remove(file_paths)
                 logger.info(f"Deleted {len(file_paths)} files from wiki directory: {base_path}")
 
             return True
@@ -620,7 +625,8 @@ class StorageService:
     async def delete_file(self, storage_path: str) -> bool:
         """Delete a file from Supabase Storage."""
         try:
-            result = self.supabase.storage.from_(self.bucket_name).remove([storage_path])
+            admin = self._resolver.get_client(trusted=True, operation="delete")
+            result = admin.storage.from_(self.bucket_name).remove([storage_path])
             logger.info(f"Deleted file from storage: {storage_path}")
             return True
         except Exception as e:
@@ -658,9 +664,10 @@ class StorageService:
             return False
 
     async def list_files(self, folder_path: str = "") -> list:
-        """List files in a storage folder."""
+        """List files in a storage folder (admin context for private bucket)."""
         try:
-            result = self.supabase.storage.from_(self.bucket_name).list(folder_path)
+            admin = self._resolver.get_client(trusted=True, operation="list")
+            result = admin.storage.from_(self.bucket_name).list(folder_path)
             return result
         except Exception as e:
             logger.error(f"Failed to list files in {folder_path}: {e}")

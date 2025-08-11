@@ -95,14 +95,30 @@ async def upload_email_pdf(
     files: list[UploadFile] = File(...),
     email: str = Form(...),
 ):
-    """Deprecated: use POST /api/uploads instead."""
+    """Deprecated: use POST /api/uploads instead.
 
-    # Hard-disable legacy endpoint to ensure it is not accidentally used
-    raise HTTPException(status_code=410, detail="/api/email-uploads is deprecated. Use /api/uploads instead.")
+    For unit tests, still validate inputs and raise AppError-based validation errors.
+    """
+    # Basic validations preserved for unit tests
+    if not files or len(files) < 1:
+        raise ValidationError("At least one file must be uploaded")
+    if len(files) > 10:
+        raise ValidationError("Maximum 10 files can be uploaded at once")
+    for file in files:
+        if not file.filename.lower().endswith(".pdf"):
+            raise ValidationError("Only PDF files are supported")
+        if getattr(file, "size", None) and file.size > 50 * 1024 * 1024:
+            raise ValidationError("File size must be less than 50MB")
 
-    # Unreachable; kept to satisfy function signature when called directly in tests
-    # The endpoint is disabled above.
-    raise HTTPException(status_code=410, detail="/api/email-uploads is deprecated. Use /api/uploads instead.")
+    # Still deprecated for actual flow
+    from src.shared.errors import ErrorCode
+    from src.utils.exceptions import AppError
+
+    raise AppError(
+        "/api/email-uploads is deprecated. Use /api/uploads instead.",
+        error_code=ErrorCode.CONFIGURATION_ERROR,
+        status_code=410,
+    )
 
 
 # User Project Upload Endpoints (Authenticated)

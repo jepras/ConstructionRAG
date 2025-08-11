@@ -1,10 +1,11 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
 from src.services.auth_service import auth_service, get_current_user, security
+from src.utils.exceptions import AppError, AuthenticationError
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -54,10 +55,7 @@ async def sign_up(request: SignUpRequest):
         raise
     except Exception as e:
         logger.error(f"Sign up error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sign up failed: {str(e)}",
-        )
+        raise AppError("Sign up failed")
 
 
 @router.post("/signin", response_model=AuthResponse, tags=["Authentication"])
@@ -70,10 +68,7 @@ async def sign_in(request: SignInRequest):
         raise
     except Exception as e:
         logger.error(f"Sign in error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
+        raise AppError("Failed to sign in", error_code=AuthenticationError("").error_code) from e
 
 
 @router.post("/signout", response_model=AuthResponse, tags=["Authentication"])
@@ -86,10 +81,7 @@ async def sign_out(credentials: HTTPAuthorizationCredentials = Depends(security)
         raise
     except Exception as e:
         logger.error(f"Sign out error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
+        raise AppError("Failed to sign out", error_code=AuthenticationError("").error_code) from e
 
 
 @router.post("/reset-password", response_model=AuthResponse, tags=["Authentication"])
@@ -102,10 +94,7 @@ async def reset_password(request: PasswordResetRequest):
         raise
     except Exception as e:
         logger.error(f"Password reset error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
+        raise AppError("Failed to reset password") from e
 
 
 @router.get("/me", tags=["Authentication"])
@@ -132,10 +121,7 @@ async def refresh_token(request: RefreshTokenRequest):
         raise
     except Exception as e:
         logger.error(f"Token refresh error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
+        raise AppError("Failed to refresh token", error_code=AuthenticationError("").error_code) from e
 
 
 # Debug endpoints (disabled in production)

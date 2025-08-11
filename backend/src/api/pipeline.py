@@ -27,7 +27,7 @@ except ImportError:
     logging.warning("Indexing orchestrator not available - indexing runs on Beam only")
 
 try:
-    from ..pipeline.shared.models import DocumentInput
+    pass
 except Exception:
     raise
 
@@ -37,7 +37,8 @@ except Exception:
     raise
 
 try:
-    from ..utils.exceptions import DatabaseError, PipelineError
+    from ..shared.errors import ErrorCode
+    from ..utils.exceptions import AppError, DatabaseError
 except Exception:
     raise
 
@@ -52,45 +53,16 @@ async def start_indexing_pipeline(
     document_id: UUID,
     background_tasks: BackgroundTasks,
     current_user: dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
-    """Start the indexing pipeline for a document."""
+    """Indexing is Beam-only; legacy local start is disabled."""
+    from ..shared.errors import ErrorCode
+    from ..utils.exceptions import AppError
 
-    # Indexing now runs exclusively on Beam, not FastAPI
-    if not INDEXING_AVAILABLE:
-        raise HTTPException(
-            status_code=501,
-            detail="Indexing pipeline runs on Beam only. Use /api/email-uploads endpoint for document processing.",
-        )
-
-    try:
-        # Create document input with placeholder run_id (will be updated by orchestrator)
-        document_input = DocumentInput(
-            document_id=document_id,
-            run_id=UUID(int=0),  # Placeholder - will be updated by orchestrator
-            user_id=current_user["id"],
-            file_path=f"/path/to/document/{document_id}.pdf",  # This would come from document service
-            filename=f"document_{document_id}.pdf",
-            upload_type="user_project",
-            metadata={},
-        )
-
-        # Get orchestrator
-        orchestrator = await get_indexing_orchestrator()
-
-        # Start pipeline in background
-        background_tasks.add_task(orchestrator.process_document_async, document_input)
-
-        return {
-            "message": "Indexing pipeline started",
-            "document_id": str(document_id),
-            "user_id": str(current_user["id"]),
-            "status": "started",
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to start indexing pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    raise AppError(
+        "Indexing runs on Beam only. Use /api/uploads to create runs.",
+        error_code=ErrorCode.CONFIGURATION_ERROR,
+        status_code=501,
+    )
 
 
 @router.get("/indexing/runs", response_model=list[dict[str, Any]])
@@ -102,9 +74,12 @@ async def get_all_indexing_runs(
         reader = PipelineReadService()
         runs = reader.list_recent_runs_for_user(current_user["id"], limit=5)
         return runs
+    except HTTPException as exc:
+        code = ErrorCode.NOT_FOUND if getattr(exc, "status_code", 500) == 404 else ErrorCode.INTERNAL_ERROR
+        raise AppError(str(getattr(exc, "detail", "Failed to get indexing runs")), error_code=code) from exc
     except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to get all indexing runs: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get indexing runs")
+        raise AppError("Failed to get indexing runs", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 @router.get("/indexing/runs/{document_id}", response_model=list[dict[str, Any]])
@@ -126,7 +101,10 @@ async def get_indexing_runs(
             .execute()
         )
         if not doc_res.data:
-            raise HTTPException(status_code=404, detail="Document not found or access denied")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Document not found or access denied", error_code=ErrorCode.NOT_FOUND)
 
         runs = await pipeline_service.get_document_indexing_runs(document_id)
         return [
@@ -142,19 +120,22 @@ async def get_indexing_runs(
             for run in runs
         ]
 
+    except HTTPException as exc:
+        code = ErrorCode.NOT_FOUND if getattr(exc, "status_code", 500) == 404 else ErrorCode.INTERNAL_ERROR
+        raise AppError(str(getattr(exc, "detail", "Failed to get indexing runs")), error_code=code) from exc
     except DatabaseError as e:
         logger.error(f"Database error getting indexing runs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError(str(e), error_code=ErrorCode.DATABASE_ERROR) from e
     except Exception as e:
         logger.error(f"Failed to get indexing runs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError("Failed to get indexing runs", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 @router.get("/indexing/runs/{run_id}/status", response_model=dict[str, Any])
 async def get_indexing_run_status(
     run_id: UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
     """Get the status of a specific indexing run."""
     logger.info(f"🔍 Getting indexing run status for run_id: {run_id}")
@@ -165,14 +146,20 @@ async def get_indexing_run_status(
         reader = PipelineReadService()
         allowed = reader.get_run_for_user(str(run_id), current_user["id"])
         if not allowed:
-            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
 
         logger.info(f"📡 Calling pipeline_service.get_indexing_run({run_id})")
         run = await pipeline_service.get_indexing_run(run_id)
 
         if not run:
             logger.warning(f"❌ Indexing run not found: {run_id}")
-            raise HTTPException(status_code=404, detail="Indexing run not found")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
 
         logger.info(f"✅ Indexing run found: {run.id}")
         logger.info(f"📊 Run status: {run.status}")
@@ -256,26 +243,29 @@ async def get_indexing_run_status(
         logger.info(f"🎉 Successfully built response for run {run_id}")
         return response_data
 
+    except HTTPException as exc:
+        status = getattr(exc, "status_code", 500)
+        code = (
+            ErrorCode.NOT_FOUND
+            if status == 404
+            else ErrorCode.ACCESS_DENIED
+            if status == 403
+            else ErrorCode.INTERNAL_ERROR
+        )
+        raise AppError(str(getattr(exc, "detail", "Failed to get indexing run status")), error_code=code) from exc
     except DatabaseError as e:
         logger.error(f"❌ Database error getting indexing run status: {e}")
-        logger.error(f"❌ Database error type: {type(e)}")
-        logger.error(f"❌ Database error details: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError(str(e), error_code=ErrorCode.DATABASE_ERROR) from e
     except Exception as e:
         logger.error(f"❌ Failed to get indexing run status: {e}")
-        logger.error(f"❌ Error type: {type(e)}")
-        logger.error(f"❌ Error details: {str(e)}")
-        import traceback
-
-        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError("Failed to get indexing run status", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 @router.get("/indexing/runs/{run_id}/progress", response_model=dict[str, Any])
 async def get_indexing_run_progress(
     run_id: UUID,
     current_user: dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
     """Get detailed progress information for an indexing run."""
     try:
@@ -283,12 +273,18 @@ async def get_indexing_run_progress(
         reader = PipelineReadService()
         allowed = reader.get_run_for_user(str(run_id), current_user["id"])
         if not allowed:
-            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
 
         # Get basic run info
         run = await pipeline_service.get_indexing_run(run_id)
         if not run:
-            raise HTTPException(status_code=404, detail="Indexing run not found")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
 
         # Get documents associated with this run
         documents_result = (
@@ -412,9 +408,19 @@ async def get_indexing_run_progress(
             "error_message": run.error_message,
         }
 
+    except HTTPException as exc:
+        status = getattr(exc, "status_code", 500)
+        code = (
+            ErrorCode.NOT_FOUND
+            if status == 404
+            else ErrorCode.ACCESS_DENIED
+            if status == 403
+            else ErrorCode.INTERNAL_ERROR
+        )
+        raise AppError(str(getattr(exc, "detail", "Failed to get indexing run progress")), error_code=code) from exc
     except Exception as e:
         logger.error(f"Failed to get indexing run progress: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError("Failed to get indexing run progress", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 def _get_current_step(step_results: dict) -> str:
@@ -444,7 +450,10 @@ async def get_step_result(
     try:
         step_result = await pipeline_service.get_step_result(run_id, step_name)
         if not step_result:
-            raise HTTPException(status_code=404, detail="Step result not found")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Step result not found", error_code=ErrorCode.NOT_FOUND)
 
         return {
             "step": step_result.step,
@@ -458,13 +467,16 @@ async def get_step_result(
             "error_message": step_result.error_message,
             "error_details": step_result.error_details,
         }
-
+    except HTTPException as exc:
+        status = getattr(exc, "status_code", 500)
+        code = ErrorCode.NOT_FOUND if status == 404 else ErrorCode.INTERNAL_ERROR
+        raise AppError(str(getattr(exc, "detail", "Failed to get step result")), error_code=code) from exc
     except DatabaseError as e:
         logger.error(f"Database error getting step result: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError(str(e), error_code=ErrorCode.DATABASE_ERROR) from e
     except Exception as e:
         logger.error(f"Failed to get step result: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError("Failed to get step result", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 @router.post("/indexing/steps/{step_name}/execute", response_model=dict[str, Any])
@@ -473,46 +485,13 @@ async def execute_single_step(
     input_data: dict[str, Any],
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    """Execute a single pipeline step with provided input data."""
-    try:
-        # Get orchestrator
-        orchestrator = await get_indexing_orchestrator()
+    """Local step execution is disabled; indexing executes on Beam only."""
+    from ..shared.errors import ErrorCode
+    from ..utils.exceptions import AppError
 
-        # Initialize steps
-        await orchestrator.initialize_steps(current_user["id"])
-
-        # Find the requested step
-        step = None
-        for s in orchestrator.steps:
-            if s.get_step_name() == step_name:
-                step = s
-                break
-
-        if not step:
-            raise HTTPException(status_code=404, detail=f"Step '{step_name}' not found")
-
-        # Execute the step
-        result = await step.execute(input_data)
-
-        return {
-            "step": result.step,
-            "status": result.status,
-            "duration_seconds": result.duration_seconds,
-            "summary_stats": result.summary_stats,
-            "sample_outputs": result.sample_outputs,
-            "data": result.data,
-            "started_at": result.started_at.isoformat() if result.started_at else None,
-            "completed_at": (result.completed_at.isoformat() if result.completed_at else None),
-            "error_message": result.error_message,
-            "error_details": result.error_details,
-        }
-
-    except PipelineError as e:
-        logger.error(f"Pipeline error executing step: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to execute step: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    raise AppError(
+        "Local step execution is disabled; use Beam.", error_code=ErrorCode.CONFIGURATION_ERROR, status_code=501
+    )
 
 
 @router.get("/health", response_model=dict[str, Any])
@@ -533,7 +512,10 @@ async def pipeline_health_check():
 
     except Exception as e:
         logger.error(f"Pipeline health check failed: {e}")
-        raise HTTPException(status_code=503, detail="Pipeline service unhealthy")
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+
+        raise AppError("Pipeline service unhealthy", error_code=ErrorCode.INTERNAL_ERROR, status_code=503) from e
 
 
 # Flat resource endpoints for indexing runs
@@ -578,9 +560,12 @@ async def list_indexing_runs(
             .execute()
         )
         return list(res.data or [])
+    except HTTPException as exc:
+        code = ErrorCode.NOT_FOUND if getattr(exc, "status_code", 500) == 404 else ErrorCode.INTERNAL_ERROR
+        raise AppError(str(getattr(exc, "detail", "Failed to list indexing runs")), error_code=code) from exc
     except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to list indexing runs: {e}")
-        raise HTTPException(status_code=500, detail="Failed to list indexing runs")
+        raise AppError("Failed to list indexing runs", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 @flat_router.get("/indexing-runs/{run_id}", response_model=dict[str, Any])
@@ -598,16 +583,25 @@ async def get_indexing_run(
     # Fetch run using admin client to check upload_type and existence
     run = await pipeline_service.get_indexing_run(run_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Indexing run not found")
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+
+        raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
 
     if current_user:
         allowed = reader.get_run_for_user(str(run_id), current_user["id"])
         if not allowed:
-            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
     else:
         # Anonymous only permitted for email uploads
         if getattr(run, "upload_type", None) != "email":
-            raise HTTPException(status_code=403, detail="Access denied: Authentication required")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Access denied: Authentication required", error_code=ErrorCode.ACCESS_DENIED)
 
     return {
         "id": str(run.id),
@@ -632,14 +626,23 @@ async def get_flat_indexing_run_progress(
     reader = PipelineReadService()
     run = await pipeline_service.get_indexing_run(run_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Indexing run not found")
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+
+        raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
     if current_user:
         allowed = reader.get_run_for_user(str(run_id), current_user["id"])
         if not allowed:
-            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
     else:
         if getattr(run, "upload_type", None) != "email":
-            raise HTTPException(status_code=403, detail="Access denied: Authentication required")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Access denied: Authentication required", error_code=ErrorCode.ACCESS_DENIED)
 
     documents_result = (
         pipeline_service.supabase.table("indexing_run_documents")
@@ -733,3 +736,59 @@ async def get_flat_indexing_run_progress(
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "error_message": run.error_message,
     }
+
+
+# Optional: Explicit creation of indexing runs (separate from uploads)
+@flat_router.post("/indexing-runs", response_model=dict[str, Any])
+async def create_indexing_run(
+    project_id: UUID | None = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService()),
+):
+    """Create an indexing run explicitly. Use for project-based runs.
+
+    Note: Email/public runs should be created via /api/uploads.
+    """
+    try:
+        # Basic ownership check if project specified
+        if project_id is not None:
+            db = get_supabase_client()
+            proj = (
+                db.table("projects")
+                .select("id")
+                .eq("id", str(project_id))
+                .eq("user_id", current_user["id"])
+                .limit(1)
+                .execute()
+            )
+            if not proj.data:
+                from ..shared.errors import ErrorCode
+                from ..utils.exceptions import AppError
+
+                raise AppError("Project not found or access denied", error_code=ErrorCode.NOT_FOUND)
+        run = await pipeline_service.create_indexing_run(
+            upload_type="user_project",
+            project_id=project_id,
+        )
+        return {
+            "id": str(run.id),
+            "upload_type": run.upload_type,
+            "project_id": (str(run.project_id) if run.project_id else None),
+            "status": run.status,
+            "started_at": (run.started_at.isoformat() if run.started_at else None),
+            "completed_at": (run.completed_at.isoformat() if run.completed_at else None),
+            "error_message": run.error_message,
+        }
+    except HTTPException as exc:
+        status = getattr(exc, "status_code", 500)
+        code = (
+            ErrorCode.NOT_FOUND
+            if status == 404
+            else ErrorCode.ACCESS_DENIED
+            if status == 403
+            else ErrorCode.INTERNAL_ERROR
+        )
+        raise AppError(str(getattr(exc, "detail", "Failed to create indexing run")), error_code=code) from exc
+    except Exception as e:
+        logger.error(f"Failed to create indexing run: {e}")
+        raise AppError("Failed to create indexing run", error_code=ErrorCode.INTERNAL_ERROR) from e
