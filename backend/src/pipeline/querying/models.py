@@ -1,27 +1,30 @@
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
-from uuid import UUID
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class QueryVariations(BaseModel):
     """Query variations generated during processing"""
 
     original: str
-    semantic: Optional[str] = None
-    hyde: Optional[str] = None
-    formal: Optional[str] = None
+    semantic: str | None = None
+    hyde: str | None = None
+    formal: str | None = None
 
 
 class SearchResult(BaseModel):
     """Individual search result from vector search"""
 
     content: str
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     similarity_score: float
     source_filename: str
-    page_number: Optional[int] = None
-    chunk_id: Optional[str] = None
+    page_number: int | None = None
+    chunk_id: str | None = None
 
 
 class QualityMetrics(BaseModel):
@@ -29,8 +32,8 @@ class QualityMetrics(BaseModel):
 
     relevance_score: float
     confidence: str  # "excellent", "good", "acceptable", "low"
-    top_similarity: Optional[float] = None
-    result_count: Optional[int] = None
+    top_similarity: float | None = None
+    result_count: int | None = None
 
 
 class DiversityMetrics(BaseModel):
@@ -55,7 +58,7 @@ class QualityDecision(BaseModel):
 
     overall_score: float
     quality_level: str  # "excellent", "good", "acceptable", "poor"
-    suggestions: List[str]
+    suggestions: list[str]
     confidence: str
 
 
@@ -63,21 +66,20 @@ class QueryResponse(BaseModel):
     """Final response from query pipeline"""
 
     response: str
-    search_results: List[SearchResult]
-    performance_metrics: Dict[str, Any]
-    quality_metrics: Optional[QualityMetrics] = None
-    quality_decision: Optional[QualityDecision] = None
-    step_timings: Optional[Dict[str, float]] = None
+    search_results: list[SearchResult]
+    performance_metrics: dict[str, Any]
+    quality_metrics: QualityMetrics | None = None
+    quality_decision: QualityDecision | None = None
+    step_timings: dict[str, float] | None = None
 
 
 class QueryRequest(BaseModel):
     """Request model for query processing"""
 
     query: str = Field(..., min_length=1, max_length=1000)
-    user_id: Optional[str] = None
-    indexing_run_id: Optional[UUID] = Field(
-        None, description="Specific indexing run to query against"
-    )
+    user_id: str | None = None
+    indexing_run_id: UUID | None = Field(None, description="Specific indexing run to query against")
+    allowed_document_ids: list[str] | None = Field(default=None, description="Restrict retrieval to these document IDs")
 
 
 class QueryFeedback(BaseModel):
@@ -86,37 +88,37 @@ class QueryFeedback(BaseModel):
     relevance_score: int = Field(ge=1, le=5)  # 1-5 scale
     helpfulness_score: int = Field(ge=1, le=5)
     accuracy_score: int = Field(ge=1, le=5)
-    comments: Optional[str] = None
+    comments: str | None = None
 
 
 class QueryRun(BaseModel):
     """Database model for storing query runs"""
 
-    id: Optional[UUID] = None
-    user_id: Optional[str] = None
+    id: UUID | None = None
+    user_id: str | None = None
     original_query: str
-    query_variations: Optional[Dict[str, Any]] = None
-    selected_variation: Optional[str] = None
-    search_results: Optional[List[Dict[str, Any]]] = None
-    final_response: Optional[str] = None
-    performance_metrics: Optional[Dict[str, Any]] = None
-    quality_metrics: Optional[Dict[str, Any]] = None
-    created_at: Optional[datetime] = None
+    query_variations: dict[str, Any] | None = None
+    selected_variation: str | None = None
+    search_results: list[dict[str, Any]] | None = None
+    final_response: str | None = None
+    performance_metrics: dict[str, Any] | None = None
+    quality_metrics: dict[str, Any] | None = None
+    created_at: datetime | None = None
 
 
 # --- Adapters: convert sample_outputs dicts into typed models ---
 
 
-def to_query_variations(sample_outputs: Dict[str, Any]) -> QueryVariations:
+def to_query_variations(sample_outputs: dict[str, Any]) -> QueryVariations:
     variations_data = sample_outputs.get("variations", {}) or {}
     if isinstance(variations_data, QueryVariations):
         return variations_data
     return QueryVariations(**variations_data)
 
 
-def to_search_results(sample_outputs: Dict[str, Any]) -> List[SearchResult]:
+def to_search_results(sample_outputs: dict[str, Any]) -> list[SearchResult]:
     raw = sample_outputs.get("search_results", []) or []
-    results: List[SearchResult] = []
+    results: list[SearchResult] = []
     for item in raw:
         if isinstance(item, SearchResult):
             results.append(item)
@@ -125,7 +127,7 @@ def to_search_results(sample_outputs: Dict[str, Any]) -> List[SearchResult]:
     return results
 
 
-def to_query_response(sample_outputs: Dict[str, Any]) -> "QueryResponse":
+def to_query_response(sample_outputs: dict[str, Any]) -> QueryResponse:
     response_data = sample_outputs.get("response", {}) or {}
     if isinstance(response_data, QueryResponse):
         return response_data

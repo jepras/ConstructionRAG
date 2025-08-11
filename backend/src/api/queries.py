@@ -1,14 +1,7 @@
-"""
-FastAPI endpoints for query processing pipeline.
+"""Flat Query API with optional auth and access-aware scoping."""
 
-This module provides REST API endpoints for:
-- POST /api/query - Process construction queries
-- GET /api/query/history - Get user query history
-- POST /api/query/{id}/feedback - Submit user feedback
-- GET /api/query/quality-dashboard - Admin quality metrics
-"""
+from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -19,12 +12,16 @@ from src.api.auth import get_current_user
 from src.config.database import get_supabase_admin_client, get_supabase_client
 from src.pipeline.querying.models import QueryFeedback, QueryRequest, QueryResponse
 from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
+from src.services.auth_service import get_current_user_optional
+from src.services.query_service import QueryReadService, QueryService
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
+from src.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-router = APIRouter(prefix="/query", tags=["queries"])
+router = APIRouter(prefix="/query", tags=["queries"])  # legacy routes kept
+flat_router = APIRouter(prefix="/api", tags=["Queries"])  # new flat routes
 
 
 # Pydantic models for API requests/responses
@@ -103,7 +100,7 @@ async def process_query(
         raise AppError(
             str(exc.detail),
             error_code=(ErrorCode.NOT_FOUND if exc.status_code == 404 else ErrorCode.INTERNAL_ERROR),
-        )
+        ) from exc
     except Exception as e:
         logger.error(f"Error processing query: {e}")
         # Store error in database (best effort)
@@ -116,7 +113,53 @@ async def process_query(
             "Failed to process query",
             error_code=ErrorCode.EXTERNAL_API_ERROR,
             details={"reason": str(e)},
-        )
+        ) from e
+
+
+# ---------------- Flat resource endpoints (Phase 8) ----------------
+
+
+class CreateQueryRequest(BaseModel):
+    query: str
+    indexing_run_id: str | None = None
+
+
+@flat_router.post("/queries", response_model=dict)
+async def create_query(
+    payload: CreateQueryRequest,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+):
+    svc = QueryService()
+    orchestrator = QueryPipelineOrchestrator()
+    result = await svc.create_query(
+        user=current_user,
+        query_text=payload.query,
+        indexing_run_id=payload.indexing_run_id,
+        orchestrator=orchestrator,
+    )
+    return result
+
+
+@flat_router.get("/queries", response_model=list[dict])
+async def list_queries(
+    limit: int = 20,
+    offset: int = 0,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+):
+    reader = QueryReadService()
+    return reader.list_queries(user=current_user, limit=min(limit, 100), offset=max(offset, 0))
+
+
+@flat_router.get("/queries/{query_id}", response_model=dict)
+async def get_query(
+    query_id: str,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+):
+    reader = QueryReadService()
+    row = reader.get_query(query_id=query_id, user=current_user)
+    if not row:
+        raise AppError("Query not found", error_code=ErrorCode.NOT_FOUND)
+    return row
 
 
 @router.get("/history", response_model=QueryHistoryResponse)
@@ -168,7 +211,11 @@ async def get_query_history(
 
     except Exception as e:
         logger.error(f"Error getting query history: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve query history")
+        raise AppError(
+            "Failed to retrieve query history",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+        )
 
 
 @router.post("/{query_id}/feedback", response_model=FeedbackResponse)
@@ -220,7 +267,10 @@ async def submit_query_feedback(
         )
 
         if not update_result.data:
-            raise HTTPException(status_code=500, detail="Failed to update feedback")
+            raise AppError(
+                "Failed to update feedback",
+                error_code=ErrorCode.INTERNAL_ERROR,
+            )
 
         logger.info(f"Feedback submitted for query {query_id} by user {current_user['id']}")
 

@@ -1,36 +1,29 @@
 """Query pipeline orchestrator for real-time question answering."""
 
-import asyncio
-import logging
-import time
-from typing import Dict, Any, Optional, List
-from uuid import uuid4
-from datetime import datetime
+from __future__ import annotations
 
-from ..shared.base_step import PipelineStep, StepResult
-from src.middleware.request_id import get_request_id
-from src.utils.logging import get_logger
-from ..shared.progress_tracker import ProgressTracker
-from .steps.query_processing import (
-    QueryProcessor,
-    QueryProcessingConfig,
-)
-from .steps.retrieval import DocumentRetriever, RetrievalConfig
-from .steps.generation import ResponseGenerator, GenerationConfig
-from .models import (
-    QueryVariations,
-    QueryResponse,
-    QueryRequest,
-    QueryRun,
-    QualityMetrics,
-    SearchResult,
-    to_query_variations,
-    to_search_results,
-    to_query_response,
-)
+from datetime import datetime
+from typing import Any
+from uuid import uuid4
+
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.middleware.request_id import get_request_id
 from src.services.config_service import ConfigService
+from src.utils.logging import get_logger
+
+from .models import (
+    QualityMetrics,
+    QueryRequest,
+    QueryResponse,
+    QueryVariations,
+    to_query_response,
+    to_query_variations,
+    to_search_results,
+)
+from .steps.generation import GenerationConfig, ResponseGenerator
+from .steps.query_processing import QueryProcessingConfig, QueryProcessor
+from .steps.retrieval import DocumentRetriever, RetrievalConfig
 
 logger = get_logger(__name__)
 
@@ -38,7 +31,7 @@ logger = get_logger(__name__)
 class QueryPipelineOrchestrator:
     """Orchestrates the complete query pipeline from input to response"""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         if config is not None:
             self.config = config
         else:
@@ -47,9 +40,7 @@ class QueryPipelineOrchestrator:
             self.config = {
                 "query_processing": {
                     "provider": "openrouter",
-                    "model": effective.get("generation", {}).get(
-                        "model", "google/gemini-2.5-flash"
-                    ),
+                    "model": effective.get("generation", {}).get("model", "google/gemini-2.5-flash"),
                     "fallback_models": ["anthropic/claude-3.5-haiku"],
                     "timeout_seconds": 1.0,
                     "max_tokens": 200,
@@ -64,9 +55,7 @@ class QueryPipelineOrchestrator:
                 "retrieval": {
                     "embedding_model": effective["embedding"]["model"],
                     "dimensions": effective["embedding"]["dimensions"],
-                    "similarity_metric": effective.get("retrieval", {}).get(
-                        "similarity_metric", "cosine"
-                    ),
+                    "similarity_metric": effective.get("retrieval", {}).get("similarity_metric", "cosine"),
                     "top_k": effective.get("retrieval", {}).get("top_k", 5),
                     "similarity_thresholds": {
                         "excellent": 0.75,
@@ -91,9 +80,7 @@ class QueryPipelineOrchestrator:
                             "meta-llama/llama-3.1-8b-instruct",
                         ],
                     ),
-                    "timeout_seconds": effective["generation"].get(
-                        "timeout_seconds", 5.0
-                    ),
+                    "timeout_seconds": effective["generation"].get("timeout_seconds", 5.0),
                     "max_tokens": effective["generation"].get("max_tokens", 1000),
                     "temperature": effective["generation"].get("temperature", 0.1),
                     "response_format": effective["generation"].get(
@@ -110,18 +97,14 @@ class QueryPipelineOrchestrator:
         self.db = get_supabase_admin_client()
 
         # Initialize pipeline steps
-        self.query_processor = QueryProcessor(
-            QueryProcessingConfig(**self.config["query_processing"])
-        )
+        self.query_processor = QueryProcessor(QueryProcessingConfig(**self.config["query_processing"]))
         self.retriever = DocumentRetriever(RetrievalConfig(self.config["retrieval"]))
-        self.generator = ResponseGenerator(
-            GenerationConfig(**self.config["generation"])
-        )
+        self.generator = ResponseGenerator(GenerationConfig(**self.config["generation"]))
 
         # Progress tracking (simplified for query pipeline)
         self.progress_tracker = None
 
-    def _get_default_config(self) -> Dict[str, Any]:
+    def _get_default_config(self) -> dict[str, Any]:
         """Get default configuration for the query pipeline"""
         return {
             "query_processing": {
@@ -192,16 +175,12 @@ class QueryPipelineOrchestrator:
 
         # Bind structured context once per run
         rid = get_request_id()
-        run_logger = logger.bind(
-            request_id=rid, pipeline_type="query", run_id=query_run_id
-        )
+        run_logger = logger.bind(request_id=rid, pipeline_type="query", run_id=query_run_id)
 
         # Track step timings
         step_timings = {}
 
-        run_logger.info(
-            f"🔍 Starting query pipeline for query: {request.query[:50]}..."
-        )
+        run_logger.info(f"🔍 Starting query pipeline for query: {request.query[:50]}...")
         run_logger.info(f"🔍 Request user_id: {request.user_id}")
         run_logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
         run_logger.info(f"🔍 Request type: {type(request)}")
@@ -213,9 +192,7 @@ class QueryPipelineOrchestrator:
 
             query_result = await self.query_processor.execute(request.query)
             if query_result.status != "completed":
-                raise Exception(
-                    f"Query processing failed: {query_result.error_message}"
-                )
+                raise Exception(f"Query processing failed: {query_result.error_message}")
 
             step1_duration = (datetime.utcnow() - step1_start).total_seconds()
             step_timings["query_processing"] = step1_duration
@@ -228,16 +205,14 @@ class QueryPipelineOrchestrator:
             run_logger.info("Step 2: Retrieving relevant documents...")
             step2_start = datetime.utcnow()
 
-            # Pass indexing_run_id to retrieval step if provided
+            # Pass indexing_run_id and allowed_document_ids to retrieval step if provided
             if request.indexing_run_id:
-                run_logger.info(
-                    f"Querying specific indexing run: {request.indexing_run_id}"
-                )
+                run_logger.info(f"Querying specific indexing run: {request.indexing_run_id}")
                 retrieval_result = await self.retriever.execute(
-                    variations, str(request.indexing_run_id)
+                    variations, str(request.indexing_run_id), request.allowed_document_ids
                 )
             else:
-                retrieval_result = await self.retriever.execute(variations)
+                retrieval_result = await self.retriever.execute(variations, None, request.allowed_document_ids)
             if retrieval_result.status != "completed":
                 raise Exception(f"Retrieval failed: {retrieval_result.error_message}")
 
@@ -267,9 +242,7 @@ class QueryPipelineOrchestrator:
             response.step_timings = step_timings
 
             # Calculate total response time
-            response_time_ms = int(
-                (datetime.utcnow() - start_time).total_seconds() * 1000
-            )
+            response_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
 
             # Store query run in database
             await self._store_query_run(
@@ -282,9 +255,7 @@ class QueryPipelineOrchestrator:
                 step_timings=step_timings,
             )
 
-            run_logger.info(
-                f"Query pipeline completed successfully in {response_time_ms}ms"
-            )
+            run_logger.info(f"Query pipeline completed successfully in {response_time_ms}ms")
             run_logger.info(f"Step timings: {step_timings}")
 
             return response
@@ -297,9 +268,7 @@ class QueryPipelineOrchestrator:
                 query_run_id=query_run_id,
                 request=request,
                 error_message=str(e),
-                response_time_ms=int(
-                    (datetime.utcnow() - start_time).total_seconds() * 1000
-                ),
+                response_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000),
             )
 
             # Return error response
@@ -325,37 +294,30 @@ class QueryPipelineOrchestrator:
         self,
         query_run_id: str,
         request: QueryRequest,
-        variations: Optional[QueryVariations] = None,
-        search_results: Optional[List] = None,
-        response: Optional[QueryResponse] = None,
-        error_message: Optional[str] = None,
+        variations: QueryVariations | None = None,
+        search_results: list | None = None,
+        response: QueryResponse | None = None,
+        error_message: str | None = None,
         response_time_ms: int = 0,
-        step_timings: Optional[Dict[str, float]] = None,
+        step_timings: dict[str, float] | None = None,
     ):
         """Store query run in the database"""
 
         try:
-            logger.bind(run_id=query_run_id).info(
-                f"🔍 Storing query run with ID: {query_run_id}"
-            )
+            logger.bind(run_id=query_run_id).info(f"🔍 Storing query run with ID: {query_run_id}")
             logger.info(f"🔍 Request user_id: {request.user_id}")
             logger.info(f"🔍 Request type: {type(request)}")
             query_run_data = {
                 "id": query_run_id,
                 "user_id": request.user_id,
+                "access_level": ("public" if not request.user_id else "private"),
                 "original_query": request.query,
-                "query_variations": (
-                    variations.model_dump(exclude_none=True) if variations else None
-                ),
+                "query_variations": (variations.model_dump(exclude_none=True) if variations else None),
                 "search_results": (
-                    [result.model_dump(exclude_none=True) for result in search_results]
-                    if search_results
-                    else None
+                    [result.model_dump(exclude_none=True) for result in search_results] if search_results else None
                 ),
                 "final_response": response.response if response else None,
-                "performance_metrics": (
-                    response.performance_metrics if response else None
-                ),
+                "performance_metrics": (response.performance_metrics if response else None),
                 "quality_metrics": (
                     response.quality_metrics.model_dump(exclude_none=True)
                     if response and response.quality_metrics
@@ -364,40 +326,61 @@ class QueryPipelineOrchestrator:
                 "response_time_ms": response_time_ms,
                 "error_message": error_message,
                 "step_timings": step_timings,
+                "pipeline_config": self.config,
                 "created_at": datetime.utcnow().isoformat(),
             }
 
-            # Insert into query_runs table
+            # Insert into query_runs table, with fallback if pipeline_config column is missing
             result = self.db.table("query_runs").insert(query_run_data).execute()
 
             if result.data:
-                logger.bind(run_id=query_run_id).info(
-                    f"Query run stored with ID: {query_run_id}"
-                )
+                logger.bind(run_id=query_run_id).info(f"Query run stored with ID: {query_run_id}")
             else:
+                # Best-effort fallback: retry without pipeline_config in case column doesn't exist yet
+                error_msg = getattr(result, "error", None)
                 logger.bind(run_id=query_run_id).warning(
-                    f"Failed to store query run: {result.error}"
+                    f"Primary insert failed, attempting fallback without pipeline_config: {error_msg}"
                 )
+                fallback_data = {k: v for k, v in query_run_data.items() if k != "pipeline_config"}
+                fb_result = self.db.table("query_runs").insert(fallback_data).execute()
+                if fb_result.data:
+                    logger.bind(run_id=query_run_id).info(f"Query run stored with ID (fallback): {query_run_id}")
+                else:
+                    logger.bind(run_id=query_run_id).error(
+                        f"Failed to store query run even after fallback: {getattr(fb_result, 'error', None)}"
+                    )
 
         except Exception as e:
-            logger.bind(run_id=query_run_id).error(f"Error storing query run: {e}")
+            # Final defensive fallback on unexpected exceptions: try without pipeline_config once
+            logger.bind(run_id=query_run_id).warning(
+                f"Exception during insert with pipeline_config, retrying without it: {e}"
+            )
+            try:
+                fallback_data = {k: v for k, v in query_run_data.items() if k != "pipeline_config"}
+                fb_result = self.db.table("query_runs").insert(fallback_data).execute()
+                if fb_result.data:
+                    logger.bind(run_id=query_run_id).info(
+                        f"Query run stored with ID (exception fallback): {query_run_id}"
+                    )
+                else:
+                    logger.bind(run_id=query_run_id).error(
+                        f"Failed to store query run after exception fallback: {getattr(fb_result, 'error', None)}"
+                    )
+            except Exception as final_err:
+                logger.bind(run_id=query_run_id).error(f"Error storing query run, final failure: {final_err}")
 
-    async def get_pipeline_status(self, query_run_id: str) -> Dict[str, Any]:
+    async def get_pipeline_status(self, query_run_id: str) -> dict[str, Any]:
         """Get the status of a specific query pipeline run"""
 
         try:
             # Get query run from database
-            result = (
-                self.db.table("query_runs").select("*").eq("id", query_run_id).execute()
-            )
+            result = self.db.table("query_runs").select("*").eq("id", query_run_id).execute()
 
             if result.data:
                 query_run = result.data[0]
                 return {
                     "query_run_id": query_run_id,
-                    "status": (
-                        "completed" if query_run.get("final_response") else "failed"
-                    ),
+                    "status": ("completed" if query_run.get("final_response") else "failed"),
                     "original_query": query_run.get("original_query"),
                     "response_time_ms": query_run.get("response_time_ms"),
                     "error_message": query_run.get("error_message"),
@@ -410,18 +393,12 @@ class QueryPipelineOrchestrator:
             logger.error(f"Error getting pipeline status: {e}")
             return {"error": str(e)}
 
-    async def get_pipeline_metrics(self) -> Dict[str, Any]:
+    async def get_pipeline_metrics(self) -> dict[str, Any]:
         """Get overall pipeline performance metrics"""
 
         try:
             # Get recent query runs
-            result = (
-                self.db.table("query_runs")
-                .select("*")
-                .order("created_at", desc=True)
-                .limit(100)
-                .execute()
-            )
+            result = self.db.table("query_runs").select("*").order("created_at", desc=True).limit(100).execute()
 
             if not result.data:
                 return {"total_queries": 0, "avg_response_time": 0, "success_rate": 0}
@@ -429,12 +406,8 @@ class QueryPipelineOrchestrator:
             query_runs = result.data
 
             total_queries = len(query_runs)
-            successful_queries = len(
-                [qr for qr in query_runs if qr.get("final_response")]
-            )
-            avg_response_time = (
-                sum(qr.get("response_time_ms", 0) for qr in query_runs) / total_queries
-            )
+            successful_queries = len([qr for qr in query_runs if qr.get("final_response")])
+            avg_response_time = sum(qr.get("response_time_ms", 0) for qr in query_runs) / total_queries
             success_rate = successful_queries / total_queries
 
             return {

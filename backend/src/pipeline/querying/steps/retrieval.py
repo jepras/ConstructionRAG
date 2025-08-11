@@ -1,21 +1,18 @@
 """Production retrieval step for query pipeline."""
 
-import asyncio
-import time
 import logging
-from typing import List, Dict, Any, Optional
-from uuid import UUID
 from datetime import datetime
-import httpx
-from supabase import Client
+from typing import Any
 
-from ..models import SearchResult, QueryVariations
-from ...shared.base_step import PipelineStep, StepResult
+import httpx
+
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 
+from ...shared.base_step import PipelineStep, StepResult
+from ..models import QueryVariations, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +26,7 @@ class VoyageEmbeddingClient:
         self.base_url = "https://api.voyageai.com/v1/embeddings"
         self.dimensions = 1024  # voyage-multilingual-2 dimensions
 
-    async def get_embedding(self, text: str) -> List[float]:
+    async def get_embedding(self, text: str) -> list[float]:
         """Generate embedding for a single text using Voyage AI"""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -43,9 +40,7 @@ class VoyageEmbeddingClient:
                 )
 
                 if response.status_code != 200:
-                    raise Exception(
-                        f"Voyage API error: {response.status_code} - {response.text}"
-                    )
+                    raise Exception(f"Voyage API error: {response.status_code} - {response.text}")
 
                 result = response.json()
                 return result["data"][0]["embedding"]
@@ -58,7 +53,7 @@ class VoyageEmbeddingClient:
 class RetrievalConfig:
     """Configuration for retrieval step"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.embedding_model = config.get("embedding_model", "voyage-multilingual-2")
         self.dimensions = config.get("dimensions", 1024)
         self.similarity_metric = config.get("similarity_metric", "cosine")
@@ -87,19 +82,20 @@ class DocumentRetriever(PipelineStep):
         if not api_key:
             raise ValueError("VOYAGE_API_KEY not found in environment variables")
 
-        self.voyage_client = VoyageEmbeddingClient(
-            api_key=api_key, model=self.config.embedding_model
-        )
+        self.voyage_client = VoyageEmbeddingClient(api_key=api_key, model=self.config.embedding_model)
 
     async def execute(
-        self, input_data: QueryVariations, indexing_run_id: Optional[str] = None
+        self,
+        input_data: QueryVariations,
+        indexing_run_id: str | None = None,
+        allowed_document_ids: list[str] | None = None,
     ) -> StepResult:
         """Execute the retrieval step"""
         start_time = datetime.utcnow()
 
         try:
             # Search documents using query variations
-            results = await self.search(input_data, indexing_run_id)
+            results = await self.search(input_data, indexing_run_id, allowed_document_ids)
 
             # Create sample outputs for debugging
             sample_outputs = {
@@ -114,13 +110,9 @@ class DocumentRetriever(PipelineStep):
                 duration_seconds=(datetime.utcnow() - start_time).total_seconds(),
                 summary_stats={
                     "results_retrieved": len(results),
-                    "top_similarity_score": (
-                        results[0].similarity_score if results else 0.0
-                    ),
+                    "top_similarity_score": (results[0].similarity_score if results else 0.0),
                     "avg_similarity_score": (
-                        sum(r.similarity_score for r in results) / len(results)
-                        if results
-                        else 0.0
+                        sum(r.similarity_score for r in results) / len(results) if results else 0.0
                     ),
                 },
                 sample_outputs=sample_outputs,
@@ -137,8 +129,11 @@ class DocumentRetriever(PipelineStep):
             ) from e
 
     async def search(
-        self, variations: QueryVariations, indexing_run_id: Optional[str] = None
-    ) -> List[SearchResult]:
+        self,
+        variations: QueryVariations,
+        indexing_run_id: str | None = None,
+        allowed_document_ids: list[str] | None = None,
+    ) -> list[SearchResult]:
         """Search documents using best query variation"""
 
         # Select best variation (for now, use original)
@@ -149,7 +144,7 @@ class DocumentRetriever(PipelineStep):
         query_embedding = await self.embed_query(best_query)
 
         # Search pgvector using embedding_1024 column
-        results = await self.search_pgvector(query_embedding, indexing_run_id)
+        results = await self.search_pgvector(query_embedding, indexing_run_id, allowed_document_ids)
 
         # Filter by similarity threshold
         filtered_results = self.filter_by_similarity(results)
@@ -163,14 +158,17 @@ class DocumentRetriever(PipelineStep):
         # TODO: Implement selection logic based on query type, language, etc.
         return variations.original
 
-    async def embed_query(self, query: str) -> List[float]:
+    async def embed_query(self, query: str) -> list[float]:
         """Embed query using Voyage API"""
         logger.info(f"Embedding query: {query[:50]}...")
         return await self.voyage_client.get_embedding(query)
 
     async def search_pgvector(
-        self, query_embedding: List[float], indexing_run_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self,
+        query_embedding: list[float],
+        indexing_run_id: str | None = None,
+        allowed_document_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search pgvector using cosine distance"""
 
         # Convert embedding to string format for pgvector
@@ -209,9 +207,7 @@ class DocumentRetriever(PipelineStep):
             # (RPC function doesn't exist, so we use direct query)
             query = (
                 self.db.table("document_chunks")
-                .select(
-                    "id,content,metadata,embedding_1024,document_id,indexing_run_id"
-                )
+                .select("id,content,metadata,embedding_1024,document_id,indexing_run_id")
                 .not_.is_("embedding_1024", "null")
             )
 
@@ -219,6 +215,9 @@ class DocumentRetriever(PipelineStep):
             if indexing_run_id:
                 query = query.eq("indexing_run_id", indexing_run_id)
                 logger.info(f"Filtering search to indexing run: {indexing_run_id}")
+            # Apply document filter if provided (public/auth/owned set pre-resolved)
+            if allowed_document_ids:
+                query = query.in_("document_id", allowed_document_ids)
 
             response = query.execute()
 
@@ -240,19 +239,13 @@ class DocumentRetriever(PipelineStep):
                             chunk_embedding = [float(x) for x in chunk_embedding]
 
                             # Calculate cosine similarity
-                            similarity = self.cosine_similarity(
-                                query_embedding, chunk_embedding
-                            )
+                            similarity = self.cosine_similarity(query_embedding, chunk_embedding)
                         else:
-                            logger.warning(
-                                f"Invalid embedding format for chunk {chunk['id']}"
-                            )
+                            logger.warning(f"Invalid embedding format for chunk {chunk['id']}")
                             continue
 
                     except (ValueError, SyntaxError) as e:
-                        logger.warning(
-                            f"Failed to parse embedding for chunk {chunk['id']}: {e}"
-                        )
+                        logger.warning(f"Failed to parse embedding for chunk {chunk['id']}: {e}")
                         continue
 
                     results_with_scores.append(
@@ -286,7 +279,7 @@ class DocumentRetriever(PipelineStep):
             results = unique_results
 
             # Convert results to standard format
-            formatted_results = []
+            formatted_results: list[dict[str, Any]] = []
             for result in results:
                 formatted_results.append(
                     {
@@ -294,15 +287,9 @@ class DocumentRetriever(PipelineStep):
                         "content": result["content"],
                         "metadata": result["metadata"],
                         "source_filename": (
-                            result["metadata"].get("source_filename", "unknown")
-                            if result["metadata"]
-                            else "unknown"
+                            result["metadata"].get("source_filename", "unknown") if result["metadata"] else "unknown"
                         ),
-                        "page_number": (
-                            result["metadata"].get("page_number")
-                            if result["metadata"]
-                            else None
-                        ),
+                        "page_number": (result["metadata"].get("page_number") if result["metadata"] else None),
                         "similarity_score": result.get("distance", 0),
                     }
                 )
@@ -314,14 +301,14 @@ class DocumentRetriever(PipelineStep):
             logger.error(f"Error searching pgvector: {e}")
             raise
 
-    def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors"""
         import math
 
         if len(vec1) != len(vec2):
             raise ValueError("Vectors must have the same length")
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         magnitude1 = math.sqrt(sum(a * a for a in vec1))
         magnitude2 = math.sqrt(sum(b * b for b in vec2))
 
@@ -330,7 +317,7 @@ class DocumentRetriever(PipelineStep):
 
         return dot_product / (magnitude1 * magnitude2)
 
-    def filter_by_similarity(self, results: List[Dict[str, Any]]) -> List[SearchResult]:
+    def filter_by_similarity(self, results: list[dict[str, Any]]) -> list[SearchResult]:
         """Filter results by similarity threshold"""
 
         # Determine threshold based on query language
@@ -341,9 +328,7 @@ class DocumentRetriever(PipelineStep):
         filtered_results = []
 
         for result in results:
-            similarity_score = (
-                1 - result["similarity_score"]
-            )  # Convert distance to similarity
+            similarity_score = 1 - result["similarity_score"]  # Convert distance to similarity
 
             if similarity_score >= min_threshold:
                 search_result = SearchResult(

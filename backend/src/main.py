@@ -100,7 +100,8 @@ async def debug_env():
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])
 app.include_router(pipeline.flat_router, tags=["IndexingRuns"])
-app.include_router(queries.router, prefix="/api", tags=["Queries"])
+app.include_router(queries.router, prefix="/api", tags=["Queries"])  # legacy
+app.include_router(queries.flat_router, tags=["Queries"])  # flat endpoints
 app.include_router(documents.router, tags=["Documents"])
 app.include_router(wiki.router, prefix="/api", tags=["Wiki"])
 
