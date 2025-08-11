@@ -1,6 +1,7 @@
-import streamlit as st
-import requests
 import logging
+
+import requests
+import streamlit as st
 from utils.shared import get_backend_url
 
 logger = logging.getLogger(__name__)
@@ -9,17 +10,10 @@ logger = logging.getLogger(__name__)
 def show_upload_page():
     """Show the upload page"""
     st.markdown("## Upload Construction Documents")
-    st.markdown(
-        "Upload your construction PDFs to start building your project knowledge base."
-    )
+    st.markdown("Upload your construction PDFs to start building your project knowledge base.")
 
-    # Check authentication first
+    # Authentication optional for email uploads
     auth_manager = st.session_state.auth_manager
-
-    if not auth_manager.is_authenticated():
-        st.error("🔐 Please sign in to upload documents.")
-        st.info("Use the sidebar to navigate to the Authentication page.")
-        return
 
     # Show user info
     user_info = auth_manager.get_current_user()
@@ -64,46 +58,29 @@ def show_upload_page():
         if st.button("📤 Upload and Process", type="primary"):
             with st.spinner("Uploading and processing documents..."):
                 try:
-                    # Check authentication
-                    if not st.session_state.get("authenticated", False):
-                        st.error("🔐 Please sign in to upload documents.")
-                        return
-
                     # Get backend URL and access token
                     backend_url = get_backend_url()
                     access_token = st.session_state.get("access_token")
 
-                    if not access_token:
-                        st.error("❌ No access token found. Please sign in again.")
-                        return
-
                     # Prepare headers
-                    headers = {"Authorization": f"Bearer {access_token}"}
+                    headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
 
                     # Prepare files data for unified multi-file upload
                     files = []
                     for file in uploaded_files:
-                        files.append(
-                            ("files", (file.name, file.getvalue(), "application/pdf"))
-                        )
+                        files.append(("files", (file.name, file.getvalue(), "application/pdf")))
 
                     # Prepare form data with email
                     data = {"email": email}
 
                     # Debug logging to verify what's being sent
                     logger.info(f"🔍 DEBUG: Number of files to upload: {len(files)}")
-                    logger.info(
-                        f"🔍 DEBUG: File names being sent: {[f[1][0] for f in files]}"
-                    )
-                    logger.info(
-                        f"🔍 DEBUG: Field names being sent: {[f[0] for f in files]}"
-                    )
+                    logger.info(f"🔍 DEBUG: File names being sent: {[f[1][0] for f in files]}")
+                    logger.info(f"🔍 DEBUG: Field names being sent: {[f[0] for f in files]}")
                     logger.info(f"🔍 DEBUG: Data being sent: {data}")
 
                     # Log upload attempt
-                    logger.info(
-                        f"📤 Uploading {len(uploaded_files)} files to email: {email}"
-                    )
+                    logger.info(f"📤 Uploading {len(uploaded_files)} files to email: {email}")
 
                     # Upload all files in single request to unified endpoint
                     response = requests.post(
@@ -120,19 +97,15 @@ def show_upload_page():
 
                     if response.status_code == 200:
                         result = response.json()
-                        logger.info(
-                            f"✅ Successfully uploaded {len(uploaded_files)} files"
-                        )
+                        logger.info(f"✅ Successfully uploaded {len(uploaded_files)} files")
 
                         # Show upload result
-                        st.success(
-                            f"✅ Successfully uploaded {len(uploaded_files)} files!"
-                        )
+                        st.success(f"✅ Successfully uploaded {len(uploaded_files)} files!")
                         if result.get("index_run_id"):
                             st.info(f"Index Run ID: {result['index_run_id']}")
-                            st.info(
-                                "💡 Use this ID to track progress in the Progress page"
-                            )
+                            st.info("💡 Use this ID to track progress in the Progress page")
+                            st.session_state["last_index_run_id"] = result["index_run_id"]
+                            st.markdown("Go to the Progress page and paste the run ID above to track status.")
                         if result.get("document_count"):
                             st.info(f"Document Count: {result['document_count']}")
                         if result.get("message"):

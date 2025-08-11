@@ -1,7 +1,9 @@
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends, status
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
+
 from src.services.auth_service import auth_service, get_current_user, security
 from src.utils.logging import get_logger
 
@@ -35,11 +37,11 @@ class AuthResponse(BaseModel):
 
     success: bool
     message: str
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    user_id: Optional[str] = None
-    email: Optional[str] = None
-    expires_at: Optional[str] = None
+    access_token: str | None = None
+    refresh_token: str | None = None
+    user_id: str | None = None
+    email: str | None = None
+    expires_at: str | None = None
 
 
 @router.post("/signup", response_model=AuthResponse, tags=["Authentication"])
@@ -108,7 +110,7 @@ async def reset_password(request: PasswordResetRequest):
 
 @router.get("/me", tags=["Authentication"])
 async def get_current_user_info(
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ):
     """Get current user information"""
     return current_user

@@ -90,21 +90,16 @@ async def debug_env():
     return {
         "beam_webhook_url": os.getenv("BEAM_WEBHOOK_URL", "NOT_SET"),
         "beam_auth_token": (
-            os.getenv("BEAM_AUTH_TOKEN", "NOT_SET")[:10] + "..."
-            if os.getenv("BEAM_AUTH_TOKEN")
-            else "NOT_SET"
+            os.getenv("BEAM_AUTH_TOKEN", "NOT_SET")[:10] + "..." if os.getenv("BEAM_AUTH_TOKEN") else "NOT_SET"
         ),
         "environment": os.getenv("ENVIRONMENT", "NOT_SET"),
-        "supabase_url": (
-            os.getenv("SUPABASE_URL", "NOT_SET")[:20] + "..."
-            if os.getenv("SUPABASE_URL")
-            else "NOT_SET"
-        ),
+        "supabase_url": (os.getenv("SUPABASE_URL", "NOT_SET")[:20] + "..." if os.getenv("SUPABASE_URL") else "NOT_SET"),
     }
 
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(pipeline.router, prefix="/api", tags=["Pipeline"])
+app.include_router(pipeline.flat_router, tags=["IndexingRuns"])
 app.include_router(queries.router, prefix="/api", tags=["Queries"])
 app.include_router(documents.router, tags=["Documents"])
 app.include_router(wiki.router, prefix="/api", tags=["Wiki"])

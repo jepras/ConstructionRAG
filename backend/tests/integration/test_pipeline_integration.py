@@ -1,3 +1,26 @@
+from __future__ import annotations
+
+import os
+
+import pytest
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    not (os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY")),
+    reason="Supabase env not configured",
+)
+async def test_get_recent_indexing_runs_filters_to_user_projects(async_client, auth_headers):
+    # Smoke: just call the endpoint and assert 200 and list response shape
+    r = await async_client.get("/pipeline/indexing/runs", headers=auth_headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    if body:
+        row = body[0]
+        assert "id" in row and "status" in row
+
+
 #!/usr/bin/env python3
 """
 Integration test for pipeline steps working together
@@ -7,9 +30,9 @@ Tests partition, metadata, enrichment, and chunking steps in sequence
 import asyncio
 import os
 import sys
-import requests
-from uuid import UUID
 from pathlib import Path
+from uuid import UUID
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -25,24 +48,19 @@ from src.pipeline.indexing.orchestrator import IndexingOrchestrator
 from src.pipeline.shared.models import DocumentInput, UploadType
 from src.services.pipeline_service import PipelineService
 
-
 # Removed debug functions - no longer needed
 
 
 async def test_pipeline_integration():
     """Test partition, metadata, enrichment, and chunking steps working together"""
     try:
-        print(
-            "🧪 Testing Pipeline Integration (Partition + Metadata + Enrichment + Chunking)"
-        )
+        print("🧪 Testing Pipeline Integration (Partition + Metadata + Enrichment + Chunking)")
         print("=" * 70)
 
         # Configuration
         document_id = "550e8400-e29b-41d4-a716-446655440000"
         user_id = "123e4567-e89b-12d3-a456-426614174000"
-        test_pdf_path = Path(
-            "data/external/construction_pdfs/test-with-little-variety.pdf"
-        )
+        test_pdf_path = Path("data/external/construction_pdfs/test-with-little-variety.pdf")
 
         if not test_pdf_path.exists():
             print(f"❌ Test PDF not found: {test_pdf_path}")
@@ -95,9 +113,7 @@ async def test_pipeline_integration():
 
         try:
             # Validate prerequisites
-            if not await orchestrator.partition_step.validate_prerequisites_async(
-                document_input
-            ):
+            if not await orchestrator.partition_step.validate_prerequisites_async(document_input):
                 print("❌ Partition step prerequisites failed")
                 return False
 
@@ -121,7 +137,7 @@ async def test_pipeline_integration():
 
             # Display partition results
             if partition_result.summary_stats:
-                print(f"\n📊 Partition Summary:")
+                print("\n📊 Partition Summary:")
                 stats = partition_result.summary_stats
                 print(f"   Text Elements: {stats.get('text_elements', 0)}")
                 print(f"   Table Elements: {stats.get('table_elements', 0)}")
@@ -143,9 +159,7 @@ async def test_pipeline_integration():
             print(f"📥 Loading partition data from run: {indexing_run.id}")
 
             # Execute metadata step with run ID
-            metadata_result = await orchestrator.metadata_step.execute(
-                str(indexing_run.id)
-            )
+            metadata_result = await orchestrator.metadata_step.execute(str(indexing_run.id))
 
             # Store the result
             await pipeline_service.store_step_result(
@@ -164,20 +178,14 @@ async def test_pipeline_integration():
 
             # Display metadata results
             if metadata_result.summary_stats:
-                print(f"\n📊 Metadata Summary:")
+                print("\n📊 Metadata Summary:")
                 stats = metadata_result.summary_stats
                 print(f"   Total Elements: {stats.get('total_elements', 0)}")
                 print(f"   Text Elements: {stats.get('text_elements', 0)}")
                 print(f"   Table Elements: {stats.get('table_elements', 0)}")
-                print(
-                    f"   Elements with Numbers: {stats.get('elements_with_numbers', 0)}"
-                )
-                print(
-                    f"   Elements with Sections: {stats.get('elements_with_sections', 0)}"
-                )
-                print(
-                    f"   Page Sections Detected: {stats.get('page_sections_detected', 0)}"
-                )
+                print(f"   Elements with Numbers: {stats.get('elements_with_numbers', 0)}")
+                print(f"   Elements with Sections: {stats.get('elements_with_sections', 0)}")
+                print(f"   Page Sections Detected: {stats.get('page_sections_detected', 0)}")
 
             # Metadata data processed successfully
 
@@ -192,12 +200,10 @@ async def test_pipeline_integration():
 
         try:
             # Execute enrichment step with metadata result
-            print(f"📥 Processing metadata output for enrichment")
+            print("📥 Processing metadata output for enrichment")
 
             # Execute enrichment step with metadata result
-            enrichment_result = await orchestrator.enrichment_step.execute(
-                metadata_result
-            )
+            enrichment_result = await orchestrator.enrichment_step.execute(metadata_result)
 
             # Store the result
             await pipeline_service.store_step_result(
@@ -216,38 +222,28 @@ async def test_pipeline_integration():
 
             # Display enrichment results
             if enrichment_result.summary_stats:
-                print(f"\n📊 Enrichment Summary:")
+                print("\n📊 Enrichment Summary:")
                 stats = enrichment_result.summary_stats
                 print(f"   Tables processed: {stats.get('tables_processed', 0)}")
                 print(f"   Images processed: {stats.get('images_processed', 0)}")
                 print(f"   Total caption words: {stats.get('total_caption_words', 0)}")
                 print(f"   VLM model: {stats.get('vlm_model', 'unknown')}")
-                print(
-                    f"   Caption language: {stats.get('caption_language', 'unknown')}"
-                )
+                print(f"   Caption language: {stats.get('caption_language', 'unknown')}")
 
             if enrichment_result.sample_outputs:
-                print(f"\n📋 Sample Outputs:")
-                sample_tables = enrichment_result.sample_outputs.get(
-                    "sample_tables", []
-                )
-                sample_images = enrichment_result.sample_outputs.get(
-                    "sample_images", []
-                )
+                print("\n📋 Sample Outputs:")
+                sample_tables = enrichment_result.sample_outputs.get("sample_tables", [])
+                sample_images = enrichment_result.sample_outputs.get("sample_images", [])
 
                 if sample_tables:
                     print(f"   Sample tables: {len(sample_tables)}")
                     for table in sample_tables:
-                        print(
-                            f"     - Table {table['id']}: {table['caption_words']} words"
-                        )
+                        print(f"     - Table {table['id']}: {table['caption_words']} words")
 
                 if sample_images:
                     print(f"   Sample images: {len(sample_images)}")
                     for image in sample_images:
-                        print(
-                            f"     - Page {image['page']}: {image['caption_words']} words"
-                        )
+                        print(f"     - Page {image['page']}: {image['caption_words']} words")
 
         except Exception as e:
             print(f"❌ Enrichment step failed: {e}")
@@ -260,12 +256,10 @@ async def test_pipeline_integration():
 
         try:
             # Execute chunking step with enrichment result
-            print(f"📥 Processing enrichment output for chunking")
+            print("📥 Processing enrichment output for chunking")
 
             # Execute chunking step with enrichment result
-            chunking_result = await orchestrator.chunking_step.execute(
-                enrichment_result, indexing_run.id, document_id
-            )
+            chunking_result = await orchestrator.chunking_step.execute(enrichment_result, indexing_run.id, document_id)
 
             # Store the result
             await pipeline_service.store_step_result(
@@ -284,38 +278,28 @@ async def test_pipeline_integration():
 
             # Display chunking results
             if chunking_result.summary_stats:
-                print(f"\n📊 Chunking Summary:")
+                print("\n📊 Chunking Summary:")
                 stats = chunking_result.summary_stats
-                print(
-                    f"   Total chunks created: {stats.get('total_chunks_created', 0)}"
-                )
-                print(
-                    f"   Elements processed: {stats.get('total_elements_processed', 0)}"
-                )
-                print(
-                    f"   Average chunk size: {stats.get('average_chunk_size', 0)} chars"
-                )
+                print(f"   Total chunks created: {stats.get('total_chunks_created', 0)}")
+                print(f"   Elements processed: {stats.get('total_elements_processed', 0)}")
+                print(f"   Average chunk size: {stats.get('average_chunk_size', 0)} chars")
 
                 # Show chunk type distribution
                 chunk_types = stats.get("chunk_type_distribution", {})
                 if chunk_types:
-                    print(f"   Chunk types:")
+                    print("   Chunk types:")
                     for chunk_type, count in chunk_types.items():
                         print(f"     - {chunk_type}: {count}")
 
             if chunking_result.sample_outputs:
-                print(f"\n📋 Sample Chunks:")
+                print("\n📋 Sample Chunks:")
                 sample_chunks = chunking_result.sample_outputs.get("sample_chunks", [])
                 if sample_chunks:
                     print(f"   Sample chunks: {len(sample_chunks)}")
                     for i, chunk in enumerate(sample_chunks[:3]):
-                        chunk_type = chunk.get("metadata", {}).get(
-                            "element_category", "unknown"
-                        )
+                        chunk_type = chunk.get("metadata", {}).get("element_category", "unknown")
                         content_preview = chunk.get("content_preview", "")
-                        print(
-                            f"     - Chunk {i+1}: {chunk_type} - {len(content_preview)} chars"
-                        )
+                        print(f"     - Chunk {i + 1}: {chunk_type} - {len(content_preview)} chars")
                         print(f"       Preview: {content_preview[:100]}...")
 
         except Exception as e:
@@ -329,12 +313,10 @@ async def test_pipeline_integration():
 
         try:
             # Execute embedding step with chunking result
-            print(f"📥 Processing chunking output for embedding")
+            print("📥 Processing chunking output for embedding")
 
             # Execute embedding step with chunking result
-            embedding_result = await orchestrator.embedding_step.execute(
-                chunking_result, indexing_run.id, document_id
-            )
+            embedding_result = await orchestrator.embedding_step.execute(chunking_result, indexing_run.id, document_id)
 
             # Store the result
             await pipeline_service.store_step_result(
@@ -353,35 +335,23 @@ async def test_pipeline_integration():
 
             # Display embedding results
             if embedding_result.summary_stats:
-                print(f"\n📊 Embedding Summary:")
+                print("\n📊 Embedding Summary:")
                 stats = embedding_result.summary_stats
                 print(f"   Total chunks: {stats.get('total_chunks', 0)}")
-                print(
-                    f"   Embeddings generated: {stats.get('embeddings_generated', 0)}"
-                )
+                print(f"   Embeddings generated: {stats.get('embeddings_generated', 0)}")
                 print(f"   Embedding model: {stats.get('embedding_model', 'unknown')}")
-                print(
-                    f"   Embedding dimensions: {stats.get('embedding_dimensions', 0)}"
-                )
+                print(f"   Embedding dimensions: {stats.get('embedding_dimensions', 0)}")
                 print(f"   Batch size used: {stats.get('batch_size_used', 0)}")
-                print(
-                    f"   Average time per chunk: {stats.get('average_embedding_time', 0):.3f}s"
-                )
+                print(f"   Average time per chunk: {stats.get('average_embedding_time', 0):.3f}s")
 
             if embedding_result.sample_outputs:
-                print(f"\n📋 Sample Embeddings:")
-                sample_embeddings = embedding_result.sample_outputs.get(
-                    "sample_embeddings", []
-                )
+                print("\n📋 Sample Embeddings:")
+                sample_embeddings = embedding_result.sample_outputs.get("sample_embeddings", [])
                 if sample_embeddings:
                     print(f"   Sample embeddings: {len(sample_embeddings)}")
                     for i, embedding in enumerate(sample_embeddings[:3]):
-                        print(
-                            f"     - Embedding {i+1}: {embedding.get('embedding_preview', 'unknown')}"
-                        )
-                        print(
-                            f"       Content: {embedding.get('content_preview', 'unknown')}"
-                        )
+                        print(f"     - Embedding {i + 1}: {embedding.get('embedding_preview', 'unknown')}")
+                        print(f"       Content: {embedding.get('content_preview', 'unknown')}")
 
         except Exception as e:
             print(f"❌ Embedding step failed: {e}")

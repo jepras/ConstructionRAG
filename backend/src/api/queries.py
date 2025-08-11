@@ -9,20 +9,18 @@ This module provides REST API endpoints for:
 """
 
 import logging
-from typing import List, Optional, Dict, Any
-from uuid import UUID
 from datetime import datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
-from src.pipeline.querying.models import QueryRequest, QueryResponse, QueryFeedback
 from src.api.auth import get_current_user
 from src.config.database import get_supabase_admin_client, get_supabase_client
+from src.pipeline.querying.models import QueryFeedback, QueryRequest, QueryResponse
+from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
-from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +31,7 @@ router = APIRouter(prefix="/query", tags=["queries"])
 class QueryHistoryResponse(BaseModel):
     """Response model for query history"""
 
-    queries: List[Dict[str, Any]]
+    queries: list[dict[str, Any]]
     total_count: int
     has_more: bool
 
@@ -55,8 +53,8 @@ class QualityDashboardResponse(BaseModel):
     avg_response_time_ms: float
     success_rate: float
     avg_quality_score: float
-    quality_distribution: Dict[str, int]
-    recent_queries: List[Dict[str, Any]]
+    quality_distribution: dict[str, int]
+    recent_queries: list[dict[str, Any]]
 
 
 # Dependency injection for orchestrator
@@ -83,36 +81,28 @@ async def process_query(
         # Debug: Check what current_user contains
         logger.info(f"🔍 current_user type: {type(current_user)}")
         logger.info(f"🔍 current_user content: {current_user}")
-        logger.info(
-            f"🔍 current_user keys: {current_user.keys() if isinstance(current_user, dict) else 'Not a dict'}"
-        )
+        logger.info(f"🔍 current_user keys: {current_user.keys() if isinstance(current_user, dict) else 'Not a dict'}")
 
         # Set user_id from authenticated user
         request.user_id = current_user["id"]
 
-        logger.info(
-            f"Processing query for user {current_user['id']}: {request.query[:50]}..."
-        )
+        logger.info(f"Processing query for user {current_user['id']}: {request.query[:50]}...")
 
         # Process query through pipeline
-        logger.info(f"🔍 About to process query through orchestrator...")
+        logger.info("🔍 About to process query through orchestrator...")
         logger.info(f"🔍 Request object: {request}")
         logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
 
         response = await orchestrator.process_query(request)
 
-        logger.info(f"Query processed successfully")
+        logger.info("Query processed successfully")
         return response
 
     except HTTPException as exc:
         # Bridge legacy HTTPException to AppError for uniform envelope
         raise AppError(
             str(exc.detail),
-            error_code=(
-                ErrorCode.NOT_FOUND
-                if exc.status_code == 404
-                else ErrorCode.INTERNAL_ERROR
-            ),
+            error_code=(ErrorCode.NOT_FOUND if exc.status_code == 404 else ErrorCode.INTERNAL_ERROR),
         )
     except Exception as e:
         logger.error(f"Error processing query: {e}")
@@ -146,19 +136,14 @@ async def get_query_history(
     """
     try:
         # Get total count
-        count_result = (
-            db.table("query_runs")
-            .select("id", count="exact")
-            .eq("user_id", current_user.id)
-            .execute()
-        )
+        count_result = db.table("query_runs").select("id", count="exact").eq("user_id", current_user["id"]).execute()
         total_count = count_result.count or 0
 
         # Get paginated queries
         result = (
             db.table("query_runs")
             .select("*")
-            .eq("user_id", current_user.id)
+            .eq("user_id", current_user["id"])
             .order("created_at", desc=True)
             .range(offset, offset + limit - 1)
             .execute()
@@ -179,9 +164,7 @@ async def get_query_history(
 
         has_more = offset + limit < total_count
 
-        return QueryHistoryResponse(
-            queries=queries, total_count=total_count, has_more=has_more
-        )
+        return QueryHistoryResponse(queries=queries, total_count=total_count, has_more=has_more)
 
     except Exception as e:
         logger.error(f"Error getting query history: {e}")
@@ -209,7 +192,7 @@ async def submit_query_feedback(
             db.table("query_runs")
             .select("id, quality_metrics")
             .eq("id", query_id)
-            .eq("user_id", current_user.id)
+            .eq("user_id", current_user["id"])
             .execute()
         )
 
@@ -233,18 +216,13 @@ async def submit_query_feedback(
 
         # Update database
         update_result = (
-            db.table("query_runs")
-            .update({"quality_metrics": updated_quality_metrics})
-            .eq("id", query_id)
-            .execute()
+            db.table("query_runs").update({"quality_metrics": updated_quality_metrics}).eq("id", query_id).execute()
         )
 
         if not update_result.data:
             raise HTTPException(status_code=500, detail="Failed to update feedback")
 
-        logger.info(
-            f"Feedback submitted for query {query_id} by user {current_user.id}"
-        )
+        logger.info(f"Feedback submitted for query {query_id} by user {current_user['id']}")
 
         return FeedbackResponse(success=True, message="Feedback submitted successfully")
 
@@ -322,12 +300,8 @@ async def get_quality_dashboard(
         success_rate = (successful_queries / total_queries) * 100
 
         # Calculate average response time
-        response_times = [
-            q.get("response_time_ms", 0) for q in queries if q.get("response_time_ms")
-        ]
-        avg_response_time_ms = (
-            sum(response_times) / len(response_times) if response_times else 0.0
-        )
+        response_times = [q.get("response_time_ms", 0) for q in queries if q.get("response_time_ms")]
+        avg_response_time_ms = sum(response_times) / len(response_times) if response_times else 0.0
 
         # Calculate quality distribution
         quality_distribution = {"excellent": 0, "good": 0, "acceptable": 0, "poor": 0}
@@ -347,9 +321,7 @@ async def get_quality_dashboard(
             else:
                 quality_distribution["poor"] += 1
 
-        avg_quality_score = (
-            sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
-        )
+        avg_quality_score = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
 
         # Get recent queries for examples
         recent_queries = []
@@ -357,9 +329,7 @@ async def get_quality_dashboard(
             recent_queries.append(
                 {
                     "query": query["original_query"],
-                    "quality_score": query.get("quality_metrics", {}).get(
-                        "quality_score", 0.0
-                    ),
+                    "quality_score": query.get("quality_metrics", {}).get("quality_score", 0.0),
                     "response_time_ms": query.get("response_time_ms", 0),
                     "created_at": query["created_at"],
                 }
@@ -393,15 +363,19 @@ async def store_error_query(request: QueryRequest, error_message: str):
     try:
         db = get_supabase_admin_client()
 
-        await db.table("query_runs").insert(
-            {
-                "user_id": request.user_id,
-                "original_query": request.query,
-                "error_message": error_message,
-                "response_time_ms": 0,
-                "created_at": datetime.utcnow().isoformat(),
-            }
-        ).execute()
+        await (
+            db.table("query_runs")
+            .insert(
+                {
+                    "user_id": request.user_id,
+                    "original_query": request.query,
+                    "error_message": error_message,
+                    "response_time_ms": 0,
+                    "created_at": datetime.utcnow().isoformat(),
+                }
+            )
+            .execute()
+        )
 
     except Exception as e:
         logger.error(f"Failed to store error query: {e}")

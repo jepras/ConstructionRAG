@@ -1,14 +1,16 @@
-import streamlit as st
-import requests
 import logging
 from datetime import datetime
+
+import requests
+import streamlit as st
 from utils.shared import get_backend_url
+
 from .progress_helpers import (
     display_document_status,
-    display_timing_summary,
-    display_step_results,
     display_embedding_results,
     display_enhanced_chunking_results,
+    display_step_results,
+    display_timing_summary,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,9 +48,7 @@ def show_progress_page():
         headers = {"Authorization": f"Bearer {access_token}"}
 
         # Get all indexing runs
-        runs_response = requests.get(
-            f"{backend_url}/api/pipeline/indexing/runs", headers=headers
-        )
+        runs_response = requests.get(f"{backend_url}/api/indexing-runs", headers=headers)
 
         if runs_response.status_code != 200:
             st.error(f"❌ Failed to load indexing runs: {runs_response.status_code}")
@@ -58,9 +58,7 @@ def show_progress_page():
         runs = runs_response.json()
 
         if not runs:
-            st.info(
-                "📭 No indexing runs found. Upload some documents to see progress here."
-            )
+            st.info("📭 No indexing runs found. Upload some documents to see progress here.")
             return
 
         # Create dropdown for run selection
@@ -79,9 +77,7 @@ def show_progress_page():
                     dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
                     date_str = dt.strftime("%Y-%m-%d %H:%M")
                 except:
-                    date_str = started_at[
-                        :19
-                    ]  # Just take first 19 chars if parsing fails
+                    date_str = started_at[:19]  # Just take first 19 chars if parsing fails
             else:
                 date_str = "No start time"
 
@@ -99,10 +95,7 @@ def show_progress_page():
             run_id = run_options[selected_run_label]
 
             # Get detailed status for selected run
-            status_response = requests.get(
-                f"{backend_url}/api/pipeline/indexing/runs/{run_id}/status",
-                headers=headers,
-            )
+            status_response = requests.get(f"{backend_url}/api/pipeline/indexing/runs/{run_id}/status", headers=headers)
 
             if status_response.status_code == 200:
                 run_data = status_response.json()
@@ -133,10 +126,8 @@ def show_progress_page():
                     st.error(f"❌ Error: {run_data['error_message']}")
 
                 # Get documents for this indexing run (unified approach)
-                documents_response = requests.get(
-                    f"{backend_url}/api/documents/by-index-run/{run_id}",
-                    headers=headers,
-                )
+                # Use flat documents listing for email runs when anonymous later; keep existing for now
+                documents_response = requests.get(f"{backend_url}/api/documents/by-index-run/{run_id}", headers=headers)
 
                 if documents_response.status_code == 200:
                     documents = documents_response.json()
@@ -196,9 +187,7 @@ def show_progress_page():
                     else:
                         st.info("No documents found for this indexing run")
                 else:
-                    st.error(
-                        f"Failed to load documents: {documents_response.status_code}"
-                    )
+                    st.error(f"Failed to load documents: {documents_response.status_code}")
 
             else:
                 st.error(f"❌ Failed to load run status: {status_response.status_code}")

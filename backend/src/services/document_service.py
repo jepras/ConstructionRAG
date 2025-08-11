@@ -66,6 +66,7 @@ class DocumentService:
             "index_run_id": index_run_id,
             "metadata": {"email": email},
             "expires_at": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+            "access_level": "public",
         }
         try:
             self.crud.create("documents", doc_row)
@@ -110,6 +111,7 @@ class DocumentService:
             "project_id": str(project_id),
             "index_run_id": index_run_id,
             "upload_id": str(uuid4()),
+            "access_level": "private",
         }
         try:
             self.crud.create("documents", doc_row)

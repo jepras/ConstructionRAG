@@ -1,7 +1,8 @@
-import streamlit as st
-import requests
 import time
 from datetime import datetime
+
+import requests
+import streamlit as st
 from utils.shared import get_backend_url
 
 
@@ -10,23 +11,12 @@ def show_progress_polling_page():
     st.markdown("## 📊 Indexing Run Progress Tracker")
     st.markdown("Enter an index run ID to track its progress in real-time.")
 
-    # Check authentication
-    if (
-        not st.session_state.get("auth_manager")
-        or not st.session_state.auth_manager.is_authenticated()
-    ):
-        st.error("🔐 Please sign in to view progress.")
-        return
+    # Authentication optional for email runs
 
     # Get backend URL and access token
     backend_url = get_backend_url()
     access_token = st.session_state.get("access_token")
-
-    if not access_token:
-        st.error("❌ No access token found. Please sign in again.")
-        return
-
-    headers = {"Authorization": f"Bearer {access_token}"}
+    headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
 
     # Input section
     st.subheader("🔍 Select Indexing Run")
@@ -44,9 +34,7 @@ def show_progress_polling_page():
 
     try:
         # Get recent indexing runs (last 5)
-        runs_response = requests.get(
-            f"{backend_url}/api/pipeline/indexing/runs", headers=headers
-        )
+        runs_response = requests.get(f"{backend_url}/api/indexing-runs", headers=headers)
 
         if runs_response.status_code == 200:
             runs = runs_response.json()
@@ -62,9 +50,7 @@ def show_progress_polling_page():
 
                     if started_at:
                         try:
-                            dt = datetime.fromisoformat(
-                                started_at.replace("Z", "+00:00")
-                            )
+                            dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
                             date_str = dt.strftime("%Y-%m-%d %H:%M")
                         except:
                             date_str = started_at[:19]
@@ -80,17 +66,12 @@ def show_progress_polling_page():
                     index=0,
                 )
 
-                if (
-                    selected_run_label
-                    and selected_run_label != "-- Select from recent runs --"
-                ):
+                if selected_run_label and selected_run_label != "-- Select from recent runs --":
                     run_id_input = run_options[selected_run_label]
             else:
                 st.info("📭 No recent indexing runs found.")
         else:
-            st.warning(
-                f"⚠️ Could not load recent runs (status: {runs_response.status_code})"
-            )
+            st.warning(f"⚠️ Could not load recent runs (status: {runs_response.status_code})")
             st.info("💡 You can still enter a run ID manually above.")
     except Exception as e:
         st.warning(f"⚠️ Could not load recent runs: {str(e)}")
@@ -132,9 +113,9 @@ def show_progress_polling_page():
         if st.session_state.polling_active:
             try:
                 # Call our enhanced progress endpoint
+                # Anonymous can view email run details via flat endpoint; progress remains auth for now
                 progress_response = requests.get(
-                    f"{backend_url}/api/pipeline/indexing/runs/{run_id_input}/progress",
-                    headers=headers,
+                    f"{backend_url}/api/pipeline/indexing/runs/{run_id_input}/progress", headers=headers
                 )
 
                 if progress_response.status_code == 200:
@@ -167,9 +148,7 @@ def show_progress_polling_page():
                             st.success("✅ Processing completed successfully!")
                             st.session_state.polling_active = False
                         elif status == "failed":
-                            st.error(
-                                f"❌ Processing failed: {data.get('error_message', 'Unknown error')}"
-                            )
+                            st.error(f"❌ Processing failed: {data.get('error_message', 'Unknown error')}")
                             st.session_state.polling_active = False
                         elif status == "running":
                             st.info("🔄 Processing in progress...")
@@ -186,14 +165,10 @@ def show_progress_polling_page():
                                     col1, col2, col3 = st.columns(3)
 
                                     with col1:
-                                        st.write(
-                                            f"**Status:** {doc_status['current_step']}"
-                                        )
+                                        st.write(f"**Status:** {doc_status['current_step']}")
 
                                     with col2:
-                                        st.write(
-                                            f"**Progress:** {doc_status['progress_percentage']:.1f}%"
-                                        )
+                                        st.write(f"**Progress:** {doc_status['progress_percentage']:.1f}%")
 
                                     with col3:
                                         st.write(
@@ -203,21 +178,15 @@ def show_progress_polling_page():
                                     # Show step results if available
                                     if doc_status["step_results"]:
                                         st.markdown("**Step Results:**")
-                                        for step_name, step_data in doc_status[
-                                            "step_results"
-                                        ].items():
+                                        for step_name, step_data in doc_status["step_results"].items():
                                             if step_data.get("status") == "completed":
-                                                st.write(
-                                                    f"✅ {step_name}: {step_data.get('duration_seconds', 0):.1f}s"
-                                                )
+                                                st.write(f"✅ {step_name}: {step_data.get('duration_seconds', 0):.1f}s")
                                             elif step_data.get("status") == "failed":
                                                 st.write(
                                                     f"❌ {step_name}: {step_data.get('error_message', 'Unknown error')}"
                                                 )
                                             else:
-                                                st.write(
-                                                    f"🔄 {step_name}: {step_data.get('status', 'unknown')}"
-                                                )
+                                                st.write(f"🔄 {step_name}: {step_data.get('status', 'unknown')}")
                         else:
                             st.info("No document status available")
 
@@ -230,15 +199,11 @@ def show_progress_polling_page():
                         with col1:
                             st.write(f"**Run ID:** {data['run_id']}")
                             st.write(f"**Upload Type:** {data['upload_type']}")
-                            st.write(
-                                f"**Started:** {data['started_at'][:19] if data['started_at'] else 'N/A'}"
-                            )
+                            st.write(f"**Started:** {data['started_at'][:19] if data['started_at'] else 'N/A'}")
 
                         with col2:
                             st.write(f"**Status:** {data['status']}")
-                            st.write(
-                                f"**Completed:** {data['completed_at'][:19] if data['completed_at'] else 'N/A'}"
-                            )
+                            st.write(f"**Completed:** {data['completed_at'][:19] if data['completed_at'] else 'N/A'}")
                             if data.get("error_message"):
                                 st.write(f"**Error:** {data['error_message']}")
 
@@ -270,13 +235,9 @@ def show_progress_polling_page():
                                     progress = step_data.get("progress_percentage", 0)
                                     completed = step_data.get("completed_documents", 0)
                                     total = step_data.get("total_documents", 0)
-                                    st.write(
-                                        f"🔄 {step_name}: {completed}/{total} documents ({progress:.1f}%)"
-                                    )
+                                    st.write(f"🔄 {step_name}: {completed}/{total} documents ({progress:.1f}%)")
                                 else:
-                                    st.write(
-                                        f"⏳ {step_name}: {step_data.get('status', 'unknown')}"
-                                    )
+                                    st.write(f"⏳ {step_name}: {step_data.get('status', 'unknown')}")
 
                         # Display batch-level steps
                         if batch_steps:
@@ -284,18 +245,12 @@ def show_progress_polling_page():
                             for step_name, step_data in batch_steps.items():
                                 if step_data.get("status") == "completed":
                                     duration = step_data.get("duration_seconds", 0)
-                                    st.write(
-                                        f"✅ {step_name}: Completed ({duration:.1f}s)"
-                                    )
+                                    st.write(f"✅ {step_name}: Completed ({duration:.1f}s)")
                                 elif step_data.get("status") == "failed":
-                                    error = step_data.get(
-                                        "error_message", "Unknown error"
-                                    )
+                                    error = step_data.get("error_message", "Unknown error")
                                     st.write(f"❌ {step_name}: Failed - {error}")
                                 else:
-                                    st.write(
-                                        f"🔄 {step_name}: {step_data.get('status', 'unknown')}"
-                                    )
+                                    st.write(f"🔄 {step_name}: {step_data.get('status', 'unknown')}")
 
                     # Auto-refresh
                     time.sleep(3)
@@ -305,9 +260,7 @@ def show_progress_polling_page():
                     st.error("❌ Indexing run not found. Please check the run ID.")
                     st.session_state.polling_active = False
                 else:
-                    st.error(
-                        f"❌ Error loading progress: {progress_response.status_code}"
-                    )
+                    st.error(f"❌ Error loading progress: {progress_response.status_code}")
                     st.error(f"Response: {progress_response.text}")
                     st.session_state.polling_active = False
 

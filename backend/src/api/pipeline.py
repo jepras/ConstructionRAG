@@ -1,20 +1,20 @@
 """Pipeline API endpoints for managing indexing and query pipelines."""
 
-from typing import List, Dict, Any, Optional
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
 import logging
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 try:
-    from ..models.pipeline import IndexingRun, QueryRun, StepResult
-except Exception as e:
+    pass
+except Exception:
     raise
 
-try:
-    from ..services.pipeline_service import PipelineService
-except Exception as e:
-    raise
+from ..config.database import get_supabase_client
+from ..services.auth_service import get_current_user_optional
+from ..services.pipeline_read_service import PipelineReadService
+from ..services.pipeline_service import PipelineService
 
 # Indexing orchestrator only available on Beam, not FastAPI
 try:
@@ -28,29 +28,30 @@ except ImportError:
 
 try:
     from ..pipeline.shared.models import DocumentInput
-except Exception as e:
+except Exception:
     raise
 
 try:
     from .auth import get_current_user
-except Exception as e:
+except Exception:
     raise
 
 try:
     from ..utils.exceptions import DatabaseError, PipelineError
-except Exception as e:
+except Exception:
     raise
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+flat_router = APIRouter(prefix="/api", tags=["IndexingRuns"])
 
 
-@router.post("/indexing/start", response_model=Dict[str, Any])
+@router.post("/indexing/start", response_model=dict[str, Any])
 async def start_indexing_pipeline(
     document_id: UUID,
     background_tasks: BackgroundTasks,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
     """Start the indexing pipeline for a document."""
@@ -92,67 +93,41 @@ async def start_indexing_pipeline(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/indexing/runs", response_model=List[Dict[str, Any]])
+@router.get("/indexing/runs", response_model=list[dict[str, Any]])
 async def get_all_indexing_runs(
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(
-        lambda: PipelineService(use_admin_client=True)
-    ),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    """Get all indexing runs, sorted by latest first."""
-    logger.info(
-        f"🔍 Getting all indexing runs for user: {current_user.get('id', 'unknown')}"
-    )
-
+    """Get recent indexing runs for the current user's projects."""
     try:
-        # Direct database query to avoid validation issues
-        result = (
-            pipeline_service.supabase.table("indexing_runs")
-            .select(
-                "id, upload_type, project_id, status, started_at, completed_at, error_message"
-            )
-            .order("started_at", desc=True)
-            .limit(5)  # Only get last 5 runs
-            .execute()
-        )
-
-        if not result.data:
-            logger.info("📭 No indexing runs found")
-            return []
-
-        # Transform the raw data
-        runs = []
-        for run_data in result.data:
-            runs.append(
-                {
-                    "id": run_data["id"],
-                    "upload_type": run_data.get("upload_type", "unknown"),
-                    "project_id": run_data.get("project_id"),
-                    "status": run_data.get("status", "unknown"),
-                    "started_at": run_data.get("started_at"),
-                    "completed_at": run_data.get("completed_at"),
-                    "error_message": run_data.get("error_message"),
-                }
-            )
-
-        logger.info(f"📊 Found {len(runs)} indexing runs")
-        logger.info(f"📊 Run IDs being returned: {[run['id'] for run in runs]}")
-
+        reader = PipelineReadService()
+        runs = reader.list_recent_runs_for_user(current_user["id"], limit=5)
         return runs
-
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to get all indexing runs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get indexing runs")
 
 
-@router.get("/indexing/runs/{document_id}", response_model=List[Dict[str, Any]])
+@router.get("/indexing/runs/{document_id}", response_model=list[dict[str, Any]])
 async def get_indexing_runs(
     document_id: UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
     """Get all indexing runs for a document."""
     try:
+        # Access check: ensure document belongs to current user
+        db = get_supabase_client()
+        doc_res = (
+            db.table("documents")
+            .select("id")
+            .eq("id", str(document_id))
+            .eq("user_id", current_user["id"])
+            .limit(1)
+            .execute()
+        )
+        if not doc_res.data:
+            raise HTTPException(status_code=404, detail="Document not found or access denied")
+
         runs = await pipeline_service.get_document_indexing_runs(document_id)
         return [
             {
@@ -160,9 +135,7 @@ async def get_indexing_runs(
                 "document_id": str(run.document_id),
                 "status": run.status,
                 "started_at": run.started_at.isoformat() if run.started_at else None,
-                "completed_at": (
-                    run.completed_at.isoformat() if run.completed_at else None
-                ),
+                "completed_at": (run.completed_at.isoformat() if run.completed_at else None),
                 "error_message": run.error_message,
                 "step_results": run.step_results,
             }
@@ -177,19 +150,23 @@ async def get_indexing_runs(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/indexing/runs/{run_id}/status", response_model=Dict[str, Any])
+@router.get("/indexing/runs/{run_id}/status", response_model=dict[str, Any])
 async def get_indexing_run_status(
     run_id: UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(
-        lambda: PipelineService(use_admin_client=True)
-    ),
+    current_user: dict[str, Any] = Depends(get_current_user),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
 ):
     """Get the status of a specific indexing run."""
     logger.info(f"🔍 Getting indexing run status for run_id: {run_id}")
     logger.info(f"👤 Current user: {current_user.get('id', 'unknown')}")
 
     try:
+        # Access check first
+        reader = PipelineReadService()
+        allowed = reader.get_run_for_user(str(run_id), current_user["id"])
+        if not allowed:
+            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+
         logger.info(f"📡 Calling pipeline_service.get_indexing_run({run_id})")
         run = await pipeline_service.get_indexing_run(run_id)
 
@@ -228,9 +205,7 @@ async def get_indexing_run_status(
             raise
 
         try:
-            response_data["project_id"] = (
-                str(run.project_id) if run.project_id else None
-            )
+            response_data["project_id"] = str(run.project_id) if run.project_id else None
             logger.info(f"✅ Added project_id: {response_data['project_id']}")
         except Exception as e:
             logger.error(f"❌ Error adding project_id: {e}")
@@ -244,18 +219,14 @@ async def get_indexing_run_status(
             raise
 
         try:
-            response_data["started_at"] = (
-                run.started_at.isoformat() if run.started_at else None
-            )
+            response_data["started_at"] = run.started_at.isoformat() if run.started_at else None
             logger.info(f"✅ Added started_at: {response_data['started_at']}")
         except Exception as e:
             logger.error(f"❌ Error adding started_at: {e}")
             raise
 
         try:
-            response_data["completed_at"] = (
-                run.completed_at.isoformat() if run.completed_at else None
-            )
+            response_data["completed_at"] = run.completed_at.isoformat() if run.completed_at else None
             logger.info(f"✅ Added completed_at: {response_data['completed_at']}")
         except Exception as e:
             logger.error(f"❌ Error adding completed_at: {e}")
@@ -277,9 +248,7 @@ async def get_indexing_run_status(
 
         try:
             response_data["pipeline_config"] = run.pipeline_config
-            logger.info(
-                f"✅ Added pipeline_config: {type(response_data['pipeline_config'])}"
-            )
+            logger.info(f"✅ Added pipeline_config: {type(response_data['pipeline_config'])}")
         except Exception as e:
             logger.error(f"❌ Error adding pipeline_config: {e}")
             raise
@@ -302,16 +271,20 @@ async def get_indexing_run_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/indexing/runs/{run_id}/progress", response_model=Dict[str, Any])
+@router.get("/indexing/runs/{run_id}/progress", response_model=dict[str, Any])
 async def get_indexing_run_progress(
     run_id: UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    pipeline_service: PipelineService = Depends(
-        lambda: PipelineService(use_admin_client=True)
-    ),
+    current_user: dict[str, Any] = Depends(get_current_user),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
 ):
     """Get detailed progress information for an indexing run."""
     try:
+        # Access check first
+        reader = PipelineReadService()
+        allowed = reader.get_run_for_user(str(run_id), current_user["id"])
+        if not allowed:
+            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+
         # Get basic run info
         run = await pipeline_service.get_indexing_run(run_id)
         if not run:
@@ -325,11 +298,7 @@ async def get_indexing_run_progress(
             .execute()
         )
 
-        document_ids = (
-            [doc["document_id"] for doc in documents_result.data]
-            if documents_result.data
-            else []
-        )
+        document_ids = [doc["document_id"] for doc in documents_result.data] if documents_result.data else []
 
         # Get document details
         document_status = {}
@@ -346,53 +315,35 @@ async def get_indexing_run_progress(
                 step_results = doc.get("step_results", {})
 
                 # Determine document status based on step results
-                completed_steps = len(
-                    [
-                        step
-                        for step in step_results.values()
-                        if step.get("status") == "completed"
-                    ]
-                )
+                completed_steps = len([step for step in step_results.values() if step.get("status") == "completed"])
                 total_steps = 5  # partition, metadata, enrichment, chunking, embedding
 
                 document_status[doc_id] = {
                     "filename": doc["filename"],
                     "completed_steps": completed_steps,
                     "total_steps": total_steps,
-                    "progress_percentage": (
-                        (completed_steps / total_steps * 100) if total_steps > 0 else 0
-                    ),
+                    "progress_percentage": ((completed_steps / total_steps * 100) if total_steps > 0 else 0),
                     "current_step": _get_current_step(step_results),
                     "step_results": step_results,
                 }
 
         # Calculate overall progress
         total_docs = len(document_status)
-        completed_docs = sum(
-            1
-            for status in document_status.values()
-            if status["progress_percentage"] >= 100
-        )
+        completed_docs = sum(1 for status in document_status.values() if status["progress_percentage"] >= 100)
 
         # Get step results from the run (only batch operations like embedding)
         run_step_results = run.step_results or {}
 
         # Convert Pydantic models to dictionaries if needed
-        if run_step_results and hasattr(
-            next(iter(run_step_results.values())), "status"
-        ):
+        if run_step_results and hasattr(next(iter(run_step_results.values())), "status"):
             # These are Pydantic models, convert to dict
             run_step_results_dict = {
                 step_name: {
                     "status": step.status,
                     "duration_seconds": step.duration_seconds,
                     "summary_stats": step.summary_stats,
-                    "completed_at": (
-                        step.completed_at.isoformat() if step.completed_at else None
-                    ),
-                    "error_message": (
-                        step.error_message if hasattr(step, "error_message") else None
-                    ),
+                    "completed_at": (step.completed_at.isoformat() if step.completed_at else None),
+                    "error_message": (step.error_message if hasattr(step, "error_message") else None),
                 }
                 for step_name, step in run_step_results.items()
             }
@@ -402,11 +353,7 @@ async def get_indexing_run_progress(
 
         # Count completed run steps (batch operations only)
         completed_run_steps = len(
-            [
-                step
-                for step in run_step_results_dict.values()
-                if step.get("status") == "completed"
-            ]
+            [step for step in run_step_results_dict.values() if step.get("status") == "completed"]
         )
 
         # Total run steps includes batch operations (typically just embedding)
@@ -427,20 +374,15 @@ async def get_indexing_run_progress(
                 completed_count = sum(
                     1
                     for doc_status in document_status.values()
-                    if doc_status["step_results"].get(step_name, {}).get("status")
-                    == "completed"
+                    if doc_status["step_results"].get(step_name, {}).get("status") == "completed"
                 )
                 total_count = len(document_status)
 
                 all_step_results[f"document_{step_name}"] = {
-                    "status": (
-                        "completed" if completed_count == total_count else "running"
-                    ),
+                    "status": ("completed" if completed_count == total_count else "running"),
                     "completed_documents": completed_count,
                     "total_documents": total_count,
-                    "progress_percentage": (
-                        (completed_count / total_count * 100) if total_count > 0 else 0
-                    ),
+                    "progress_percentage": ((completed_count / total_count * 100) if total_count > 0 else 0),
                     "step_type": "document_level",
                 }
 
@@ -458,16 +400,10 @@ async def get_indexing_run_progress(
             "progress": {
                 "documents_processed": completed_docs,
                 "total_documents": total_docs,
-                "documents_percentage": (
-                    (completed_docs / total_docs * 100) if total_docs > 0 else 0
-                ),
+                "documents_percentage": ((completed_docs / total_docs * 100) if total_docs > 0 else 0),
                 "run_steps_completed": completed_run_steps,
                 "total_run_steps": total_run_steps,
-                "run_steps_percentage": (
-                    (completed_run_steps / total_run_steps * 100)
-                    if total_run_steps > 0
-                    else 0
-                ),
+                "run_steps_percentage": ((completed_run_steps / total_run_steps * 100) if total_run_steps > 0 else 0),
             },
             "document_status": document_status,
             "step_results": all_step_results,
@@ -497,11 +433,11 @@ def _get_current_step(step_results: dict) -> str:
     return "completed"
 
 
-@router.get("/indexing/runs/{run_id}/steps/{step_name}", response_model=Dict[str, Any])
+@router.get("/indexing/runs/{run_id}/steps/{step_name}", response_model=dict[str, Any])
 async def get_step_result(
     run_id: UUID,
     step_name: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     pipeline_service: PipelineService = Depends(lambda: PipelineService()),
 ):
     """Get the result of a specific step from an indexing run."""
@@ -517,14 +453,8 @@ async def get_step_result(
             "summary_stats": step_result.summary_stats,
             "sample_outputs": step_result.sample_outputs,
             "data": step_result.data,
-            "started_at": (
-                step_result.started_at.isoformat() if step_result.started_at else None
-            ),
-            "completed_at": (
-                step_result.completed_at.isoformat()
-                if step_result.completed_at
-                else None
-            ),
+            "started_at": (step_result.started_at.isoformat() if step_result.started_at else None),
+            "completed_at": (step_result.completed_at.isoformat() if step_result.completed_at else None),
             "error_message": step_result.error_message,
             "error_details": step_result.error_details,
         }
@@ -537,11 +467,11 @@ async def get_step_result(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/indexing/steps/{step_name}/execute", response_model=Dict[str, Any])
+@router.post("/indexing/steps/{step_name}/execute", response_model=dict[str, Any])
 async def execute_single_step(
     step_name: str,
-    input_data: Dict[str, Any],
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    input_data: dict[str, Any],
+    current_user: dict[str, Any] = Depends(get_current_user),
 ):
     """Execute a single pipeline step with provided input data."""
     try:
@@ -572,9 +502,7 @@ async def execute_single_step(
             "sample_outputs": result.sample_outputs,
             "data": result.data,
             "started_at": result.started_at.isoformat() if result.started_at else None,
-            "completed_at": (
-                result.completed_at.isoformat() if result.completed_at else None
-            ),
+            "completed_at": (result.completed_at.isoformat() if result.completed_at else None),
             "error_message": result.error_message,
             "error_details": result.error_details,
         }
@@ -587,7 +515,7 @@ async def execute_single_step(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/health", response_model=Dict[str, Any])
+@router.get("/health", response_model=dict[str, Any])
 async def pipeline_health_check():
     """Health check endpoint for the pipeline service."""
     try:
@@ -606,3 +534,89 @@ async def pipeline_health_check():
     except Exception as e:
         logger.error(f"Pipeline health check failed: {e}")
         raise HTTPException(status_code=503, detail="Pipeline service unhealthy")
+
+
+# Flat resource endpoints for indexing runs
+
+
+@flat_router.get("/indexing-runs", response_model=list[dict[str, Any]])
+async def list_indexing_runs(
+    project_id: UUID | None = None,
+    limit: int = 20,
+    offset: int = 0,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """Flat list endpoint for indexing runs, scoped to user's projects.
+
+    For now requires `project_id` to scope; later we can support multi-project list.
+    """
+    try:
+        reader = PipelineReadService()
+        if project_id is None:
+            # Fallback to recent runs across all user's projects
+            runs = reader.list_recent_runs_for_user(current_user["id"], limit=min(limit, 50))
+            return runs
+        # Filter by specific project
+        # Simple select with ownership check similar to get_run_for_user
+        db = get_supabase_client()
+        proj = (
+            db.table("projects")
+            .select("id")
+            .eq("id", str(project_id))
+            .eq("user_id", current_user["id"])
+            .limit(1)
+            .execute()
+        )
+        if not proj.data:
+            return []
+        res = (
+            db.table("indexing_runs")
+            .select("id, upload_type, project_id, status, started_at, completed_at, error_message")
+            .eq("project_id", str(project_id))
+            .order("started_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
+        return list(res.data or [])
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to list indexing runs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list indexing runs")
+
+
+@flat_router.get("/indexing-runs/{run_id}", response_model=dict[str, Any])
+async def get_indexing_run(
+    run_id: UUID,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
+):
+    """Flat get endpoint for a single indexing run.
+
+    - If authenticated: ensure access via PipelineReadService.
+    - If anonymous: allow only when run is from email uploads.
+    """
+    reader = PipelineReadService()
+    # Fetch run using admin client to check upload_type and existence
+    run = await pipeline_service.get_indexing_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Indexing run not found")
+
+    if current_user:
+        allowed = reader.get_run_for_user(str(run_id), current_user["id"])
+        if not allowed:
+            raise HTTPException(status_code=404, detail="Indexing run not found or access denied")
+    else:
+        # Anonymous only permitted for email uploads
+        if getattr(run, "upload_type", None) != "email":
+            raise HTTPException(status_code=403, detail="Access denied: Authentication required")
+
+    return {
+        "id": str(run.id),
+        "upload_type": run.upload_type,
+        "project_id": (str(run.project_id) if run.project_id else None),
+        "status": run.status,
+        "started_at": (run.started_at.isoformat() if run.started_at else None),
+        "completed_at": (run.completed_at.isoformat() if run.completed_at else None),
+        "error_message": run.error_message,
+        "step_results": run.step_results,
+        "pipeline_config": run.pipeline_config,
+    }
