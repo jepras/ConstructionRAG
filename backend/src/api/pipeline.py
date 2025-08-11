@@ -572,7 +572,6 @@ async def list_indexing_runs(
 async def get_indexing_run(
     run_id: UUID,
     current_user: dict[str, Any] | None = Depends(get_current_user_optional),
-    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
 ):
     """Flat get endpoint for a single indexing run.
 
@@ -580,8 +579,9 @@ async def get_indexing_run(
     - If anonymous: allow only when run is from email uploads.
     """
     reader = PipelineReadService()
-    # Fetch run using admin client to check upload_type and existence
-    run = await pipeline_service.get_indexing_run(run_id)
+    # Use anon for authenticated users; admin for anonymous lookup
+    svc = PipelineService(use_admin_client=not bool(current_user))
+    run = await svc.get_indexing_run(run_id)
     if not run:
         from ..shared.errors import ErrorCode
         from ..utils.exceptions import AppError
@@ -620,11 +620,11 @@ async def get_indexing_run(
 async def get_flat_indexing_run_progress(
     run_id: UUID,
     current_user: dict[str, Any] | None = Depends(get_current_user_optional),
-    pipeline_service: PipelineService = Depends(lambda: PipelineService(use_admin_client=True)),
 ):
     """Flat progress endpoint mirroring the pipeline progress, with optional auth."""
     reader = PipelineReadService()
-    run = await pipeline_service.get_indexing_run(run_id)
+    svc = PipelineService(use_admin_client=not bool(current_user))
+    run = await svc.get_indexing_run(run_id)
     if not run:
         from ..shared.errors import ErrorCode
         from ..utils.exceptions import AppError
@@ -645,20 +645,14 @@ async def get_flat_indexing_run_progress(
             raise AppError("Access denied: Authentication required", error_code=ErrorCode.ACCESS_DENIED)
 
     documents_result = (
-        pipeline_service.supabase.table("indexing_run_documents")
-        .select("document_id")
-        .eq("indexing_run_id", str(run_id))
-        .execute()
+        svc.supabase.table("indexing_run_documents").select("document_id").eq("indexing_run_id", str(run_id)).execute()
     )
     document_ids = [doc["document_id"] for doc in (documents_result.data or [])]
 
     document_status: dict[str, Any] = {}
     if document_ids:
         documents_result = (
-            pipeline_service.supabase.table("documents")
-            .select("id, filename, step_results")
-            .in_("id", document_ids)
-            .execute()
+            svc.supabase.table("documents").select("id, filename, step_results").in_("id", document_ids).execute()
         )
         for doc in documents_result.data or []:
             doc_id = doc["id"]

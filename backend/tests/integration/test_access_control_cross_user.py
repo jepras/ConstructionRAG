@@ -71,9 +71,10 @@ async def test_wiki_cross_user_denied(monkeypatch):
 
     fake_id = str(uuid.uuid4())
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Run details should 404 for non-owned
         r = await client.get(f"/api/wiki/runs/{fake_id}")
-        assert r.status_code in (200, 404)
-        # Specific run status should not leak
+        assert r.status_code in (404,)
+        # Status should also 404 for non-owned
         s = await client.get(f"/api/wiki/runs/{fake_id}/status")
         assert s.status_code in (404,)
 

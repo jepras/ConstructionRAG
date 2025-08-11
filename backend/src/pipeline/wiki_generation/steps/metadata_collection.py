@@ -1,17 +1,16 @@
 """Metadata collection step for wiki generation pipeline."""
 
-import asyncio
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 import logging
-from uuid import UUID
+from datetime import datetime
+from typing import Any
 
-from ...shared.base_step import PipelineStep
+from src.config.database import get_supabase_admin_client
 from src.models import StepResult
+from src.services.storage_service import StorageService
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
-from src.services.storage_service import StorageService
-from src.config.database import get_supabase_admin_client
+
+from ...shared.base_step import PipelineStep
 
 logger = logging.getLogger(__name__)
 
@@ -21,23 +20,23 @@ class MetadataCollectionStep(PipelineStep):
 
     def __init__(
         self,
-        config: Dict[str, Any],
-        storage_service: Optional[StorageService] = None,
+        config: dict[str, Any],
+        storage_service: StorageService | None = None,
         progress_tracker=None,
+        db_client=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
-        self.supabase = get_supabase_admin_client()
+        # Allow DI of db client; default to admin for pipeline safety
+        self.supabase = db_client or get_supabase_admin_client()
 
-    async def execute(self, input_data: Dict[str, Any]) -> StepResult:
+    async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute metadata collection step."""
         start_time = datetime.utcnow()
 
         try:
             index_run_id = input_data["index_run_id"]
-            logger.info(
-                f"Starting metadata collection for indexing run: {index_run_id}"
-            )
+            logger.info(f"Starting metadata collection for indexing run: {index_run_id}")
 
             # Collect metadata
             metadata = await self._collect_metadata(index_run_id)
@@ -56,9 +55,7 @@ class MetadataCollectionStep(PipelineStep):
                 },
                 sample_outputs={
                     "document_filenames": metadata["document_filenames"][:3],
-                    "section_headers": list(
-                        metadata["section_headers_distribution"].keys()
-                    )[:5],
+                    "section_headers": list(metadata["section_headers_distribution"].keys())[:5],
                 },
                 data=metadata,
                 started_at=start_time,
@@ -78,26 +75,21 @@ class MetadataCollectionStep(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
+    async def validate_prerequisites_async(self, input_data: dict[str, Any]) -> bool:
         """Validate that input data meets step requirements."""
         required_fields = ["index_run_id"]
         return all(field in input_data for field in required_fields)
 
-    def estimate_duration(self, input_data: Dict[str, Any]) -> int:
+    def estimate_duration(self, input_data: dict[str, Any]) -> int:
         """Estimate step duration in seconds."""
         return 30  # Metadata collection is typically fast
 
-    async def _collect_metadata(self, index_run_id: str) -> Dict[str, Any]:
+    async def _collect_metadata(self, index_run_id: str) -> dict[str, Any]:
         """Collect comprehensive metadata about the project - matching original implementation."""
         print(f"Trin 1: Henter projektmetadata for indexing run: {index_run_id}")
 
         # Get indexing run with step results
-        indexing_run_response = (
-            self.supabase.table("indexing_runs")
-            .select("*")
-            .eq("id", index_run_id)
-            .execute()
-        )
+        indexing_run_response = self.supabase.table("indexing_runs").select("*").eq("id", index_run_id).execute()
 
         if not indexing_run_response.data:
             raise ValueError(f"Ingen indexing run fundet med ID: {index_run_id}")
@@ -113,9 +105,7 @@ class MetadataCollectionStep(PipelineStep):
             .execute()
         )
 
-        documents = [
-            item["documents"] for item in documents_response.data if item["documents"]
-        ]
+        documents = [item["documents"] for item in documents_response.data if item["documents"]]
         document_ids = [doc["id"] for doc in documents]
 
         # Get chunks with embeddings (but don't store embeddings in output)
@@ -158,18 +148,14 @@ class MetadataCollectionStep(PipelineStep):
         }
 
         # Extract pages analyzed (sum from all documents)
-        total_pages = sum(
-            doc.get("page_count", 0) for doc in documents if doc.get("page_count")
-        )
+        total_pages = sum(doc.get("page_count", 0) for doc in documents if doc.get("page_count"))
         metadata["total_pages_analyzed"] = total_pages
 
         # Extract from chunking step
         chunking_data = step_results.get("chunking", {}).get("data", {})
         if chunking_data:
             summary_stats = chunking_data.get("summary_stats", {})
-            metadata["section_headers_distribution"] = summary_stats.get(
-                "section_headers_distribution", {}
-            )
+            metadata["section_headers_distribution"] = summary_stats.get("section_headers_distribution", {})
         else:
             metadata["section_headers_distribution"] = {}
 
@@ -185,8 +171,7 @@ class MetadataCollectionStep(PipelineStep):
 
         # Extract document filenames - exactly matching original
         metadata["document_filenames"] = [
-            doc.get("filename", f"document_{doc.get('id', 'unknown')[:8]}")
-            for doc in documents
+            doc.get("filename", f"document_{doc.get('id', 'unknown')[:8]}") for doc in documents
         ]
 
         # Additional metadata for pipeline compatibility
@@ -195,7 +180,7 @@ class MetadataCollectionStep(PipelineStep):
         metadata["user_id"] = indexing_run.get("user_id")
         metadata["project_id"] = indexing_run.get("project_id")
 
-        print(f"Projektmetadata hentet:")
+        print("Projektmetadata hentet:")
         print(f"- Dokumenter: {metadata['total_documents']}")
         print(f"- Sider analyseret: {metadata['total_pages_analyzed']}")
         print(f"- Chunks oprettet: {metadata['total_chunks']}")
@@ -205,7 +190,7 @@ class MetadataCollectionStep(PipelineStep):
 
         return metadata
 
-    def _extract_processing_stats(self, step_results: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_processing_stats(self, step_results: dict[str, Any]) -> dict[str, Any]:
         """Extract processing statistics from step results."""
         stats = {
             "partition": {},

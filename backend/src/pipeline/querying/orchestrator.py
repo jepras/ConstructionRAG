@@ -98,6 +98,7 @@ class QueryPipelineOrchestrator:
 
         # Initialize pipeline steps
         self.query_processor = QueryProcessor(QueryProcessingConfig(**self.config["query_processing"]))
+        # Keep admin by default; retrieval step supports DI for future anon usage
         self.retriever = DocumentRetriever(RetrievalConfig(self.config["retrieval"]))
         self.generator = ResponseGenerator(GenerationConfig(**self.config["generation"]))
 

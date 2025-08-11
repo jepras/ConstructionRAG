@@ -1,6 +1,16 @@
 import os
+from pathlib import Path
 
 import pytest
+
+# Load backend/.env so os.getenv-based skips and clients see Supabase env
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except Exception:
+    # If python-dotenv is not installed, proceed; tests that require env will skip
+    pass
 
 
 @pytest.fixture(scope="session")

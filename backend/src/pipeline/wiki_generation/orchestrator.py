@@ -1,36 +1,34 @@
 """Wiki generation pipeline orchestrator."""
 
-import asyncio
-import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any
 from uuid import UUID
 
+from src.config.database import get_supabase_admin_client
 from src.models import (
     WikiGenerationRun,
     WikiGenerationRunCreate,
     WikiGenerationStatus,
-    StepResult,
 )
-from src.services.storage_service import StorageService
-from src.config.database import get_supabase_admin_client
 from src.services.config_service import ConfigService
-from .steps import (
-    MetadataCollectionStep,
-    OverviewGenerationStep,
-    SemanticClusteringStep,
-    StructureGenerationStep,
-    PageContentRetrievalStep,
-    MarkdownGenerationStep,
-)
+from src.services.storage_service import StorageService
+
 from .models import (
+    to_markdown_output,
     to_metadata_output,
     to_overview_output,
+    to_page_contents_output,
     to_semantic_output,
     to_structure_output,
-    to_page_contents_output,
-    to_markdown_output,
+)
+from .steps import (
+    MarkdownGenerationStep,
+    MetadataCollectionStep,
+    OverviewGenerationStep,
+    PageContentRetrievalStep,
+    SemanticClusteringStep,
+    StructureGenerationStep,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,16 +37,14 @@ logger = logging.getLogger(__name__)
 class WikiGenerationOrchestrator:
     """Orchestrator for wiki generation pipeline."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None, *, db_client=None):
         # Load wiki config from SoT if not provided
-        self.config: Dict[str, Any] = config or ConfigService().get_effective_config(
-            "wiki"
-        )
+        self.config: dict[str, Any] = config or ConfigService().get_effective_config("wiki")
         self.storage_service = StorageService()
-        self.supabase = get_supabase_admin_client()
-        self.steps = self._initialize_steps()
+        self.supabase = db_client or get_supabase_admin_client()
+        self.steps = self._initialize_steps(db_client=db_client)
 
-    def _initialize_steps(self) -> Dict[str, Any]:
+    def _initialize_steps(self, *, db_client=None) -> dict[str, Any]:
         """Initialize pipeline steps."""
         config_dict = self.config
 
@@ -56,34 +52,40 @@ class WikiGenerationOrchestrator:
             "metadata_collection": MetadataCollectionStep(
                 config=config_dict,
                 storage_service=self.storage_service,
+                db_client=db_client,
             ),
             "overview_generation": OverviewGenerationStep(
                 config=config_dict,
                 storage_service=self.storage_service,
+                db_client=db_client,
             ),
             "semantic_clustering": SemanticClusteringStep(
                 config=config_dict,
                 storage_service=self.storage_service,
+                db_client=db_client,
             ),
             "structure_generation": StructureGenerationStep(
                 config=config_dict,
                 storage_service=self.storage_service,
+                db_client=db_client,
             ),
             "page_content_retrieval": PageContentRetrievalStep(
                 config=config_dict,
                 storage_service=self.storage_service,
+                db_client=db_client,
             ),
             "markdown_generation": MarkdownGenerationStep(
                 config=config_dict,
                 storage_service=self.storage_service,
+                db_client=db_client,
             ),
         }
 
     async def run_pipeline(
         self,
         index_run_id: str,
-        user_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
         upload_type: str = "user_project",
     ) -> WikiGenerationRun:
         """Run the complete wiki generation pipeline."""
@@ -93,25 +95,15 @@ class WikiGenerationOrchestrator:
             print(
                 f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting pipeline for index run: {index_run_id}"
             )
-            logger.info(
-                f"Starting wiki generation pipeline for index run: {index_run_id}"
-            )
+            logger.info(f"Starting wiki generation pipeline for index run: {index_run_id}")
 
             # Create wiki generation run record
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Creating wiki generation run record"
-            )
-            wiki_run = await self._create_wiki_run(
-                index_run_id, user_id, project_id, upload_type
-            )
-            print(
-                f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Created wiki run: {wiki_run.id}"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Creating wiki generation run record")
+            wiki_run = await self._create_wiki_run(index_run_id, user_id, project_id, upload_type)
+            print(f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Created wiki run: {wiki_run.id}")
 
             # Step 1: Metadata Collection
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 1: Metadata Collection"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 1: Metadata Collection")
             logger.info("Step 1: Metadata Collection")
             metadata_result = await self.steps["metadata_collection"].execute(
                 {
@@ -123,22 +115,14 @@ class WikiGenerationOrchestrator:
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 failed: {metadata_result.error_message}"
                 )
-                await self._update_wiki_run_status(
-                    wiki_run.id, "failed", metadata_result.error_message
-                )
+                await self._update_wiki_run_status(wiki_run.id, "failed", metadata_result.error_message)
                 return wiki_run
 
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 completed successfully"
-            )
-            metadata = to_metadata_output(metadata_result.data).model_dump(
-                exclude_none=True
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 completed successfully")
+            metadata = to_metadata_output(metadata_result.data).model_dump(exclude_none=True)
 
             # Step 2: Overview Generation
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 2: Overview Generation"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 2: Overview Generation")
             logger.info("Step 2: Overview Generation")
             overview_result = await self.steps["overview_generation"].execute(
                 {
@@ -150,20 +134,14 @@ class WikiGenerationOrchestrator:
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 failed: {overview_result.error_message}"
                 )
-                await self._update_wiki_run_status(
-                    wiki_run.id, "failed", overview_result.error_message
-                )
+                await self._update_wiki_run_status(wiki_run.id, "failed", overview_result.error_message)
                 return wiki_run
 
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 completed successfully"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 completed successfully")
             project_overview = to_overview_output(overview_result.data).project_overview
 
             # Step 3: Semantic Clustering
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 3: Semantic Clustering"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 3: Semantic Clustering")
             logger.info("Step 3: Semantic Clustering")
             clustering_result = await self.steps["semantic_clustering"].execute(
                 {
@@ -175,22 +153,14 @@ class WikiGenerationOrchestrator:
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 failed: {clustering_result.error_message}"
                 )
-                await self._update_wiki_run_status(
-                    wiki_run.id, "failed", clustering_result.error_message
-                )
+                await self._update_wiki_run_status(wiki_run.id, "failed", clustering_result.error_message)
                 return wiki_run
 
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 completed successfully"
-            )
-            semantic_analysis = to_semantic_output(clustering_result.data).model_dump(
-                exclude_none=True
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 completed successfully")
+            semantic_analysis = to_semantic_output(clustering_result.data).model_dump(exclude_none=True)
 
             # Step 4: Structure Generation
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 4: Structure Generation"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 4: Structure Generation")
             logger.info("Step 4: Structure Generation")
             structure_result = await self.steps["structure_generation"].execute(
                 {
@@ -204,20 +174,14 @@ class WikiGenerationOrchestrator:
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 failed: {structure_result.error_message}"
                 )
-                await self._update_wiki_run_status(
-                    wiki_run.id, "failed", structure_result.error_message
-                )
+                await self._update_wiki_run_status(wiki_run.id, "failed", structure_result.error_message)
                 return wiki_run
 
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 completed successfully"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 completed successfully")
             wiki_structure = to_structure_output(structure_result.data).wiki_structure
 
             # Step 5: Page Content Retrieval
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 5: Page Content Retrieval"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 5: Page Content Retrieval")
             logger.info("Step 5: Page Content Retrieval")
             content_result = await self.steps["page_content_retrieval"].execute(
                 {
@@ -230,20 +194,14 @@ class WikiGenerationOrchestrator:
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 failed: {content_result.error_message}"
                 )
-                await self._update_wiki_run_status(
-                    wiki_run.id, "failed", content_result.error_message
-                )
+                await self._update_wiki_run_status(wiki_run.id, "failed", content_result.error_message)
                 return wiki_run
 
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 completed successfully"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 completed successfully")
             page_contents = to_page_contents_output(content_result.data).page_contents
 
             # Step 6: Markdown Generation
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 6: Markdown Generation"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 6: Markdown Generation")
             logger.info("Step 6: Markdown Generation")
             markdown_result = await self.steps["markdown_generation"].execute(
                 {
@@ -257,20 +215,14 @@ class WikiGenerationOrchestrator:
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 failed: {markdown_result.error_message}"
                 )
-                await self._update_wiki_run_status(
-                    wiki_run.id, "failed", markdown_result.error_message
-                )
+                await self._update_wiki_run_status(wiki_run.id, "failed", markdown_result.error_message)
                 return wiki_run
 
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 completed successfully"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 completed successfully")
             generated_pages = to_markdown_output(markdown_result.data).generated_pages
 
             # Step 7: Save to Storage
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 7: Saving to Storage"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 7: Saving to Storage")
             logger.info("Step 7: Saving to Storage")
             await self._save_wiki_to_storage(
                 wiki_run.id,
@@ -284,9 +236,7 @@ class WikiGenerationOrchestrator:
             )
 
             # Update wiki run status to completed
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Updating wiki run status to completed"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Updating wiki run status to completed")
             await self._update_wiki_run_status(
                 wiki_run.id,
                 "completed",
@@ -294,23 +244,15 @@ class WikiGenerationOrchestrator:
             )
 
             # Update wiki run with final data
-            print(
-                "🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Getting final wiki run data"
-            )
+            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Getting final wiki run data")
             final_wiki_run = await self._get_wiki_run(wiki_run.id)
-            print(
-                f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Final wiki run: {final_wiki_run.id}"
-            )
+            print(f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Final wiki run: {final_wiki_run.id}")
 
-            logger.info(
-                f"Wiki generation pipeline completed successfully: {final_wiki_run.id}"
-            )
+            logger.info(f"Wiki generation pipeline completed successfully: {final_wiki_run.id}")
             return final_wiki_run
 
         except Exception as e:
-            print(
-                f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Pipeline failed: {e}"
-            )
+            print(f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Pipeline failed: {e}")
             logger.error(f"Wiki generation pipeline failed: {e}")
 
             # Update wiki run status to failed
@@ -325,8 +267,8 @@ class WikiGenerationOrchestrator:
     async def _create_wiki_run(
         self,
         index_run_id: str,
-        user_id: Optional[UUID],
-        project_id: Optional[UUID],
+        user_id: UUID | None,
+        project_id: UUID | None,
         upload_type: str,
     ) -> WikiGenerationRun:
         """Create a new wiki generation run record."""
@@ -347,65 +289,43 @@ class WikiGenerationOrchestrator:
         if data_dict.get("indexing_run_id"):
             data_dict["indexing_run_id"] = str(data_dict["indexing_run_id"])
 
-        response = (
-            self.supabase.table("wiki_generation_runs").insert(data_dict).execute()
-        )
+        response = self.supabase.table("wiki_generation_runs").insert(data_dict).execute()
 
         if not response.data:
             raise Exception("Failed to create wiki generation run")
 
         # Convert pages_metadata from dict to list if needed
         run_data = response.data[0].copy()
-        if "pages_metadata" in run_data and isinstance(
-            run_data["pages_metadata"], dict
-        ):
+        if "pages_metadata" in run_data and isinstance(run_data["pages_metadata"], dict):
             run_data["pages_metadata"] = []
 
         return WikiGenerationRun(**run_data)
 
-    async def _update_wiki_run_status(
-        self, wiki_run_id: str, status: str, message: str = ""
-    ) -> None:
+    async def _update_wiki_run_status(self, wiki_run_id: str, status: str, message: str = "") -> None:
         """Update wiki generation run status."""
         update_data = {
             "status": status,
-            "completed_at": (
-                datetime.utcnow().isoformat()
-                if status in ["completed", "failed"]
-                else None
-            ),
+            "completed_at": (datetime.utcnow().isoformat() if status in ["completed", "failed"] else None),
         }
 
         if message:
             update_data["error_message"] = message if status == "failed" else None
 
-        response = (
-            self.supabase.table("wiki_generation_runs")
-            .update(update_data)
-            .eq("id", wiki_run_id)
-            .execute()
-        )
+        response = self.supabase.table("wiki_generation_runs").update(update_data).eq("id", wiki_run_id).execute()
 
         if not response.data:
             logger.warning(f"Failed to update wiki run status: {wiki_run_id}")
 
     async def _get_wiki_run(self, wiki_run_id: str) -> WikiGenerationRun:
         """Get wiki generation run by ID."""
-        response = (
-            self.supabase.table("wiki_generation_runs")
-            .select("*")
-            .eq("id", wiki_run_id)
-            .execute()
-        )
+        response = self.supabase.table("wiki_generation_runs").select("*").eq("id", wiki_run_id).execute()
 
         if not response.data:
             raise Exception(f"Wiki generation run not found: {wiki_run_id}")
 
         # Convert pages_metadata from dict to list if needed
         run_data = response.data[0].copy()
-        if "pages_metadata" in run_data and isinstance(
-            run_data["pages_metadata"], dict
-        ):
+        if "pages_metadata" in run_data and isinstance(run_data["pages_metadata"], dict):
             run_data["pages_metadata"] = []
 
         return WikiGenerationRun(**run_data)
@@ -413,12 +333,12 @@ class WikiGenerationOrchestrator:
     async def _save_wiki_to_storage(
         self,
         wiki_run_id: str,
-        wiki_structure: Dict[str, Any],
-        generated_pages: Dict[str, Any],
-        metadata: Dict[str, Any],
+        wiki_structure: dict[str, Any],
+        generated_pages: dict[str, Any],
+        metadata: dict[str, Any],
         upload_type: str,
-        user_id: Optional[UUID],
-        project_id: Optional[UUID],
+        user_id: UUID | None,
+        project_id: UUID | None,
         index_run_id: str,
     ) -> None:
         """Save wiki content to storage and database."""
@@ -493,19 +413,12 @@ class WikiGenerationOrchestrator:
             }
 
             # Update the wiki generation run record
-            response = (
-                self.supabase.table("wiki_generation_runs")
-                .update(update_data)
-                .eq("id", wiki_run_id)
-                .execute()
-            )
+            response = self.supabase.table("wiki_generation_runs").update(update_data).eq("id", wiki_run_id).execute()
 
             if not response.data:
                 raise Exception("Failed to update wiki generation run with metadata")
 
-            logger.info(
-                f"Successfully saved {len(generated_pages)} wiki pages to storage and metadata to database"
-            )
+            logger.info(f"Successfully saved {len(generated_pages)} wiki pages to storage and metadata to database")
 
         except Exception as e:
             logger.error(f"Failed to save wiki to storage and database: {e}")
@@ -522,7 +435,7 @@ class WikiGenerationOrchestrator:
 
         return sanitized
 
-    async def get_wiki_run(self, wiki_run_id: str) -> Optional[WikiGenerationRun]:
+    async def get_wiki_run(self, wiki_run_id: str) -> WikiGenerationRun | None:
         """Get wiki generation run by ID."""
         try:
             return await self._get_wiki_run(wiki_run_id)
@@ -530,7 +443,7 @@ class WikiGenerationOrchestrator:
             logger.error(f"Failed to get wiki run: {e}")
             return None
 
-    async def list_wiki_runs(self, index_run_id: str) -> List[WikiGenerationRun]:
+    async def list_wiki_runs(self, index_run_id: str) -> list[WikiGenerationRun]:
         """List all wiki generation runs for an indexing run."""
         response = (
             self.supabase.table("wiki_generation_runs")
@@ -545,9 +458,7 @@ class WikiGenerationOrchestrator:
             # Create a copy to avoid modifying the original data
             run_data_copy = run_data.copy()
             # Convert pages_metadata from dict to list if needed
-            if "pages_metadata" in run_data_copy and isinstance(
-                run_data_copy["pages_metadata"], dict
-            ):
+            if "pages_metadata" in run_data_copy and isinstance(run_data_copy["pages_metadata"], dict):
                 run_data_copy["pages_metadata"] = []
             wiki_runs.append(WikiGenerationRun(**run_data_copy))
 
@@ -569,12 +480,7 @@ class WikiGenerationOrchestrator:
             )
 
             # Delete from database
-            response = (
-                self.supabase.table("wiki_generation_runs")
-                .delete()
-                .eq("id", wiki_run_id)
-                .execute()
-            )
+            response = self.supabase.table("wiki_generation_runs").delete().eq("id", wiki_run_id).execute()
 
             return bool(response.data)
 

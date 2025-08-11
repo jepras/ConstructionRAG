@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from src.config.database import get_supabase_admin_client
+from src.config.database import get_supabase_admin_client, get_supabase_client
 from src.config.settings import get_settings
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
@@ -71,10 +71,14 @@ class RetrievalConfig:
 class DocumentRetriever(PipelineStep):
     """Retrieval step that searches document chunks using vector similarity"""
 
-    def __init__(self, config: RetrievalConfig):
+    def __init__(self, config: RetrievalConfig, *, db_client=None, use_admin: bool = True):
         super().__init__(config.__dict__, None)
         self.config = config
-        self.db = get_supabase_admin_client()
+        # Allow DI to choose client; default to admin for server-side pipeline safety
+        if db_client is not None:
+            self.db = db_client
+        else:
+            self.db = get_supabase_admin_client() if use_admin else get_supabase_client()
 
         # Initialize Voyage client
         settings = get_settings()

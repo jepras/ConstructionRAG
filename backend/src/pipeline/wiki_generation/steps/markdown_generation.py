@@ -1,21 +1,18 @@
 """Markdown generation step for wiki generation pipeline."""
 
-import asyncio
-import json
-import requests
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 import logging
-from uuid import UUID
+from datetime import datetime
+from typing import Any
 
-from ...shared.base_step import PipelineStep
-from src.models import StepResult
-from src.shared.errors import ErrorCode
-from src.utils.exceptions import AppError
-from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.models import StepResult
 from src.services.config_service import ConfigService
+from src.services.storage_service import StorageService
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
+
+from ...shared.base_step import PipelineStep
 
 logger = logging.getLogger(__name__)
 
@@ -25,24 +22,22 @@ class MarkdownGenerationStep(PipelineStep):
 
     def __init__(
         self,
-        config: Dict[str, Any],
-        storage_service: Optional[StorageService] = None,
+        config: dict[str, Any],
+        storage_service: StorageService | None = None,
         progress_tracker=None,
+        db_client=None,
     ):
         print("🔍 [DEBUG] MarkdownGenerationStep.__init__() - Starting initialization")
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
-        self.supabase = get_supabase_admin_client()
+        # Allow DI of db client; default to admin for pipeline safety
+        self.supabase = db_client or get_supabase_admin_client()
 
-        print(
-            "🔍 [DEBUG] MarkdownGenerationStep.__init__() - Loading OpenRouter API key from settings"
-        )
+        print("🔍 [DEBUG] MarkdownGenerationStep.__init__() - Loading OpenRouter API key from settings")
         # Load OpenRouter API key from settings
         try:
             settings = get_settings()
-            print(
-                f"🔍 [DEBUG] MarkdownGenerationStep.__init__() - Settings loaded: {type(settings)}"
-            )
+            print(f"🔍 [DEBUG] MarkdownGenerationStep.__init__() - Settings loaded: {type(settings)}")
             self.openrouter_api_key = settings.openrouter_api_key
             print(
                 f"🔍 [DEBUG] MarkdownGenerationStep.__init__() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
@@ -52,32 +47,22 @@ class MarkdownGenerationStep(PipelineStep):
                     f"🔍 [DEBUG] MarkdownGenerationStep.__init__() - API key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
                 )
             if not self.openrouter_api_key:
-                print(
-                    "❌ [DEBUG] MarkdownGenerationStep.__init__() - OpenRouter API key not found!"
-                )
-                raise ValueError(
-                    "OPENROUTER_API_KEY not found in environment variables"
-                )
+                print("❌ [DEBUG] MarkdownGenerationStep.__init__() - OpenRouter API key not found!")
+                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
         except Exception as e:
-            print(
-                f"❌ [DEBUG] MarkdownGenerationStep.__init__() - Error loading OpenRouter API key: {e}"
-            )
+            print(f"❌ [DEBUG] MarkdownGenerationStep.__init__() - Error loading OpenRouter API key: {e}")
             raise
 
         wiki_cfg = ConfigService().get_effective_config("wiki")
         gen_cfg = wiki_cfg.get("generation", {})
-        self.model = gen_cfg.get(
-            "model", config.get("model", "google/gemini-2.5-flash")
-        )
+        self.model = gen_cfg.get("model", config.get("model", "google/gemini-2.5-flash"))
         self.language = config.get("language", "danish")
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        print(
-            "🔍 [DEBUG] MarkdownGenerationStep.__init__() - Initialization completed successfully"
-        )
+        print("🔍 [DEBUG] MarkdownGenerationStep.__init__() - Initialization completed successfully")
 
-    async def execute(self, input_data: Dict[str, Any]) -> StepResult:
+    async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute markdown generation step."""
         start_time = datetime.utcnow()
 
@@ -85,9 +70,7 @@ class MarkdownGenerationStep(PipelineStep):
             metadata = input_data["metadata"]
             wiki_structure = input_data["wiki_structure"]
             page_contents = input_data["page_contents"]
-            logger.info(
-                f"Starting markdown generation for {len(wiki_structure['pages'])} pages"
-            )
+            logger.info(f"Starting markdown generation for {len(wiki_structure['pages'])} pages")
 
             # Generate markdown for each page
             generated_pages = {}
@@ -104,9 +87,7 @@ class MarkdownGenerationStep(PipelineStep):
                 page_content = page_contents.get(page_id, {})
 
                 # Generate markdown
-                markdown_content = await self._generate_page_markdown(
-                    page, page_content, metadata
-                )
+                markdown_content = await self._generate_page_markdown(page, page_content, metadata)
 
                 generated_pages[page_id] = {
                     "title": page_title,
@@ -126,15 +107,11 @@ class MarkdownGenerationStep(PipelineStep):
                     "total_pages": len(wiki_structure["pages"]),
                     "total_content_length": total_content_length,
                     "average_content_length": (
-                        total_content_length // len(wiki_structure["pages"])
-                        if wiki_structure["pages"]
-                        else 0
+                        total_content_length // len(wiki_structure["pages"]) if wiki_structure["pages"] else 0
                     ),
                 },
                 sample_outputs={
-                    "page_examples": [
-                        page["title"] for page in wiki_structure["pages"][:3]
-                    ],
+                    "page_examples": [page["title"] for page in wiki_structure["pages"][:3]],
                     "content_previews": {
                         page_id: content["markdown_content"][:200] + "..."
                         for page_id, content in list(generated_pages.items())[:2]
@@ -145,9 +122,7 @@ class MarkdownGenerationStep(PipelineStep):
                 completed_at=datetime.utcnow(),
             )
 
-            logger.info(
-                f"Markdown generation completed: {total_content_length} characters generated"
-            )
+            logger.info(f"Markdown generation completed: {total_content_length} characters generated")
             return result
 
         except Exception as e:
@@ -158,12 +133,12 @@ class MarkdownGenerationStep(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
+    async def validate_prerequisites_async(self, input_data: dict[str, Any]) -> bool:
         """Validate that input data meets step requirements."""
         required_fields = ["metadata", "wiki_structure", "page_contents"]
         return all(field in input_data for field in required_fields)
 
-    def estimate_duration(self, input_data: Dict[str, Any]) -> int:
+    def estimate_duration(self, input_data: dict[str, Any]) -> int:
         """Estimate step duration in seconds."""
         wiki_structure = input_data.get("wiki_structure", {})
         num_pages = len(wiki_structure.get("pages", []))
@@ -171,9 +146,9 @@ class MarkdownGenerationStep(PipelineStep):
 
     async def _generate_page_markdown(
         self,
-        page: Dict[str, Any],
-        page_content: Dict[str, Any],
-        metadata: Dict[str, Any],
+        page: dict[str, Any],
+        page_content: dict[str, Any],
+        metadata: dict[str, Any],
     ) -> str:
         """Generate markdown content for a specific page."""
         if not self.openrouter_api_key:
@@ -189,9 +164,9 @@ class MarkdownGenerationStep(PipelineStep):
 
     def _create_markdown_prompt(
         self,
-        page: Dict[str, Any],
-        page_content: Dict[str, Any],
-        metadata: Dict[str, Any],
+        page: dict[str, Any],
+        page_content: dict[str, Any],
+        metadata: dict[str, Any],
     ) -> str:
         """Create prompt for markdown generation - exactly matching original."""
         page_title = page.get("title", "Unknown Page")
@@ -204,9 +179,7 @@ class MarkdownGenerationStep(PipelineStep):
         source_docs = page_content.get("source_documents", {})
 
         # Limit to top chunks to avoid token overflow
-        top_chunks = sorted(
-            retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True
-        )[:20]
+        top_chunks = sorted(retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True)[:20]
 
         # Create document excerpts with source attribution
         document_excerpts = []
@@ -217,9 +190,7 @@ class MarkdownGenerationStep(PipelineStep):
             content = chunk.get("content", "")
             doc_id = chunk.get("document_id", "unknown")
             metadata_chunk = chunk.get("metadata", {})
-            page_number = (
-                metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
-            )
+            page_number = metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
             similarity = chunk.get("similarity_score", 0.0)
 
             # Create source reference
@@ -230,7 +201,7 @@ class MarkdownGenerationStep(PipelineStep):
             source_ref = source_map[doc_id]
 
             excerpt = f"""
-Excerpt {len(document_excerpts)+1}:
+Excerpt {len(document_excerpts) + 1}:
 Source: [Document {source_ref}, page {page_number}]
 Relevance: {similarity:.3f}
 Content: {content[:600]}..."""
@@ -246,16 +217,10 @@ Content: {content[:600]}..."""
                     doc_info = doc
                     break
 
-            filename = (
-                doc_info.get("filename", f"document_{doc_id[:8]}")
-                if doc_info
-                else f"document_{doc_id[:8]}"
-            )
+            filename = doc_info.get("filename", f"document_{doc_id[:8]}") if doc_info else f"document_{doc_id[:8]}"
             footnotes.append(f"[{ref_num}] {filename}")
 
-        excerpts_text = "\n".join(
-            document_excerpts[:12]
-        )  # Limit excerpts to avoid token overflow
+        excerpts_text = "\n".join(document_excerpts[:12])  # Limit excerpts to avoid token overflow
         footnotes_text = "\n".join(footnotes)
 
         # Create comprehensive English prompt for markdown generation - exactly matching original
@@ -406,15 +371,11 @@ Generate the comprehensive markdown wiki page:"""
             )
 
             if response.status_code != 200:
-                raise Exception(
-                    f"OpenRouter API error: {response.status_code} - {response.text}"
-                )
+                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
 
             result = response.json()
             return result["choices"][0]["message"]["content"]
         except requests.exceptions.Timeout:
-            raise Exception(
-                f"OpenRouter API request timed out after {self.api_timeout} seconds"
-            )
+            raise Exception(f"OpenRouter API request timed out after {self.api_timeout} seconds")
         except Exception as e:
             raise Exception(f"OpenRouter API error: {e}")

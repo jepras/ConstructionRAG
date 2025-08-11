@@ -1,11 +1,10 @@
 """Semantic clustering step for wiki generation pipeline."""
 
-import json
 import ast
-from datetime import datetime
-from typing import Dict, Any, List, Optional
-from collections import defaultdict
 import logging
+from collections import defaultdict
+from datetime import datetime
+from typing import Any
 
 try:
     import numpy as np
@@ -15,14 +14,15 @@ except ImportError:
     np = None
     KMeans = None
 
-from ...shared.base_step import PipelineStep
-from src.models import StepResult
-from src.shared.errors import ErrorCode
-from src.utils.exceptions import AppError
-from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.models import StepResult
 from src.services.config_service import ConfigService
+from src.services.storage_service import StorageService
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
+
+from ...shared.base_step import PipelineStep
 
 logger = logging.getLogger(__name__)
 
@@ -32,24 +32,22 @@ class SemanticClusteringStep(PipelineStep):
 
     def __init__(
         self,
-        config: Dict[str, Any],
-        storage_service: Optional[StorageService] = None,
+        config: dict[str, Any],
+        storage_service: StorageService | None = None,
         progress_tracker=None,
+        db_client=None,
     ):
         print("🔍 [DEBUG] SemanticClusteringStep.__init__() - Starting initialization")
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
-        self.supabase = get_supabase_admin_client()
+        # Allow DI of db client; default to admin for pipeline safety
+        self.supabase = db_client or get_supabase_admin_client()
 
-        print(
-            "🔍 [DEBUG] SemanticClusteringStep.__init__() - Loading OpenRouter API key from settings"
-        )
+        print("🔍 [DEBUG] SemanticClusteringStep.__init__() - Loading OpenRouter API key from settings")
         # Load OpenRouter API key from settings
         try:
             settings = get_settings()
-            print(
-                f"🔍 [DEBUG] SemanticClusteringStep.__init__() - Settings loaded: {type(settings)}"
-            )
+            print(f"🔍 [DEBUG] SemanticClusteringStep.__init__() - Settings loaded: {type(settings)}")
             self.openrouter_api_key = settings.openrouter_api_key
             print(
                 f"🔍 [DEBUG] SemanticClusteringStep.__init__() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
@@ -59,50 +57,34 @@ class SemanticClusteringStep(PipelineStep):
                     f"🔍 [DEBUG] SemanticClusteringStep.__init__() - API key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
                 )
             if not self.openrouter_api_key:
-                print(
-                    "❌ [DEBUG] SemanticClusteringStep.__init__() - OpenRouter API key not found!"
-                )
-                raise ValueError(
-                    "OPENROUTER_API_KEY not found in environment variables"
-                )
+                print("❌ [DEBUG] SemanticClusteringStep.__init__() - OpenRouter API key not found!")
+                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
         except Exception as e:
-            print(
-                f"❌ [DEBUG] SemanticClusteringStep.__init__() - Error loading OpenRouter API key: {e}"
-            )
+            print(f"❌ [DEBUG] SemanticClusteringStep.__init__() - Error loading OpenRouter API key: {e}")
             raise
 
         wiki_cfg = ConfigService().get_effective_config("wiki")
         gen_cfg = wiki_cfg.get("generation", {})
-        self.model = gen_cfg.get(
-            "model", config.get("model", "google/gemini-2.5-flash")
-        )
+        self.model = gen_cfg.get("model", config.get("model", "google/gemini-2.5-flash"))
         self.language = config.get("language", "danish")
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
 
         # Semantic clustering configuration matching original
-        self.semantic_clusters_config = config.get(
-            "semantic_clusters", {"min_clusters": 4, "max_clusters": 10}
-        )
+        self.semantic_clusters_config = config.get("semantic_clusters", {"min_clusters": 4, "max_clusters": 10})
 
-        print(
-            "🔍 [DEBUG] SemanticClusteringStep.__init__() - Initialization completed successfully"
-        )
+        print("🔍 [DEBUG] SemanticClusteringStep.__init__() - Initialization completed successfully")
 
-    async def execute(self, input_data: Dict[str, Any]) -> StepResult:
+    async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute semantic clustering step."""
         start_time = datetime.utcnow()
 
         try:
             metadata = input_data["metadata"]
             chunks_with_embeddings = metadata["chunks_with_embeddings"]
-            logger.info(
-                f"Starting semantic clustering for {len(chunks_with_embeddings)} chunks"
-            )
+            logger.info(f"Starting semantic clustering for {len(chunks_with_embeddings)} chunks")
 
             # Perform semantic clustering
-            semantic_analysis = await self._perform_semantic_clustering(
-                chunks_with_embeddings
-            )
+            semantic_analysis = await self._perform_semantic_clustering(chunks_with_embeddings)
 
             # Create step result
             result = StepResult(
@@ -112,9 +94,7 @@ class SemanticClusteringStep(PipelineStep):
                 summary_stats={
                     "n_clusters": semantic_analysis.get("n_clusters", 0),
                     "total_chunks": len(chunks_with_embeddings),
-                    "cluster_names_generated": len(
-                        semantic_analysis.get("cluster_summaries", [])
-                    ),
+                    "cluster_names_generated": len(semantic_analysis.get("cluster_summaries", [])),
                 },
                 sample_outputs={
                     "cluster_examples": [
@@ -123,9 +103,7 @@ class SemanticClusteringStep(PipelineStep):
                             "name": summary.get("cluster_name"),
                             "chunk_count": summary.get("chunk_count", 0),
                         }
-                        for summary in semantic_analysis.get("cluster_summaries", [])[
-                            :3
-                        ]
+                        for summary in semantic_analysis.get("cluster_summaries", [])[:3]
                     ]
                 },
                 data=semantic_analysis,
@@ -133,9 +111,7 @@ class SemanticClusteringStep(PipelineStep):
                 completed_at=datetime.utcnow(),
             )
 
-            logger.info(
-                f"Semantic clustering completed: {semantic_analysis.get('n_clusters', 0)} clusters generated"
-            )
+            logger.info(f"Semantic clustering completed: {semantic_analysis.get('n_clusters', 0)} clusters generated")
             return result
 
         except Exception as e:
@@ -146,7 +122,7 @@ class SemanticClusteringStep(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
+    async def validate_prerequisites_async(self, input_data: dict[str, Any]) -> bool:
         """Validate that input data meets step requirements."""
         required_fields = ["metadata"]
         if not all(field in input_data for field in required_fields):
@@ -156,20 +132,16 @@ class SemanticClusteringStep(PipelineStep):
         required_metadata_fields = ["chunks_with_embeddings"]
         return all(field in metadata for field in required_metadata_fields)
 
-    def estimate_duration(self, input_data: Dict[str, Any]) -> int:
+    def estimate_duration(self, input_data: dict[str, Any]) -> int:
         """Estimate step duration in seconds."""
         metadata = input_data.get("metadata", {})
         chunks_count = len(metadata.get("chunks_with_embeddings", []))
         # Clustering is compute-intensive: ~5 seconds per 100 chunks + LLM call
         return max(60, (chunks_count // 100) * 5 + 30)
 
-    async def _perform_semantic_clustering(
-        self, chunks_with_embeddings: List[Dict]
-    ) -> Dict[str, Any]:
+    async def _perform_semantic_clustering(self, chunks_with_embeddings: list[dict]) -> dict[str, Any]:
         """Perform semantic clustering and LLM-based naming - matches original implementation."""
-        print(
-            f"Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation..."
-        )
+        print("Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation...")
 
         # Check if required libraries are available
         if np is None or KMeans is None:
@@ -177,11 +149,7 @@ class SemanticClusteringStep(PipelineStep):
             return {"clusters": {}, "cluster_summaries": [], "n_clusters": 0}
 
         # Filter chunks with embeddings
-        valid_chunks = [
-            chunk
-            for chunk in chunks_with_embeddings
-            if chunk.get("embedding_1024") is not None
-        ]
+        valid_chunks = [chunk for chunk in chunks_with_embeddings if chunk.get("embedding_1024") is not None]
 
         if len(valid_chunks) == 0:
             print("⚠️  Ingen embeddings fundet - kan ikke lave clustering")
@@ -259,11 +227,9 @@ class SemanticClusteringStep(PipelineStep):
         # Add the generated names to summaries
         for summary in cluster_summaries:
             cluster_id = summary["cluster_id"]
-            summary["cluster_name"] = cluster_names.get(
-                cluster_id, f"Temaområde {cluster_id}"
-            )
+            summary["cluster_name"] = cluster_names.get(cluster_id, f"Temaområde {cluster_id}")
 
-        print(f"Klynger oprettet:")
+        print("Klynger oprettet:")
         for summary in cluster_summaries:
             print(
                 f"  {summary['cluster_name']} ({summary['chunk_count']} chunks): {summary['representative_content'][:100]}..."
@@ -280,13 +246,9 @@ class SemanticClusteringStep(PipelineStep):
             "n_clusters": n_clusters,
         }
 
-    async def _generate_cluster_names_llm(
-        self, cluster_summaries: List[Dict[str, Any]]
-    ) -> Dict[int, str]:
+    async def _generate_cluster_names_llm(self, cluster_summaries: list[dict[str, Any]]) -> dict[int, str]:
         """Generate meaningful cluster names using LLM - exactly matching original implementation."""
-        print(
-            f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger..."
-        )
+        print(f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger...")
 
         # Prepare cluster samples for LLM - exactly matching original
         cluster_samples = []
@@ -299,19 +261,12 @@ class SemanticClusteringStep(PipelineStep):
             cluster_samples.append(
                 {
                     "cluster_id": cluster_id,
-                    "sample_text": combined_sample[
-                        :800
-                    ],  # Limit to avoid token overflow
+                    "sample_text": combined_sample[:800],  # Limit to avoid token overflow
                 }
             )
 
         # Create prompt for LLM to generate names - exactly matching original
-        samples_text = "\n".join(
-            [
-                f"Klynge {item['cluster_id']}: {item['sample_text']}"
-                for item in cluster_samples
-            ]
-        )
+        samples_text = "\n".join([f"Klynge {item['cluster_id']}: {item['sample_text']}" for item in cluster_samples])
 
         prompt = f"""Baseret på følgende dokumentindhold fra en byggeprojekt-database, generer korte, beskrivende navne for hver klynge.
 
@@ -337,9 +292,7 @@ Svar kun med navnene i det specificerede format."""
             llm_response = await self._call_openrouter_api(prompt, max_tokens=500)
             end_time = datetime.utcnow()
 
-            print(
-                f"LLM klyngenavne genereret på {(end_time - start_time).total_seconds():.1f} sekunder"
-            )
+            print(f"LLM klyngenavne genereret på {(end_time - start_time).total_seconds():.1f} sekunder")
 
             # Parse the response to extract cluster names - exactly matching original
             cluster_names = {}
@@ -367,15 +320,13 @@ Svar kun med navnene i det specificerede format."""
                 if cluster_id not in cluster_names:
                     fallback_name = f"Temaområde {cluster_id}"
                     cluster_names[cluster_id] = fallback_name
-                    print(
-                        f"  Bruger fallback navn for klynge {cluster_id}: {fallback_name}"
-                    )
+                    print(f"  Bruger fallback navn for klynge {cluster_id}: {fallback_name}")
 
             return cluster_names
 
         except Exception as e:
             print(f"⚠️  LLM klyngenavn generering fejlede: {str(e)}")
-            print(f"⚠️  Falder tilbage til generiske navne...")
+            print("⚠️  Falder tilbage til generiske navne...")
 
             # Fallback to generic names - exactly matching original
             generic_names = [
@@ -426,15 +377,11 @@ Svar kun med navnene i det specificerede format."""
             )
 
             if response.status_code != 200:
-                raise Exception(
-                    f"OpenRouter API error: {response.status_code} - {response.text}"
-                )
+                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
 
             result = response.json()
             return result["choices"][0]["message"]["content"]
         except requests.exceptions.Timeout:
-            raise Exception(
-                f"OpenRouter API request timed out after {self.api_timeout} seconds"
-            )
+            raise Exception(f"OpenRouter API request timed out after {self.api_timeout} seconds")
         except Exception as e:
             raise Exception(f"OpenRouter API error: {e}")

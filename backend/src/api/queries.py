@@ -411,7 +411,8 @@ async def get_quality_dashboard(
 async def store_error_query(request: QueryRequest, error_message: str):
     """Store failed query in database for analytics"""
     try:
-        db = get_supabase_admin_client()
+        # Use anon when possible; fall back to admin if user_id is absent (anonymous error)
+        db = get_supabase_client() if getattr(request, "user_id", None) else get_supabase_admin_client()
 
         await (
             db.table("query_runs")

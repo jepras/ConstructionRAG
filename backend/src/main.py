@@ -29,9 +29,17 @@ app = FastAPI(
 )
 
 settings = get_settings()
+# Harden CORS in non-development: disallow wildcard unless explicitly configured
+resolved_origins = settings.cors_origins
+if settings.environment != "development":
+    # If wildcard or empty in non-dev, fail fast to prevent permissive CORS
+    if not resolved_origins or (isinstance(resolved_origins, list) and "*" in resolved_origins):
+        # Keep app creation but set no origins; cross-origin requests will be blocked
+        resolved_origins = []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=resolved_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,7 +94,12 @@ async def api_health():
 
 @app.get("/api/debug/env")
 async def debug_env():
-    """Debug endpoint to check environment variables"""
+    """Debug endpoint to check environment variables (guarded)."""
+    if settings.environment != "development":
+        from src.shared.errors import ErrorCode
+        from src.utils.exceptions import AppError
+
+        raise AppError("Not available", error_code=ErrorCode.ACCESS_DENIED, status_code=404)
     return {
         "beam_webhook_url": os.getenv("BEAM_WEBHOOK_URL", "NOT_SET"),
         "beam_auth_token": (

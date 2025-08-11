@@ -12,7 +12,6 @@ from fastapi import (
     Depends,
     File,
     Form,
-    HTTPException,
     UploadFile,
 )
 from pydantic import BaseModel
@@ -135,10 +134,18 @@ async def upload_project_document(
 
     # Validate file
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Only PDF files are supported")
+        raise ValidationError(
+            "Only PDF files are supported",
+            details={"field_errors": [{"field": "file", "message": "Only PDF files are supported"}]},
+            request_id=get_request_id(),
+        )
 
     if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit
-        raise HTTPException(400, "File size must be less than 50MB")
+        raise ValidationError(
+            "File size must be less than 50MB",
+            details={"field_errors": [{"field": "file", "message": "File size must be less than 50MB"}]},
+            request_id=get_request_id(),
+        )
 
     try:
         # Initialize services - use regular client for user project operations
@@ -287,13 +294,13 @@ async def create_upload(
     index_run_id = str(uuid4())
 
     try:
-        db = get_supabase_admin_client()
         from src.services.document_service import DocumentService
-
-        doc_service = DocumentService(db)
 
         # Anonymous email upload (no project_id)
         if project_id is None:
+            # Use admin for anonymous/email flow
+            db = get_supabase_admin_client()
+            doc_service = DocumentService(db)
             if not email:
                 raise ValidationError(
                     "email is required for anonymous upload",
@@ -358,6 +365,11 @@ async def create_upload(
                 request_id=get_request_id(),
             )
 
+        # Use anon client for user-scoped project flow
+        from src.config.database import get_supabase_client
+
+        db = get_supabase_client()
+
         proj = (
             db.table("projects")
             .select("id")
@@ -386,7 +398,8 @@ async def create_upload(
         document_ids: list[str] = []
         for file in files:
             content = await file.read()
-            created = await doc_service.create_project_document(
+            # Reuse project-scoped doc service with anon client
+            created = await DocumentService(db).create_project_document(
                 file_bytes=content,
                 filename=file.filename,
                 project_id=project_id,  # type: ignore[arg-type]
@@ -426,16 +439,32 @@ async def upload_project_documents(
 
     # Validate file count
     if len(files) < 1:
-        raise HTTPException(400, "At least one file must be uploaded")
+        raise ValidationError(
+            "At least one file must be uploaded",
+            details={"field_errors": [{"field": "files", "message": "At least one file must be uploaded"}]},
+            request_id=get_request_id(),
+        )
     if len(files) > 10:
-        raise HTTPException(400, "Maximum 10 files can be uploaded at once")
+        raise ValidationError(
+            "Maximum 10 files can be uploaded at once",
+            details={"field_errors": [{"field": "files", "message": "Maximum 10 files can be uploaded at once"}]},
+            request_id=get_request_id(),
+        )
 
     # Validate all files
     for file in files:
         if not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(400, f"Only PDF files are supported. Invalid file: {file.filename}")
+            raise ValidationError(
+                f"Only PDF files are supported. Invalid file: {file.filename}",
+                details={"field_errors": [{"field": "file", "message": "Only PDF files are supported"}]},
+                request_id=get_request_id(),
+            )
         if file.size and file.size > 50 * 1024 * 1024:  # 50MB limit
-            raise HTTPException(400, f"File size must be less than 50MB. Invalid file: {file.filename}")
+            raise ValidationError(
+                f"File size must be less than 50MB. Invalid file: {file.filename}",
+                details={"field_errors": [{"field": "file", "message": "File size must be less than 50MB"}]},
+                request_id=get_request_id(),
+            )
 
     try:
         # Initialize services
@@ -897,6 +926,15 @@ async def get_documents_by_index_run(
     logger.info(f"🔍 Getting documents for indexing run: {index_run_id}")
 
     try:
+        # Enforce ownership/access first using read service (anon not allowed on this endpoint)
+        from src.services.pipeline_read_service import PipelineReadService
+        from src.shared.errors import ErrorCode
+        from src.utils.exceptions import AppError
+
+        allowed = PipelineReadService().get_run_for_user(str(index_run_id), current_user["id"])
+        if not allowed:
+            raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
+
         db = get_supabase_admin_client()
         logger.info("✅ Using admin client")
 
@@ -970,7 +1008,11 @@ async def get_documents_by_index_run(
         import traceback
 
         logger.error(f"❌ Full traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise AppError(
+            "Failed to get documents for indexing run",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+        )
 
 
 async def process_multi_document_project_upload_async(

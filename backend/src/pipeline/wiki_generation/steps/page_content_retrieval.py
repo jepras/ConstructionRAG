@@ -1,17 +1,18 @@
 """Page content retrieval step for wiki generation pipeline."""
 
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 import logging
+from datetime import datetime
+from typing import Any
 
-from ...shared.base_step import PipelineStep
-from src.models import StepResult
-from src.shared.errors import ErrorCode
-from src.utils.exceptions import AppError
-from src.services.storage_service import StorageService
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.models import StepResult
 from src.pipeline.indexing.steps.embedding import VoyageEmbeddingClient
+from src.services.storage_service import StorageService
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
+
+from ...shared.base_step import PipelineStep
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,15 @@ class PageContentRetrievalStep(PipelineStep):
 
     def __init__(
         self,
-        config: Dict[str, Any],
-        storage_service: Optional[StorageService] = None,
+        config: dict[str, Any],
+        storage_service: StorageService | None = None,
         progress_tracker=None,
+        db_client=None,
     ):
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
-        self.supabase = get_supabase_admin_client()
+        # Allow DI of db client; default to admin for pipeline safety
+        self.supabase = db_client or get_supabase_admin_client()
         self.similarity_threshold = config.get("similarity_threshold", 0.3)
         self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
 
@@ -45,24 +48,18 @@ class PageContentRetrievalStep(PipelineStep):
                 f"[Wiki:Retrieval] Using query embedding model='{self.query_embedding_model}', expected_dims={self.query_embedding_dims_expected}"
             )
         except Exception as e:
-            logger.warning(
-                f"[Wiki:Retrieval] Failed to initialize VoyageEmbeddingClient: {e}"
-            )
+            logger.warning(f"[Wiki:Retrieval] Failed to initialize VoyageEmbeddingClient: {e}")
             self.voyage_client = None
 
-    async def execute(self, input_data: Dict[str, Any]) -> StepResult:
+    async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute page content retrieval step."""
         start_time = datetime.utcnow()
 
         try:
             metadata = input_data["metadata"]
             wiki_structure = input_data["wiki_structure"]
-            logger.info(
-                f"Starting page content retrieval for {len(wiki_structure['pages'])} pages"
-            )
-            print(
-                f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Pages to process: {len(wiki_structure['pages'])}"
-            )
+            logger.info(f"Starting page content retrieval for {len(wiki_structure['pages'])} pages")
+            print(f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Pages to process: {len(wiki_structure['pages'])}")
 
             # Retrieve content for each page
             page_contents = {}
@@ -88,9 +85,7 @@ class PageContentRetrievalStep(PipelineStep):
                 logger.info(
                     f"[Wiki:Retrieval] Sample chunk embedding length detected: {sample_len}; similarity_threshold={self.similarity_threshold}"
                 )
-                print(
-                    f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Sample chunk embedding length: {sample_len}"
-                )
+                print(f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Sample chunk embedding length: {sample_len}")
 
             for page in wiki_structure["pages"]:
                 page_id = page["id"]
@@ -122,15 +117,11 @@ class PageContentRetrievalStep(PipelineStep):
                     "total_pages": len(wiki_structure["pages"]),
                     "total_chunks_retrieved": total_chunks_retrieved,
                     "average_chunks_per_page": (
-                        total_chunks_retrieved // len(wiki_structure["pages"])
-                        if wiki_structure["pages"]
-                        else 0
+                        total_chunks_retrieved // len(wiki_structure["pages"]) if wiki_structure["pages"] else 0
                     ),
                 },
                 sample_outputs={
-                    "page_examples": [
-                        page["title"] for page in wiki_structure["pages"][:3]
-                    ],
+                    "page_examples": [page["title"] for page in wiki_structure["pages"][:3]],
                     "chunks_per_page": {
                         page_id: len(content.get("retrieved_chunks", []))
                         for page_id, content in list(page_contents.items())[:3]
@@ -141,9 +132,7 @@ class PageContentRetrievalStep(PipelineStep):
                 completed_at=datetime.utcnow(),
             )
 
-            logger.info(
-                f"Page content retrieval completed: {total_chunks_retrieved} chunks retrieved"
-            )
+            logger.info(f"Page content retrieval completed: {total_chunks_retrieved} chunks retrieved")
             print(
                 f"✅ [DEBUG] PageContentRetrievalStep.execute() - Completed retrieval, total_chunks_retrieved={total_chunks_retrieved}"
             )
@@ -157,29 +146,25 @@ class PageContentRetrievalStep(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def validate_prerequisites_async(self, input_data: Dict[str, Any]) -> bool:
+    async def validate_prerequisites_async(self, input_data: dict[str, Any]) -> bool:
         """Validate that input data meets step requirements."""
         required_fields = ["metadata", "wiki_structure"]
         if not all(field in input_data for field in required_fields):
             return False
 
         wiki_structure = input_data["wiki_structure"]
-        if "pages" not in wiki_structure or not isinstance(
-            wiki_structure["pages"], list
-        ):
+        if "pages" not in wiki_structure or not isinstance(wiki_structure["pages"], list):
             return False
 
         return True
 
-    def estimate_duration(self, input_data: Dict[str, Any]) -> int:
+    def estimate_duration(self, input_data: dict[str, Any]) -> int:
         """Estimate step duration in seconds."""
         wiki_structure = input_data.get("wiki_structure", {})
         num_pages = len(wiki_structure.get("pages", []))
         return num_pages * 30  # 30 seconds per page
 
-    async def _retrieve_page_content(
-        self, queries: List[str], metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _retrieve_page_content(self, queries: list[str], metadata: dict[str, Any]) -> dict[str, Any]:
         """Retrieve content for a specific page using its queries."""
         all_retrieved_chunks = []
         source_documents = {}
@@ -193,13 +178,9 @@ class PageContentRetrievalStep(PipelineStep):
             query_embedding = await self._generate_query_embedding(query)
 
             # Find similar chunks
-            similar_chunks = await self._find_similar_chunks(
-                query_embedding, chunks_with_embeddings
-            )
+            similar_chunks = await self._find_similar_chunks(query_embedding, chunks_with_embeddings)
 
-            logger.info(
-                f"[Wiki:Retrieval] Query '{query[:40]}...' retrieved {len(similar_chunks)} chunks"
-            )
+            logger.info(f"[Wiki:Retrieval] Query '{query[:40]}...' retrieved {len(similar_chunks)} chunks")
 
             # Add query information to chunks
             for chunk in similar_chunks:
@@ -212,9 +193,7 @@ class PageContentRetrievalStep(PipelineStep):
                     if document_id not in source_documents:
                         source_documents[document_id] = {
                             "document_id": document_id,
-                            "filename": chunk.get("metadata", {}).get(
-                                "source_filename", "Unknown"
-                            ),
+                            "filename": chunk.get("metadata", {}).get("source_filename", "Unknown"),
                             "chunk_count": 0,
                         }
                     source_documents[document_id]["chunk_count"] += 1
@@ -224,9 +203,7 @@ class PageContentRetrievalStep(PipelineStep):
         unique_chunks.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
 
         # Limit to top chunks
-        top_chunks = unique_chunks[
-            : self.max_chunks_per_query * 2
-        ]  # Allow more for deduplication
+        top_chunks = unique_chunks[: self.max_chunks_per_query * 2]  # Allow more for deduplication
 
         return {
             "retrieved_chunks": top_chunks,
@@ -235,7 +212,7 @@ class PageContentRetrievalStep(PipelineStep):
             "total_chunks_retrieved": len(top_chunks),
         }
 
-    async def _generate_query_embedding(self, query_text: str) -> List[float]:
+    async def _generate_query_embedding(self, query_text: str) -> list[float]:
         if not self.voyage_client:
             raise ValueError("Voyage client not initialized for query embeddings")
         embeddings = await self.voyage_client.get_embeddings([query_text])
@@ -244,14 +221,12 @@ class PageContentRetrievalStep(PipelineStep):
             logger.warning(
                 f"[Wiki:Retrieval] Query embedding dims mismatch: got {len(vector)}, expected {self.query_embedding_dims_expected}"
             )
-        logger.info(
-            f"[Wiki:Retrieval] Generated query embedding len={len(vector)} for text='{query_text[:50]}...'"
-        )
+        logger.info(f"[Wiki:Retrieval] Generated query embedding len={len(vector)} for text='{query_text[:50]}...'")
         return vector
 
     async def _find_similar_chunks(
-        self, query_embedding: List[float], chunks_with_embeddings: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, query_embedding: list[float], chunks_with_embeddings: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Find similar chunks using cosine similarity."""
         similar_chunks = []
 
@@ -283,12 +258,12 @@ class PageContentRetrievalStep(PipelineStep):
         similar_chunks.sort(key=lambda x: x["similarity_score"], reverse=True)
         return similar_chunks[: self.max_chunks_per_query]
 
-    def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+    def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors."""
         if len(vec1) != len(vec2):
             return 0.0
 
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = sum(a * a for a in vec1) ** 0.5
         norm2 = sum(b * b for b in vec2) ** 0.5
 
@@ -297,7 +272,7 @@ class PageContentRetrievalStep(PipelineStep):
 
         return dot_product / (norm1 * norm2)
 
-    def _deduplicate_chunks(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _deduplicate_chunks(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Remove duplicate chunks based on content similarity."""
         unique_chunks = []
         seen_contents = set()

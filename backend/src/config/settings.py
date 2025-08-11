@@ -64,16 +64,13 @@ class Settings(BaseSettings):
         extra = "allow"  # Allow extra fields to prevent validation errors
 
 
-# Global settings instance
-_settings: Settings | None = None
-
-
 def get_settings() -> Settings:
-    """Get application settings singleton"""
-    global _settings
-    if _settings is None:
-        _settings = Settings()
-    return _settings
+    """Return a fresh Settings instance each call.
+
+    Avoid caching to ensure test monkeypatches and runtime env changes
+    are respected across imports and requests.
+    """
+    return Settings()
 
 
 def get_database_url() -> str:
@@ -88,7 +85,5 @@ def get_supabase_keys() -> tuple[str, str]:
     """Get Supabase keys"""
     settings = get_settings()
     if not settings.supabase_anon_key or not settings.supabase_service_role_key:
-        raise ValueError(
-            "SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY environment variables are required"
-        )
+        raise ValueError("SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY environment variables are required")
     return settings.supabase_anon_key, settings.supabase_service_role_key

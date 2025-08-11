@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
+from ..config.database import get_supabase_client
 from ..pipeline.wiki_generation.orchestrator import WikiGenerationOrchestrator
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
@@ -31,8 +32,8 @@ async def create_wiki_generation_run(
 ):
     """Create and start a new wiki generation run for an indexing run."""
     try:
-        # Get orchestrator
-        orchestrator = WikiGenerationOrchestrator()
+        # Get orchestrator (use anon client for authenticated user paths)
+        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
 
         # Access and metadata for indexing run
         reader = PipelineReadService()
@@ -109,7 +110,7 @@ async def list_wiki_runs(
 ):
     """List all wiki generation runs for an indexing run."""
     try:
-        orchestrator = WikiGenerationOrchestrator()
+        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
 
         # Access and upload type
         reader = PipelineReadService()
@@ -182,7 +183,7 @@ async def get_wiki_pages(
 ):
     """Get list of pages and metadata for a specific wiki run."""
     try:
-        orchestrator = WikiGenerationOrchestrator()
+        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
 
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
@@ -258,7 +259,7 @@ async def get_wiki_page_content(
 ):
     """Get the content of a specific wiki page."""
     try:
-        orchestrator = WikiGenerationOrchestrator()
+        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
         storage_service = StorageService()
 
         # Get wiki run details
@@ -333,7 +334,7 @@ async def get_wiki_metadata(
 ):
     """Get metadata for a specific wiki run."""
     try:
-        orchestrator = WikiGenerationOrchestrator()
+        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
 
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
@@ -403,22 +404,31 @@ async def delete_wiki_run(
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
         if not wiki_run:
-            raise HTTPException(status_code=404, detail="Wiki run not found")
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         # For authenticated users, validate ownership
         if current_user:
             if wiki_run.user_id and str(current_user.get("id")) != str(wiki_run.user_id):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Access denied: This wiki run does not belong to you",
+                from ..shared.errors import ErrorCode
+                from ..utils.exceptions import AppError
+
+                raise AppError(
+                    "Access denied: This wiki run does not belong to you",
+                    error_code=ErrorCode.ACCESS_DENIED,
                 )
 
         # For unauthenticated users, only allow access to email uploads
         if not current_user:
             if wiki_run.upload_type != "email":
-                raise HTTPException(
-                    status_code=403,
-                    detail="Access denied: Authentication required for user project wikis",
+                from ..shared.errors import ErrorCode
+                from ..utils.exceptions import AppError
+
+                raise AppError(
+                    "Access denied: Authentication required for user project wikis",
+                    error_code=ErrorCode.ACCESS_DENIED,
                 )
 
         # Delete wiki run
