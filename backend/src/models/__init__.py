@@ -1,49 +1,42 @@
-from .user import UserProfile, UserProfileCreate, UserProfileUpdate
 from .domain.document import (
     Document,
-    DocumentStatus,
     DocumentCreate,
+    DocumentStatus,
     DocumentUpdate,
     DocumentWithChunks,
 )
 from .domain.document_chunk import DocumentChunk, DocumentChunkCreate
 from .pipeline import (
-    # Legacy models for backward compatibility
-    PipelineRun,
-    PipelineStatus,
-    PipelineStep,
-    PipelineStepResult,
-    PipelineRunCreate,
-    PipelineRunUpdate,
-    PipelineConfig,
-    # Enhanced models for two-pipeline architecture
-    StepResult,
     IndexingRun,
-    QueryRun,
-    UserConfigOverride,
     IndexingRunCreate,
     IndexingRunUpdate,
+    PipelineConfig,
+    PipelineStatus,
+    PipelineStep,
+    QueryRun,
     QueryRunCreate,
     QueryRunUpdate,
+    StepResult,
+    UserConfigOverride,
     UserConfigOverrideCreate,
     UserConfigOverrideUpdate,
-    # Wiki generation models
-    WikiGenerationStatus,
-    WikiPageMetadata,
     WikiGenerationRun,
     WikiGenerationRunCreate,
     WikiGenerationRunUpdate,
+    WikiGenerationStatus,
+    WikiPageMetadata,
     WikiPageMetadataCreate,
     WikiPageMetadataUpdate,
 )
 from .query import (
     Query,
-    QueryResponse,
     QueryCreate,
+    QueryHistory,
+    QueryResponse,
     QueryUpdate,
     QueryWithResponse,
-    QueryHistory,
 )
+from .user import UserProfile, UserProfileCreate, UserProfileUpdate
 
 __all__ = [
     # User models
@@ -58,15 +51,11 @@ __all__ = [
     "DocumentUpdate",
     "DocumentChunkCreate",
     "DocumentWithChunks",
-    # Legacy Pipeline models
-    "PipelineRun",
+    # Pipeline models
     "PipelineStatus",
     "PipelineStep",
-    "PipelineStepResult",
-    "PipelineRunCreate",
-    "PipelineRunUpdate",
     "PipelineConfig",
-    # Enhanced Pipeline models
+    # Enhanced models
     "StepResult",
     "IndexingRun",
     "QueryRun",

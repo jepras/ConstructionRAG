@@ -12,7 +12,7 @@ import pytest
 )
 async def test_get_recent_indexing_runs_filters_to_user_projects(async_client, auth_headers):
     # Smoke: just call the endpoint and assert 200 and list response shape
-    r = await async_client.get("/pipeline/indexing/runs", headers=auth_headers)
+    r = await async_client.get("/api/indexing-runs", headers=auth_headers)
     assert r.status_code == 200
     body = r.json()
     assert isinstance(body, list)

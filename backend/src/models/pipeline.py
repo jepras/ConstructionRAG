@@ -247,50 +247,16 @@ class UserConfigOverride(BaseModel):
 
 
 # Legacy models for backward compatibility
-class PipelineRun(BaseModel):
-    """Pipeline run model matching the pipeline_runs table"""
-
-    id: UUID = Field(description="Pipeline run unique identifier")
-    document_id: UUID = Field(description="Associated document ID")
-    status: PipelineStatus = Field(PipelineStatus.PENDING, description="Pipeline run status")
-    step_results: dict[str, Any] = Field(default_factory=dict, description="Results from each pipeline step")
-    started_at: datetime = Field(default_factory=datetime.utcnow, description="Pipeline start timestamp")
-    completed_at: datetime | None = Field(None, description="Pipeline completion timestamp")
-    error_message: str | None = Field(None, description="Error message if pipeline failed")
-
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+## Legacy v1 models removed in v2
 
 
-class PipelineStepResult(BaseModel):
-    """Result from a single pipeline step"""
-
-    step: PipelineStep
-    status: PipelineStatus
-    started_at: datetime
-    completed_at: datetime | None = None
-    error_message: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+## Legacy v1 models removed in v2
 
 
-class PipelineRunCreate(BaseModel):
-    """Model for creating a new pipeline run"""
-
-    document_id: UUID
-    status: PipelineStatus = PipelineStatus.PENDING
+## Legacy v1 models removed in v2
 
 
-class PipelineRunUpdate(BaseModel):
-    """Model for updating an existing pipeline run"""
-
-    status: PipelineStatus | None = None
-    step_results: dict[str, Any] | None = None
-    completed_at: datetime | None = None
-    error_message: str | None = None
+## Legacy v1 models removed in v2
 
 
 # Enhanced create/update models for new pipeline types

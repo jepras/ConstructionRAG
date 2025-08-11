@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from src.api.auth import get_current_user
 from src.config.database import get_supabase_admin_client, get_supabase_client
-from src.pipeline.querying.models import QueryFeedback, QueryRequest, QueryResponse
+from src.pipeline.querying.models import QueryRequest
 from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
 from src.services.auth_service import get_current_user_optional
 from src.services.query_service import QueryReadService, QueryService
@@ -20,100 +19,15 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/query", tags=["queries"])  # legacy routes kept
-flat_router = APIRouter(prefix="/api", tags=["Queries"])  # new flat routes
+flat_router = APIRouter(prefix="/api", tags=["Queries"])  # v2 flat routes
 
 
-# Pydantic models for API requests/responses
-class QueryHistoryResponse(BaseModel):
-    """Response model for query history"""
-
-    queries: list[dict[str, Any]]
-    total_count: int
-    has_more: bool
-
-
-class FeedbackResponse(BaseModel):
-    """Response model for feedback submission"""
-
-    success: bool
-    message: str
-
-
-class QualityDashboardResponse(BaseModel):
-    """Response model for quality dashboard"""
-
-    period: str
-    total_queries: int
-    successful_queries: int
-    failed_queries: int
-    avg_response_time_ms: float
-    success_rate: float
-    avg_quality_score: float
-    quality_distribution: dict[str, int]
-    recent_queries: list[dict[str, Any]]
-
-
-# Dependency injection for orchestrator
 async def get_query_orchestrator() -> QueryPipelineOrchestrator:
-    """Get query pipeline orchestrator with dependency injection"""
+    """Dependency provider for the query orchestrator (overridable in tests)."""
     return QueryPipelineOrchestrator()
 
 
-@router.post("/", response_model=QueryResponse)
-async def process_query(
-    request: QueryRequest,
-    current_user=Depends(get_current_user),
-    orchestrator: QueryPipelineOrchestrator = Depends(get_query_orchestrator),
-):
-    """
-    Process a construction-related query through the entire pipeline.
-
-    This endpoint:
-    1. Takes a user query and processes it through query processing, retrieval, and generation
-    2. Stores the result in the database for history and analytics
-    3. Returns the complete response with metadata
-    """
-    try:
-        # Debug: Check what current_user contains
-        logger.info(f"🔍 current_user type: {type(current_user)}")
-        logger.info(f"🔍 current_user content: {current_user}")
-        logger.info(f"🔍 current_user keys: {current_user.keys() if isinstance(current_user, dict) else 'Not a dict'}")
-
-        # Set user_id from authenticated user
-        request.user_id = current_user["id"]
-
-        logger.info(f"Processing query for user {current_user['id']}: {request.query[:50]}...")
-
-        # Process query through pipeline
-        logger.info("🔍 About to process query through orchestrator...")
-        logger.info(f"🔍 Request object: {request}")
-        logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
-
-        response = await orchestrator.process_query(request)
-
-        logger.info("Query processed successfully")
-        return response
-
-    except HTTPException as exc:
-        # Bridge legacy HTTPException to AppError for uniform envelope
-        raise AppError(
-            str(exc.detail),
-            error_code=(ErrorCode.NOT_FOUND if exc.status_code == 404 else ErrorCode.INTERNAL_ERROR),
-        ) from exc
-    except Exception as e:
-        logger.error(f"Error processing query: {e}")
-        # Store error in database (best effort)
-        try:
-            await store_error_query(request, str(e))
-        except Exception as db_error:
-            logger.error(f"Failed to store error query: {db_error}")
-        # Raise AppError to hit centralized handler
-        raise AppError(
-            "Failed to process query",
-            error_code=ErrorCode.EXTERNAL_API_ERROR,
-            details={"reason": str(e)},
-        ) from e
+## Legacy endpoint cluster removed in v2
 
 
 # ---------------- Flat resource endpoints (Phase 8) ----------------
@@ -128,9 +42,9 @@ class CreateQueryRequest(BaseModel):
 async def create_query(
     payload: CreateQueryRequest,
     current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+    orchestrator: QueryPipelineOrchestrator = Depends(get_query_orchestrator),
 ):
     svc = QueryService()
-    orchestrator = QueryPipelineOrchestrator()
     result = await svc.create_query(
         user=current_user,
         query_text=payload.query,
@@ -162,250 +76,13 @@ async def get_query(
     return row
 
 
-@router.get("/history", response_model=QueryHistoryResponse)
-async def get_query_history(
-    current_user=Depends(get_current_user),
-    limit: int = Query(20, ge=1, le=100, description="Number of queries to return"),
-    offset: int = Query(0, ge=0, description="Number of queries to skip"),
-    db=Depends(get_supabase_client),
-):
-    """
-    Get user's query history with pagination.
-
-    Returns:
-    - List of previous queries with responses and metadata
-    - Total count for pagination
-    - Has more flag for infinite scrolling
-    """
-    try:
-        # Get total count
-        count_result = db.table("query_runs").select("id", count="exact").eq("user_id", current_user["id"]).execute()
-        total_count = count_result.count or 0
-
-        # Get paginated queries
-        result = (
-            db.table("query_runs")
-            .select("*")
-            .eq("user_id", current_user["id"])
-            .order("created_at", desc=True)
-            .range(offset, offset + limit - 1)
-            .execute()
-        )
-
-        queries = []
-        for query_run in result.data:
-            queries.append(
-                {
-                    "id": query_run["id"],
-                    "original_query": query_run["original_query"],
-                    "final_response": query_run.get("final_response", ""),
-                    "performance_metrics": query_run.get("performance_metrics", {}),
-                    "quality_metrics": query_run.get("quality_metrics", {}),
-                    "created_at": query_run["created_at"],
-                }
-            )
-
-        has_more = offset + limit < total_count
-
-        return QueryHistoryResponse(queries=queries, total_count=total_count, has_more=has_more)
-
-    except Exception as e:
-        logger.error(f"Error getting query history: {e}")
-        raise AppError(
-            "Failed to retrieve query history",
-            error_code=ErrorCode.INTERNAL_ERROR,
-            details={"reason": str(e)},
-        )
+## Legacy history endpoint removed in v2
 
 
-@router.post("/{query_id}/feedback", response_model=FeedbackResponse)
-async def submit_query_feedback(
-    query_id: str,
-    feedback: QueryFeedback,
-    current_user=Depends(get_current_user),
-    db=Depends(get_supabase_client),
-):
-    """
-    Submit user feedback on query results.
-
-    This endpoint:
-    1. Validates the query_id exists and belongs to the user
-    2. Updates the quality_metrics with user feedback
-    3. Returns success confirmation
-    """
-    try:
-        # Verify query exists and belongs to user
-        result = (
-            db.table("query_runs")
-            .select("id, quality_metrics")
-            .eq("id", query_id)
-            .eq("user_id", current_user["id"])
-            .execute()
-        )
-
-        if not result.data:
-            raise AppError("Query not found", error_code=ErrorCode.NOT_FOUND)
-
-        query_run = result.data[0]
-        current_quality_metrics = query_run.get("quality_metrics", {})
-
-        # Add user feedback to quality metrics
-        updated_quality_metrics = {
-            **current_quality_metrics,
-            "user_feedback": {
-                "relevance_score": feedback.relevance_score,
-                "helpfulness_score": feedback.helpfulness_score,
-                "accuracy_score": feedback.accuracy_score,
-                "comments": feedback.comments,
-                "submitted_at": datetime.utcnow().isoformat(),
-            },
-        }
-
-        # Update database
-        update_result = (
-            db.table("query_runs").update({"quality_metrics": updated_quality_metrics}).eq("id", query_id).execute()
-        )
-
-        if not update_result.data:
-            raise AppError(
-                "Failed to update feedback",
-                error_code=ErrorCode.INTERNAL_ERROR,
-            )
-
-        logger.info(f"Feedback submitted for query {query_id} by user {current_user['id']}")
-
-        return FeedbackResponse(success=True, message="Feedback submitted successfully")
-
-    except AppError:
-        raise
-    except Exception as e:
-        logger.error(f"Error submitting feedback: {e}")
-        raise AppError(
-            "Failed to submit feedback",
-            error_code=ErrorCode.INTERNAL_ERROR,
-            details={"reason": str(e)},
-        )
+## Legacy feedback endpoint removed in v2
 
 
-@router.get("/quality-dashboard", response_model=QualityDashboardResponse)
-async def get_quality_dashboard(
-    time_period: str = Query("7d", description="Time period: 1d, 7d, 30d"),
-    current_user=Depends(get_current_user),
-    db=Depends(get_supabase_client),
-):
-    """
-    Get admin quality dashboard metrics.
-
-    This endpoint provides:
-    - Query volume and success rates
-    - Average response times
-    - Quality score distribution
-    - Recent query examples
-    """
-    try:
-        # Calculate time range
-        now = datetime.utcnow()
-        if time_period == "1d":
-            start_time = now - timedelta(days=1)
-        elif time_period == "7d":
-            start_time = now - timedelta(days=7)
-        elif time_period == "30d":
-            start_time = now - timedelta(days=30)
-        else:
-            raise AppError("Invalid time period", error_code=ErrorCode.VALIDATION_ERROR)
-
-        # Get all queries in time period
-        result = (
-            db.table("query_runs")
-            .select("*")
-            .gte("created_at", start_time.isoformat())
-            .order("created_at", desc=True)
-            .execute()
-        )
-
-        queries = result.data
-        total_queries = len(queries)
-
-        if total_queries == 0:
-            return QualityDashboardResponse(
-                period=time_period,
-                total_queries=0,
-                successful_queries=0,
-                failed_queries=0,
-                avg_response_time_ms=0.0,
-                success_rate=0.0,
-                avg_quality_score=0.0,
-                quality_distribution={
-                    "excellent": 0,
-                    "good": 0,
-                    "acceptable": 0,
-                    "poor": 0,
-                },
-                recent_queries=[],
-            )
-
-        # Calculate metrics
-        successful_queries = len([q for q in queries if q.get("final_response")])
-        failed_queries = total_queries - successful_queries
-        success_rate = (successful_queries / total_queries) * 100
-
-        # Calculate average response time
-        response_times = [q.get("response_time_ms", 0) for q in queries if q.get("response_time_ms")]
-        avg_response_time_ms = sum(response_times) / len(response_times) if response_times else 0.0
-
-        # Calculate quality distribution
-        quality_distribution = {"excellent": 0, "good": 0, "acceptable": 0, "poor": 0}
-        quality_scores = []
-
-        for query in queries:
-            quality_metrics = query.get("quality_metrics", {})
-            quality_score = quality_metrics.get("quality_score", 0.0)
-            quality_scores.append(quality_score)
-
-            if quality_score >= 0.8:
-                quality_distribution["excellent"] += 1
-            elif quality_score >= 0.6:
-                quality_distribution["good"] += 1
-            elif quality_score >= 0.4:
-                quality_distribution["acceptable"] += 1
-            else:
-                quality_distribution["poor"] += 1
-
-        avg_quality_score = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
-
-        # Get recent queries for examples
-        recent_queries = []
-        for query in queries[:10]:  # Last 10 queries
-            recent_queries.append(
-                {
-                    "query": query["original_query"],
-                    "quality_score": query.get("quality_metrics", {}).get("quality_score", 0.0),
-                    "response_time_ms": query.get("response_time_ms", 0),
-                    "created_at": query["created_at"],
-                }
-            )
-
-        return QualityDashboardResponse(
-            period=time_period,
-            total_queries=total_queries,
-            successful_queries=successful_queries,
-            failed_queries=failed_queries,
-            avg_response_time_ms=avg_response_time_ms,
-            success_rate=success_rate,
-            avg_quality_score=avg_quality_score,
-            quality_distribution=quality_distribution,
-            recent_queries=recent_queries,
-        )
-
-    except AppError:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting quality dashboard: {e}")
-        raise AppError(
-            "Failed to retrieve quality dashboard",
-            error_code=ErrorCode.INTERNAL_ERROR,
-            details={"reason": str(e)},
-        )
+## Legacy quality dashboard removed in v2
 
 
 async def store_error_query(request: QueryRequest, error_message: str):

@@ -17,29 +17,29 @@ client = TestClient(app)
 
 def test_documents_list_requires_auth():
     project_id = uuid.uuid4()
-    r = client.get(f"/api/projects/{project_id}/documents")
+    r = client.get(f"/api/documents?project_id={project_id}")
     assert r.status_code in (401, 403)
 
 
 def test_documents_get_requires_auth():
     project_id = uuid.uuid4()
     document_id = uuid.uuid4()
-    r = client.get(f"/api/projects/{project_id}/documents/{document_id}")
+    r = client.get(f"/api/documents/{document_id}?project_id={project_id}")
     assert r.status_code in (401, 403)
 
 
 def test_pipeline_runs_requires_auth():
-    r = client.get("/pipeline/indexing/runs")
+    r = client.get("/api/indexing-runs")
     assert r.status_code in (401, 403)
 
 
 def test_pipeline_run_status_requires_auth():
     run_id = uuid.uuid4()
-    r = client.get(f"/pipeline/indexing/runs/{run_id}/status")
+    r = client.get(f"/api/indexing-runs/{run_id}")
     assert r.status_code in (401, 403)
 
 
 def test_pipeline_run_progress_requires_auth():
     run_id = uuid.uuid4()
-    r = client.get(f"/pipeline/indexing/runs/{run_id}/progress")
+    r = client.get(f"/api/indexing-runs/{run_id}/progress")
     assert r.status_code in (401, 403)

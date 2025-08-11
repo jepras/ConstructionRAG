@@ -2,17 +2,37 @@
 Integration tests for FastAPI query endpoints.
 
 This test suite verifies:
-1. POST /api/query - Query processing endpoint
-2. GET /api/query/history - Query history endpoint
-3. POST /api/query/{id}/feedback - Feedback submission endpoint
-4. GET /api/query/quality-dashboard - Quality dashboard endpoint
+import os
+import pytest
+import httpx
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    not (os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY")),
+    reason="Supabase env not configured",
+)
+async def test_flat_query_endpoints_smoke(monkeypatch):
+    from src.services import config_service
+
+    monkeypatch.setattr(config_service.ConfigService, "validate_startup", lambda self: None)
+
+    from src.main import app
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # List queries (unauthenticated allowed, should return list)
+        r = await client.get("/api/queries")
+        assert r.status_code in (200, 401, 403)
+
+        # Get query by id (will likely be 404 for a fake id)
+        r2 = await client.get("/api/queries/00000000-0000-0000-0000-000000000000")
+        assert r2.status_code in (200, 404, 401, 403)
 """
 
 import asyncio
-import sys
 import os
-import json
-from datetime import datetime, timedelta
+import sys
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -22,8 +42,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from fastapi.testclient import TestClient
+
 from src.main import app
-from src.config.database import get_supabase_admin_client
 
 
 class TestQueryAPIEndpoints:
@@ -104,11 +124,7 @@ class TestQueryAPIEndpoints:
 
         try:
             # Prepare headers with authentication
-            headers = (
-                {"Authorization": f"Bearer {self.auth_token}"}
-                if self.auth_token
-                else {}
-            )
+            headers = {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
 
             # Make request based on method
             if test_case["method"] == "POST":
@@ -138,15 +154,11 @@ class TestQueryAPIEndpoints:
                 "status_code": response.status_code,
                 "duration_ms": duration,
                 "response_size": len(str(response_data)),
-                "error": (
-                    None if success else response_data.get("detail", "Unknown error")
-                ),
+                "error": (None if success else response_data.get("detail", "Unknown error")),
             }
 
             if success:
-                print(
-                    f"✅ PASS - Status: {response.status_code}, Duration: {duration:.1f}ms"
-                )
+                print(f"✅ PASS - Status: {response.status_code}, Duration: {duration:.1f}ms")
                 print(f"   Response size: {result['response_size']} chars")
             else:
                 print(f"❌ FAIL - Status: {response.status_code}")
@@ -170,21 +182,15 @@ class TestQueryAPIEndpoints:
 
     async def _test_feedback_submission(self):
         """Test feedback submission endpoint"""
-        print(f"\n📝 Test Case: Submit Query Feedback")
-        print(f"Endpoint: POST /api/query/{{id}}/feedback")
+        print("\n📝 Test Case: Submit Query Feedback")
+        print("Endpoint: POST /api/query/{id}/feedback")
         print("-" * 60)
 
         try:
             # First, get a query from history to submit feedback on
-            headers = (
-                {"Authorization": f"Bearer {self.auth_token}"}
-                if self.auth_token
-                else {}
-            )
+            headers = {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
 
-            history_response = self.client.get(
-                "/api/query/history", params={"limit": 1}, headers=headers
-            )
+            history_response = self.client.get("/api/query/history", params={"limit": 1}, headers=headers)
 
             if history_response.status_code == 200:
                 history_data = history_response.json()
@@ -206,9 +212,7 @@ class TestQueryAPIEndpoints:
                     )
 
                     success = feedback_response.status_code == 200
-                    response_data = (
-                        feedback_response.json() if feedback_response.content else {}
-                    )
+                    response_data = feedback_response.json() if feedback_response.content else {}
 
                     result = {
                         "test_name": "Submit Query Feedback",
@@ -217,16 +221,12 @@ class TestQueryAPIEndpoints:
                         "status_code": feedback_response.status_code,
                         "duration_ms": 0,  # Not measured for this test
                         "response_size": len(str(response_data)),
-                        "error": (
-                            None
-                            if success
-                            else response_data.get("detail", "Unknown error")
-                        ),
+                        "error": (None if success else response_data.get("detail", "Unknown error")),
                     }
 
                     if success:
                         print(f"✅ PASS - Status: {feedback_response.status_code}")
-                        print(f"   Feedback submitted successfully")
+                        print("   Feedback submitted successfully")
                     else:
                         print(f"❌ FAIL - Status: {feedback_response.status_code}")
                         print(f"   Error: {result['error']}")
@@ -235,9 +235,7 @@ class TestQueryAPIEndpoints:
                 else:
                     print("⚠️  No queries in history to test feedback submission")
             else:
-                print(
-                    f"⚠️  Could not get query history for feedback test: {history_response.status_code}"
-                )
+                print(f"⚠️  Could not get query history for feedback test: {history_response.status_code}")
 
         except Exception as e:
             result = {
@@ -265,15 +263,11 @@ class TestQueryAPIEndpoints:
         success_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
 
         # Performance metrics
-        durations = [
-            result["duration_ms"]
-            for result in self.test_results
-            if result["duration_ms"] > 0
-        ]
+        durations = [result["duration_ms"] for result in self.test_results if result["duration_ms"] > 0]
         avg_duration = sum(durations) / len(durations) if durations else 0
         max_duration = max(durations) if durations else 0
 
-        print(f"\n📈 SUMMARY:")
+        print("\n📈 SUMMARY:")
         print(f"   Total Tests: {total_tests}")
         print(f"   Passed: {passed_tests} ✅")
         print(f"   Failed: {failed_tests} ❌")
@@ -281,7 +275,7 @@ class TestQueryAPIEndpoints:
         print(f"   Average Duration: {avg_duration:.1f}ms")
         print(f"   Max Duration: {max_duration:.1f}ms")
 
-        print(f"\n📋 DETAILED RESULTS:")
+        print("\n📋 DETAILED RESULTS:")
         for i, result in enumerate(self.test_results, 1):
             status = "✅ PASS" if result["success"] else "❌ FAIL"
             print(f"   {i}. {result['test_name']} - {status}")
@@ -293,7 +287,7 @@ class TestQueryAPIEndpoints:
             print()
 
         # Recommendations
-        print(f"\n💡 RECOMMENDATIONS:")
+        print("\n💡 RECOMMENDATIONS:")
         if success_rate == 100:
             print("   🎉 All tests passed! API endpoints are working correctly.")
         elif success_rate >= 80:

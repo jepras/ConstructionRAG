@@ -17,18 +17,17 @@ async def test_error_envelope_and_request_id(monkeypatch):
 
     from src.main import app
 
-    # Call deprecated endpoint to trigger 410 with AppError
+    # Call a v2 endpoint with invalid payload to trigger AppError envelope
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         r = await client.post(
-            "/api/email-uploads",
+            "/api/uploads",
             headers={"X-Request-ID": "envelope-test-1"},
-            files={"files": ("test.pdf", b"%PDF-1.4", "application/pdf")},
-            data={"email": "test@example.com"},
+            files={},
+            data={},
         )
-        assert r.status_code == 410
+        assert r.status_code in (400, 422)
         assert r.headers.get("X-Request-ID") == "envelope-test-1"
         body = r.json()
         assert "error" in body
         err = body["error"]
         assert set(["code", "message", "request_id", "timestamp"]).issubset(err.keys())
-
