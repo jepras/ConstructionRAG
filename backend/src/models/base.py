@@ -1,9 +1,26 @@
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class AccessLevel(str, Enum):
+    """Access control levels for resources.
+
+    Semantics align with API redesign plan:
+    - public: accessible to anyone (anonymous or authenticated)
+    - auth: accessible to any authenticated user
+    - owner: reserved for owner-only semantics (used primarily for policies)
+    - private: accessible only to the resource owner (and explicit shares, future)
+    """
+
+    PUBLIC = "public"
+    AUTH = "auth"
+    OWNER = "owner"
+    PRIVATE = "private"
 
 
 class BaseDocument(BaseModel):

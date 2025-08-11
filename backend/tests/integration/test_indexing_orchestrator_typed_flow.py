@@ -1,10 +1,11 @@
 import types
-import pytest
 from uuid import uuid4
 
+import pytest
+
+from src.models import StepResult
 from src.pipeline.indexing.orchestrator import IndexingOrchestrator
 from src.pipeline.shared.models import DocumentInput, UploadType
-from src.models import StepResult
 
 
 class _DummyStep:
@@ -128,7 +129,5 @@ async def test_indexing_orchestrator_typed_flow(monkeypatch):
     )
 
     # Run single-document flow up to before embedding (handled by _process_single_document_steps)
-    ok = await orch._process_single_document_steps(
-        doc_input, uuid4(), types.SimpleNamespace()
-    )
+    ok = await orch._process_single_document_steps(doc_input, uuid4(), types.SimpleNamespace())
     assert ok is True
