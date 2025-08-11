@@ -14,7 +14,7 @@ from ..services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/wiki", tags=["wiki"])
+router = APIRouter(prefix="/wiki", tags=["Wiki"])
 
 
 async def get_optional_user(

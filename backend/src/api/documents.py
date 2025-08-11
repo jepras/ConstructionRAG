@@ -26,7 +26,7 @@ from src.utils.exceptions import AppError, StorageError, ValidationError
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["documents"])
+router = APIRouter(prefix="/api", tags=["Documents"])
 
 
 class DocumentListResponse(BaseModel):
