@@ -58,7 +58,7 @@ RUN ls -la .
 RUN echo "=== END RUNNER DEBUG ==="
 
 # Copy public assets directly from source (unchanged by build)
-COPY public ./public
+COPY --from=builder /app/public ./public
 
 # Set the correct permission for prerender cache
 RUN mkdir .next
