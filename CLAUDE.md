@@ -2,15 +2,45 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important Claude rules
+- Make a plan before coding. Do not code until I have confirmed the plan looks good.
+- Do not use git commands unless explicitly told to 
+
+
+
+## Core development philosophy
+KISS (Keep It Simple, Stupid)
+Simplicity should be a key goal in design. Choose straightforward solutions over complex ones whenever possible. Simple solutions are easier to understand, maintain, and debug.
+
+YAGNI (You Aren't Gonna Need It)
+Avoid building functionality on speculation. Implement features only when they are needed, not when you anticipate they might be useful in the future.
+
+Design Principles
+   Single Responsibility: Each function, class, and module should have one clear purpose.
+   Fail Fast: Check for potential errors early and raise exceptions immediately when issues occur.
+
+File and Function Limits
+   Never create a file longer than 500 lines of code. If approaching this limit, refactor by splitting into modules.
+   Functions should be under 50 lines with a single, clear responsibility.
+   Classes should be under 100 lines and represent a single concept or entity.
+   Organize code into clearly separated modules, grouped by feature or responsibility.
+
+Python style guide
+- Format with ruff format (faster alternative to Black)
+- Use async/await for I/O operations
+- Type hints required for all functions
+- Pydantic models for validation and settings management
+- Early returns for error conditions. Consistent error handling from middleware. 
+- Functional programming preferred over classes
+
 ## Project Overview
 
 ConstructionRAG is a production-ready AI-powered construction document processing and Q&A system. It's a "DeepWiki for Construction Sites" that automatically processes construction documents and enables intelligent Q&A about project requirements, timelines, and specifications.
 
 ### Key Technologies
 - **Backend**: FastAPI (Python) - deployed on Railway
-- **Production Frontend**: Next.js 15.3 with TypeScript - deployed on Railway
-- **Development Frontend**: Next.js (unified development and production)
-- **Reference Frontend**: Streamlit (legacy, kept for reference) - deployed on Streamlit Cloud
+- **Production React Frontend**: Not developed yet - also to be deployed on Railway
+- **Development Frontend**: Streamlit - deployed on Streamlit Cloud
 - **Database**: Supabase (PostgreSQL with pgvector)
 - **AI Services**: Voyage AI (embeddings), OpenRouter (generation & VLM)
 - **Language**: Optimized for Danish construction documents currently. To be made multilingual. 
@@ -28,7 +58,7 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 # Frontend only (from frontend/ directory)
 npm run dev
 
-# Legacy Streamlit frontend (from frontend-streamlit/ directory)
+# Legacy frontend
 streamlit run streamlit_app/main.py --server.port 8501
 
 # Run tests (from backend/ directory)
@@ -49,7 +79,8 @@ Streamlit updates automatically on git pushes.
 
 Backend to Railway
 Indexing run on Beam
-Production Next.js Frontend on Railway 
+Development Frontend on Streamlit
+Production React Frontend on Railway (future) 
 
 ### URLs
 - Frontend: http://localhost:3000
@@ -88,12 +119,6 @@ frontend/
 ├── Dockerfile               # Production build
 └── railway.toml             # Railway deployment config
 
-frontend-streamlit/          # Legacy reference frontend
-├── streamlit_app/
-│   ├── main.py             # Main Streamlit app
-│   ├── pages/              # Multi-page app structure
-│   ├── components/         # Reusable UI components
-│   └── utils/              # Frontend utilities
 ```
 
 ### Pipeline Processing Flow
@@ -140,13 +165,6 @@ frontend-streamlit/          # Legacy reference frontend
 - All endpoints validate ownership via access levels and database policies
 - Anonymous users can only access `email` upload type resources
 
-### Code Style (from .cursor/rules)
-- Use async/await for I/O operations
-- Type hints required for all functions
-- Pydantic models for validation
-- Early returns for error conditions. Consistent error handling from middleware. 
-- Functional programming preferred over classes
-- Snake_case for files/directories
 
 ### Pipeline Development
 - Embedding model consistency: voyage-multilingual-2 (1024 dims) throughout
