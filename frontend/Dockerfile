@@ -17,20 +17,18 @@ RUN npm ci
 FROM base AS builder
 WORKDIR /app
 
-# DEBUG: Check what Railway can access
-RUN echo "=== DEBUGGING RAILWAY BUILD CONTEXT ==="
-RUN echo "Root directory contents:"
-RUN ls -la /
-RUN echo "Build context contents:"
-RUN ls -la .
-RUN echo "Looking for public directory:"
-RUN find . -name "public" -type d 2>/dev/null || echo "No public directory found"
-RUN echo "All directories in build context:"
-RUN find . -type d -maxdepth 2
-RUN echo "=== END DEBUG ==="
+# DEBUG: Check what Railway can access (force output with stderr redirect)
+RUN echo "=== DEBUGGING RAILWAY BUILD CONTEXT ===" >&2
+RUN echo "Build context contents:" >&2 && ls -la . >&2
+RUN echo "Looking for public directory:" >&2 && (find . -name "public" -type d 2>&1 || echo "No public directory found") >&2
+RUN echo "All directories in build context:" >&2 && find . -type d -maxdepth 2 >&2
+RUN echo "=== END DEBUG ===" >&2
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# DEBUG: Check if public directory exists after COPY . .
+RUN echo "After COPY . . check:" >&2 && ls -la . >&2 && ls -la public >&2 || echo "No public dir after copy" >&2
 
 # Disable telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -50,12 +48,11 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # DEBUG: Check what's available in runner stage for copying public
-RUN echo "=== DEBUGGING RUNNER STAGE ==="
-RUN echo "Current working directory:"
-RUN pwd
-RUN echo "Contents of current directory:"
-RUN ls -la .
-RUN echo "=== END RUNNER DEBUG ==="
+RUN echo "=== DEBUGGING RUNNER STAGE ===" >&2
+RUN echo "Current working directory:" >&2 && pwd >&2  
+RUN echo "Contents of current directory:" >&2 && ls -la . >&2
+RUN echo "Builder stage public check:" >&2 && ls -la /app/public >&2 || echo "No /app/public in builder stage" >&2
+RUN echo "=== END RUNNER DEBUG ===" >&2
 
 # Copy public assets directly from source (unchanged by build)
 COPY --from=builder /app/public ./public
