@@ -22,20 +22,20 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "8501:8501"
+      - "3000:3000"
     environment:
       - ENVIRONMENT=development
-      - BACKEND_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     env_file:
       - frontend/.env
     volumes:
       - ./frontend:/app
-      - /app/__pycache__
+      - /app/node_modules
     depends_on:
       - backend
-    command: streamlit run streamlit_app/main.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    command: npm run dev
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8501/_stcore/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

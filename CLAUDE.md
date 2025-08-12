@@ -8,10 +8,12 @@ ConstructionRAG is a production-ready AI-powered construction document processin
 
 ### Key Technologies
 - **Backend**: FastAPI (Python) - deployed on Railway
-- **Frontend**: Streamlit - deployed on Streamlit Cloud
+- **Production Frontend**: Next.js 15.3 with TypeScript - deployed on Railway
+- **Development Frontend**: Next.js (unified development and production)
+- **Reference Frontend**: Streamlit (legacy, kept for reference) - deployed on Streamlit Cloud
 - **Database**: Supabase (PostgreSQL with pgvector)
-- **AI Services**: Voyage AI (embeddings), OpenRouter (generation), Anthropic (VLM)
-- **Language**: Optimized for Danish construction documents
+- **AI Services**: Voyage AI (embeddings), OpenRouter (generation & VLM)
+- **Language**: Optimized for Danish construction documents currently. To be made multilingual. 
 
 ## Development Commands
 
@@ -24,6 +26,9 @@ docker-compose up --build
 uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Frontend only (from frontend/ directory)
+npm run dev
+
+# Legacy Streamlit frontend (from frontend-streamlit/ directory)
 streamlit run streamlit_app/main.py --server.port 8501
 
 # Run tests (from backend/ directory)
@@ -32,17 +37,26 @@ pytest tests/integration/
 pytest tests/unit/
 
 # Code quality (from backend/ directory)
-black .
-isort .
-flake8 .
-mypy .
+Code style: ruff format .
+Lint: ruff check .
+Types: mypy .
 ```
 
+### Prod development
+Railway automatically updates on git pushes. Uses Dockerfile from /backend repository.
+Updates to indexing run requires cd backend && beam deploy beam-app.py:process_documents
+Streamlit updates automatically on git pushes.
+
+Backend to Railway
+Indexing run on Beam
+Production Next.js Frontend on Railway 
+
 ### URLs
-- Frontend: http://localhost:8501
+- Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
 - Health Check: http://localhost:8000/health
+- Legacy Streamlit Frontend: http://localhost:8501 (if running)
 
 ## Architecture
 
@@ -55,19 +69,31 @@ backend/
 │   ├── pipeline/            # Core RAG pipeline
 │   │   ├── indexing/        # Document processing (5 steps)
 │   │   │   ├── steps/       # Partition → Metadata → Enrichment → Chunking → Embedding
-│   │   │   └── config/      # Pipeline configuration (YAML)
-│   │   └── querying/        # Query processing pipeline
-│   │       ├── steps/       # Query Processing → Retrieval → Generation
-│   │       └── config/      # Query configuration (YAML)
+│   │   ├── querying/        # Query processing pipeline
+│   │   │   ├── steps/       # Query Processing → Retrieval → Generation
+│   │   └─── wiki_generation/
 │   ├── services/            # Business logic
 │   ├── models/              # Pydantic data models
 │   └── config/              # App configuration
 
-frontend/streamlit_app/
-├── main.py                  # Main Streamlit app
-├── pages/                   # Multi-page app structure
-├── components/              # Reusable UI components
-└── utils/                   # Frontend utilities
+frontend/
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── layout.tsx       # Root layout
+│   │   ├── page.tsx         # Home page
+│   │   └── api/             # API routes
+│   ├── components/          # Reusable UI components
+│   └── lib/                 # Utilities and helpers
+├── package.json             # Node.js dependencies
+├── Dockerfile               # Production build
+└── railway.toml             # Railway deployment config
+
+frontend-streamlit/          # Legacy reference frontend
+├── streamlit_app/
+│   ├── main.py             # Main Streamlit app
+│   ├── pages/              # Multi-page app structure
+│   ├── components/         # Reusable UI components
+│   └── utils/              # Frontend utilities
 ```
 
 ### Pipeline Processing Flow
@@ -84,10 +110,20 @@ frontend/streamlit_app/
    - **Retrieval**: Vector similarity search using pgvector
    - **Generation**: OpenRouter models for response generation
 
+3. **Wiki Generation Pipeline** (Indexed Documents → Structured Wiki):
+   - **Metadata Collection**: Extract document metadata and structure
+   - **Overview Generation**: Create project overview from collected data
+   - **Semantic Clustering**: Group related content by semantic similarity
+   - **Structure Generation**: Define wiki page hierarchy and navigation
+   - **Page Content Retrieval**: Gather relevant content for each wiki page
+   - **Markdown Generation**: Generate final markdown pages with proper formatting
+
 ### Configuration Management
-- Pipeline settings in YAML files: `backend/src/pipeline/*/config/*.yaml`
+- Pipeline settings in single JSON SoT: `config/pipeline/pipeline_config.json`
+- ConfigService loads from JSON with environment variable substitution
 - Environment variables in `.env` files (never commit these)
 - Hot reloading: configuration changes take effect immediately
+- YAML-based config deprecated in favor of single source of truth approach
 
 ## Key Development Practices
 
@@ -97,11 +133,18 @@ frontend/streamlit_app/
 - Vector operations use pgvector extension
 - Migrations applied directly to production - push after writing
 
+### Access Control & Security
+- **Access Levels**: `public` (anonymous), `auth` (any authenticated user), `owner` (policies), `private` (resource owner only)
+- **Upload Types**: `email` (public access), `user_project` (authenticated access with RLS)
+- **RLS Policies**: Row-level security enforces user-specific data access in Supabase
+- All endpoints validate ownership via access levels and database policies
+- Anonymous users can only access `email` upload type resources
+
 ### Code Style (from .cursor/rules)
 - Use async/await for I/O operations
 - Type hints required for all functions
 - Pydantic models for validation
-- Early returns for error conditions
+- Early returns for error conditions. Consistent error handling from middleware. 
 - Functional programming preferred over classes
 - Snake_case for files/directories
 
@@ -118,8 +161,6 @@ frontend/streamlit_app/
 - Never echo/update .env files
 
 ## Testing
-
-### Test Structure
 ```bash
 backend/tests/
 ├── integration/             # Full pipeline tests
@@ -130,15 +171,15 @@ backend/tests/
 ```
 
 ### Running Tests
-- Integration tests: `python run_tests.py` (custom runner)
-- Specific tests: `pytest tests/integration/test_*.py`
+- All tests: `pytest tests/` (standard pytest runner)
+- Integration tests: `pytest tests/integration/`
+- Unit tests: `pytest tests/unit/v2/`
 - All tests use production database with proper isolation
+- Tests are organized by type: integration (full pipelines), unit (service/component tests)
 
 ## Configuration Files
 
 ### Pipeline Configuration
-- `indexing_config.yaml`: Document processing parameters
-- `query_config.yaml`: Query processing parameters
 - Environment variable substitution supported
 - Validation and optimization guides included
 
@@ -155,6 +196,54 @@ backend/tests/
 - **Database**: Supabase (managed PostgreSQL)
 - Health checks and monitoring configured
 - SSL/TLS enabled for all endpoints
+
+## API Endpoints
+
+### Authentication (`/api/auth`)
+- **POST** `/api/auth/signup` - Sign up new user
+- **POST** `/api/auth/signin` - Sign in existing user  
+- **POST** `/api/auth/signout` - Sign out current user
+- **POST** `/api/auth/reset-password` - Send password reset email
+- **GET** `/api/auth/me` - Get current user info (requires auth)
+- **POST** `/api/auth/refresh` - Refresh access token
+
+### Document Management (`/api`)
+- **POST** `/api/uploads` - Upload PDFs (max 10 files, 50MB each) - supports anonymous (email) or authenticated (project)
+- **GET** `/api/documents` - List documents with pagination and filtering
+- **GET** `/api/documents/{document_id}` - Get single document details
+
+### Indexing Pipeline (`/api`)
+- **GET** `/api/indexing-runs` - List indexing runs (paginated) - optional auth
+- **GET** `/api/indexing-runs/{run_id}` - Get single indexing run - optional auth
+- **GET** `/api/indexing-runs/{run_id}/progress` - Get detailed progress - optional auth
+- **POST** `/api/indexing-runs` - Create project-based indexing run (requires auth) - use `/api/uploads` for email uploads
+
+### Query System (`/api`)
+- **POST** `/api/queries` - Create and execute query (optional auth)
+- **GET** `/api/queries` - List previous queries (paginated)
+- **GET** `/api/queries/{query_id}` - Get specific query results
+
+### Project Management (`/api`)
+- **POST** `/api/projects` - Create project (requires auth)
+- **GET** `/api/projects` - List user projects (requires auth)
+- **GET** `/api/projects/{project_id}` - Get specific project
+- **PATCH** `/api/projects/{project_id}` - Update project
+- **DELETE** `/api/projects/{project_id}` - Delete project
+
+### Wiki Generation (`/api/wiki`)
+- **POST** `/api/wiki/runs` - Create wiki generation run
+- **GET** `/api/wiki/runs/{index_run_id}` - List wiki runs for indexing run
+- **GET** `/api/wiki/runs/{wiki_run_id}/pages` - Get wiki pages metadata
+- **GET** `/api/wiki/runs/{wiki_run_id}/pages/{page_name}` - Get wiki page content
+- **GET** `/api/wiki/runs/{wiki_run_id}/metadata` - Get wiki metadata
+- **DELETE** `/api/wiki/runs/{wiki_run_id}` - Delete wiki run
+- **GET** `/api/wiki/runs/{wiki_run_id}/status` - Get wiki run status
+
+### System Endpoints
+- **GET** `/` - API status message
+- **GET** `/health` - Health check for monitoring
+- **GET** `/api/health` - API-specific health check
+- **GET** `/api/debug/env` - Environment debug (development only)
 
 ## Important Notes
 
