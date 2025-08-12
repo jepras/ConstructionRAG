@@ -16,6 +16,19 @@ RUN npm ci
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+
+# DEBUG: Check what Railway can access
+RUN echo "=== DEBUGGING RAILWAY BUILD CONTEXT ==="
+RUN echo "Root directory contents:"
+RUN ls -la /
+RUN echo "Build context contents:"
+RUN ls -la .
+RUN echo "Looking for public directory:"
+RUN find . -name "public" -type d 2>/dev/null || echo "No public directory found"
+RUN echo "All directories in build context:"
+RUN find . -type d -maxdepth 2
+RUN echo "=== END DEBUG ==="
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -35,6 +48,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Create nextjs user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# DEBUG: Check what's available in runner stage for copying public
+RUN echo "=== DEBUGGING RUNNER STAGE ==="
+RUN echo "Current working directory:"
+RUN pwd
+RUN echo "Contents of current directory:"
+RUN ls -la .
+RUN echo "=== END RUNNER DEBUG ==="
 
 # Copy public assets directly from source (unchanged by build)
 COPY public ./public
