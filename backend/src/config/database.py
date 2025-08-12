@@ -1,9 +1,14 @@
-from supabase import create_client, Client
-from typing import Optional
 from src.config.settings import get_settings
+from supabase import Client, create_client
+
+try:
+    # Only imported when used inside FastAPI context
+    from fastapi import Header
+except Exception:
+    Header = None  # type: ignore[assignment]
 
 # Global Supabase client
-_supabase_client: Optional[Client] = None
+_supabase_client: Client | None = None
 
 
 def get_supabase_client() -> Client:
@@ -14,9 +19,7 @@ def get_supabase_client() -> Client:
         if not settings.supabase_url or not settings.supabase_anon_key:
             raise ValueError("Supabase URL and anon key are required")
 
-        _supabase_client = create_client(
-            settings.supabase_url, settings.supabase_anon_key
-        )
+        _supabase_client = create_client(settings.supabase_url, settings.supabase_anon_key)
     return _supabase_client
 
 
@@ -53,3 +56,41 @@ async def initialize_database():
     except Exception as e:
         print(f"Database initialization failed: {e}")
         return False
+
+
+# ---------- Request-scoped client helpers (RLS hygiene) ----------
+
+
+def get_anon_client() -> Client:
+    """Alias for anon client accessor for clarity in DI code."""
+    return get_supabase_client()
+
+
+def get_supabase_client_for_token(token: str | None) -> Client:
+    """Return an anon client authenticated with a bearer token when provided.
+
+    This enables per-request RLS-enforced access using the caller's auth context.
+    Falls back to anon when token is missing/invalid.
+    """
+    client = get_supabase_client()
+    try:
+        if token:
+            # Authenticate PostgREST with the user's JWT so RLS evaluates with auth.uid()
+            # supabase-py exposes postgrest.auth(token) for request-scoped auth
+            client.postgrest.auth(token)  # type: ignore[attr-defined]
+    except Exception:
+        # Non-fatal: keep anon client
+        pass
+    return client
+
+
+def get_db_client_for_request(authorization: str | None = Header(None)) -> Client:  # type: ignore[valid-type]
+    """FastAPI dependency to provide a request-scoped Supabase client.
+
+    - If Authorization: Bearer <token> is present, return a client authed with that token
+    - Else return anon client
+    """
+    token: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    return get_supabase_client_for_token(token)

@@ -193,22 +193,7 @@ class DocumentRetriever(PipelineStep):
                 logger.warning("No document chunks with embeddings found")
                 return []
 
-            # Use RPC call for vector similarity search
-            # This is the proper way to do pgvector similarity search in Supabase
-            search_query = f"""
-            SELECT 
-                id,
-                content,
-                metadata,
-                embedding_1024 <=> '{embedding_str}'::vector AS distance
-            FROM document_chunks 
-            WHERE embedding_1024 IS NOT NULL
-            ORDER BY embedding_1024 <=> '{embedding_str}'::vector
-            LIMIT {self.config.top_k * 2}
-            """
-
-            # Get all chunks and calculate similarity in Python
-            # (RPC function doesn't exist, so we use direct query)
+            # Get chunks and calculate similarity in Python under RLS client
             query = (
                 self.db.table("document_chunks")
                 .select("id,content,metadata,embedding_1024,document_id,indexing_run_id")

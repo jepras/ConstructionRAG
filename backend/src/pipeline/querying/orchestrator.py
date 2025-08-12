@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 class QueryPipelineOrchestrator:
     """Orchestrates the complete query pipeline from input to response"""
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None, db_client=None):
         if config is not None:
             self.config = config
         else:
@@ -94,12 +94,15 @@ class QueryPipelineOrchestrator:
                 },
             }
         self.settings = get_settings()
-        self.db = get_supabase_admin_client()
+        # Default to admin, but allow request-scoped client injection for RLS-aware reads
+        self.db = db_client or get_supabase_admin_client()
 
         # Initialize pipeline steps
         self.query_processor = QueryProcessor(QueryProcessingConfig(**self.config["query_processing"]))
         # Keep admin by default; retrieval step supports DI for future anon usage
-        self.retriever = DocumentRetriever(RetrievalConfig(self.config["retrieval"]))
+        self.retriever = DocumentRetriever(
+            RetrievalConfig(self.config["retrieval"]), db_client=self.db, use_admin=False
+        )
         self.generator = ResponseGenerator(GenerationConfig(**self.config["generation"]))
 
         # Progress tracking (simplified for query pipeline)

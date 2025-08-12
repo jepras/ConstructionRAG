@@ -14,7 +14,7 @@ from fastapi import (
 )
 from pydantic import BaseModel
 
-from src.config.database import get_supabase_admin_client
+from src.config.database import get_db_client_for_request, get_supabase_admin_client
 from src.middleware.request_id import get_request_id
 from src.models.pipeline import UploadType
 from src.services.auth_service import get_current_user_optional
@@ -27,6 +27,10 @@ from src.utils.exceptions import AppError, StorageError, ValidationError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Documents"])
+
+# Linter-friendly dependency placeholder
+DB_CLIENT_DEP = Depends(get_db_client_for_request)
+CURRENT_USER_OPT_DEP = Depends(get_current_user_optional)
 
 
 class DocumentListResponse(BaseModel):
@@ -59,10 +63,10 @@ class UploadCreateResponse(BaseModel):
 @router.post("/uploads", response_model=UploadCreateResponse)
 async def create_upload(
     background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...),
-    email: str | None = Form(None),
-    project_id: UUID | None = Form(None),
-    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+    files: list[UploadFile] = File(...),  # noqa: B008
+    email: str | None = Form(None),  # noqa: B008
+    project_id: UUID | None = Form(None),  # noqa: B008
+    current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
 ):
     """Create an upload for email (anonymous) or project (authenticated).
 
@@ -252,14 +256,15 @@ async def list_documents(
     index_run_id: UUID | None = None,
     limit: int = 20,
     offset: int = 0,
-    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+    current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
+    db_client=DB_CLIENT_DEP,
 ):
     """Flat list endpoint for documents.
 
     For now, requires `project_id` to scope results. Pagination via limit/offset.
     """
     try:
-        reader = DocumentReadService()
+        reader = DocumentReadService(client=db_client)
 
         # Anonymous listing by index_run_id (email uploads only)
         if not current_user and index_run_id is not None:
@@ -334,7 +339,8 @@ async def get_document(
     document_id: UUID,
     project_id: UUID | None = None,
     index_run_id: UUID | None = None,
-    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+    current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
+    db_client=DB_CLIENT_DEP,
 ):
     """Flat get endpoint for a single document.
 
@@ -343,7 +349,7 @@ async def get_document(
     - Anonymous + index_run_id (email uploads): allow access if the document belongs to the given email-indexing run.
     """
     try:
-        reader = DocumentReadService()
+        reader = DocumentReadService(client=db_client)
 
         if current_user and project_id is not None:
             document = reader.get_project_document(current_user["id"], str(project_id), str(document_id))

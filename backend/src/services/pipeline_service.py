@@ -1,42 +1,51 @@
 """Pipeline service for database operations related to pipeline steps."""
 
-import asyncio
-import json
-from typing import Dict, Any, Optional, List
-from uuid import UUID
-from datetime import datetime
 import logging
+from datetime import datetime
+from typing import Any
+from uuid import UUID
 
 from src.config.database import get_supabase_client
 from src.models.pipeline import (
-    StepResult,
+    EmailUpload,
     IndexingRun,
     IndexingRunCreate,
     IndexingRunUpdate,
-    UploadType,
     Project,
-    EmailUpload,
+    StepResult,
+    UploadType,
 )
 from src.utils.exceptions import DatabaseError
 
 logger = logging.getLogger(__name__)
 
+try:
+    # For type hints (optional import)
+    from supabase import Client as SupabaseClient  # type: ignore
+except Exception:  # pragma: no cover
+
+    class SupabaseClient:  # type: ignore
+        ...
+
 
 class PipelineService:
     """Service for managing pipeline operations in the database."""
 
-    def __init__(self, use_admin_client=False):
-        if use_admin_client:
-            from src.config.database import get_supabase_admin_client
-
-            self.supabase = get_supabase_admin_client()
+    def __init__(self, use_admin_client: bool = False, client: SupabaseClient | None = None):
+        if client is not None:
+            self.supabase = client
         else:
-            self.supabase = get_supabase_client()
+            if use_admin_client:
+                from src.config.database import get_supabase_admin_client
+
+                self.supabase = get_supabase_admin_client()
+            else:
+                self.supabase = get_supabase_client()
 
     async def create_indexing_run(
         self,
         upload_type: UploadType = UploadType.USER_PROJECT,
-        project_id: Optional[UUID] = None,
+        project_id: UUID | None = None,
     ) -> IndexingRun:
         """Create a new indexing run."""
         try:
@@ -93,11 +102,7 @@ class PipelineService:
                 print(f"📋 Document {document_id} already linked")
                 return True
 
-            result = (
-                self.supabase.table("indexing_run_documents")
-                .insert(data_dict)
-                .execute()
-            )
+            result = self.supabase.table("indexing_run_documents").insert(data_dict).execute()
 
             if not result.data:
                 raise DatabaseError("Failed to link document to indexing run")
@@ -108,16 +113,12 @@ class PipelineService:
             logger.error(f"Error linking document to indexing run: {e}")
             raise DatabaseError(f"Failed to link document to indexing run: {str(e)}")
 
-    async def create_project(
-        self, user_id: UUID, name: str, description: Optional[str] = None
-    ) -> Project:
+    async def create_project(self, user_id: UUID, name: str, description: str | None = None) -> Project:
         """Create a new project for a user."""
         try:
             from src.models.pipeline import Project, ProjectCreate
 
-            project_data = ProjectCreate(
-                user_id=user_id, name=name, description=description
-            )
+            project_data = ProjectCreate(user_id=user_id, name=name, description=description)
 
             # Convert UUIDs to strings for JSON serialization
             data_dict = project_data.model_dump()
@@ -135,15 +136,13 @@ class PipelineService:
             raise DatabaseError(f"Failed to create project: {str(e)}")
 
     async def create_email_upload(
-        self, upload_id: str, email: str, filename: str, file_size: Optional[int] = None
+        self, upload_id: str, email: str, filename: str, file_size: int | None = None
     ) -> EmailUpload:
         """Create a new email upload record."""
         try:
             from src.models.pipeline import EmailUpload, EmailUploadCreate
 
-            email_upload_data = EmailUploadCreate(
-                id=upload_id, email=email, filename=filename, file_size=file_size
-            )
+            email_upload_data = EmailUploadCreate(id=upload_id, email=email, filename=filename, file_size=file_size)
 
             data_dict = email_upload_data.model_dump()
 
@@ -162,8 +161,8 @@ class PipelineService:
         self,
         upload_id: str,
         status: str,
-        public_url: Optional[str] = None,
-        processing_results: Optional[Dict[str, Any]] = None,
+        public_url: str | None = None,
+        processing_results: dict[str, Any] | None = None,
     ) -> EmailUpload:
         """Update the status of an email upload."""
         try:
@@ -187,21 +186,12 @@ class PipelineService:
                 status=status,
                 public_url=public_url,
                 processing_results=processing_results,
-                completed_at=(
-                    datetime.utcnow().isoformat()
-                    if status in ["completed", "failed"]
-                    else None
-                ),
+                completed_at=(datetime.utcnow().isoformat() if status in ["completed", "failed"] else None),
             )
 
             data_dict = update_data.model_dump(exclude_unset=True)
 
-            result = (
-                self.supabase.table("email_uploads")
-                .update(data_dict)
-                .eq("id", upload_id)
-                .execute()
-            )
+            result = self.supabase.table("email_uploads").update(data_dict).eq("id", upload_id).execute()
 
             if not result.data:
                 raise DatabaseError("Failed to update email upload")
@@ -213,27 +203,20 @@ class PipelineService:
             raise DatabaseError(f"Failed to update email upload status: {str(e)}")
 
     async def update_indexing_run_status(
-        self, indexing_run_id: UUID, status: str, error_message: Optional[str] = None
+        self, indexing_run_id: UUID, status: str, error_message: str | None = None
     ) -> IndexingRun:
         """Update the status of an indexing run."""
         try:
             update_data = IndexingRunUpdate(
                 status=status,
                 error_message=error_message,
-                completed_at=(
-                    datetime.utcnow() if status in ["completed", "failed"] else None
-                ),
+                completed_at=(datetime.utcnow() if status in ["completed", "failed"] else None),
             )
 
             # Convert UUIDs to strings for JSON serialization
             data_dict = update_data.model_dump(exclude_unset=True, mode="json")
 
-            result = (
-                self.supabase.table("indexing_runs")
-                .update(data_dict)
-                .eq("id", str(indexing_run_id))
-                .execute()
-            )
+            result = self.supabase.table("indexing_runs").update(data_dict).eq("id", str(indexing_run_id)).execute()
 
             if not result.data:
                 raise DatabaseError("Failed to update indexing run")
@@ -262,17 +245,12 @@ class PipelineService:
             # Fallback: convert to string representation
             return {"error": f"Serialization failed: {str(e)}"}
 
-    async def store_step_result(
-        self, indexing_run_id: UUID, step_name: str, step_result: StepResult
-    ) -> bool:
+    async def store_step_result(self, indexing_run_id: UUID, step_name: str, step_result: StepResult) -> bool:
         """Store a step result in the indexing run's step_results JSONB field."""
         try:
             # First, get the current step_results
             result = (
-                self.supabase.table("indexing_runs")
-                .select("step_results")
-                .eq("id", str(indexing_run_id))
-                .execute()
+                self.supabase.table("indexing_runs").select("step_results").eq("id", str(indexing_run_id)).execute()
             )
 
             if not result.data:
@@ -294,25 +272,18 @@ class PipelineService:
             if not update_result.data:
                 raise DatabaseError("Failed to store step result")
 
-            logger.info(
-                f"Stored step result for {step_name} in indexing run {indexing_run_id}"
-            )
+            logger.info(f"Stored step result for {step_name} in indexing run {indexing_run_id}")
             return True
 
         except Exception as e:
             logger.error(f"Error storing step result: {e}")
             raise DatabaseError(f"Failed to store step result: {str(e)}")
 
-    async def get_step_result(
-        self, indexing_run_id: UUID, step_name: str
-    ) -> Optional[StepResult]:
+    async def get_step_result(self, indexing_run_id: UUID, step_name: str) -> StepResult | None:
         """Get a specific step result from an indexing run."""
         try:
             result = (
-                self.supabase.table("indexing_runs")
-                .select("step_results")
-                .eq("id", str(indexing_run_id))
-                .execute()
+                self.supabase.table("indexing_runs").select("step_results").eq("id", str(indexing_run_id)).execute()
             )
 
             if not result.data:
@@ -330,18 +301,11 @@ class PipelineService:
             logger.error(f"Error getting step result: {e}")
             raise DatabaseError(f"Failed to get step result: {str(e)}")
 
-    async def store_document_step_result(
-        self, document_id: UUID, step_name: str, step_result: StepResult
-    ) -> bool:
+    async def store_document_step_result(self, document_id: UUID, step_name: str, step_result: StepResult) -> bool:
         """Store a step result in the document's step_results JSONB field."""
         try:
             # First, get the current step_results
-            result = (
-                self.supabase.table("documents")
-                .select("step_results")
-                .eq("id", str(document_id))
-                .execute()
-            )
+            result = self.supabase.table("documents").select("step_results").eq("id", str(document_id)).execute()
 
             if not result.data:
                 raise DatabaseError("Document not found")
@@ -390,17 +354,10 @@ class PipelineService:
             logger.error(f"Error storing document step result: {e}")
             raise DatabaseError(f"Failed to store document step result: {str(e)}")
 
-    async def get_document_step_result(
-        self, document_id: UUID, step_name: str
-    ) -> Optional[StepResult]:
+    async def get_document_step_result(self, document_id: UUID, step_name: str) -> StepResult | None:
         """Get a specific step result from a document's step_results field."""
         try:
-            result = (
-                self.supabase.table("documents")
-                .select("step_results")
-                .eq("id", str(document_id))
-                .execute()
-            )
+            result = self.supabase.table("documents").select("step_results").eq("id", str(document_id)).execute()
 
             if not result.data:
                 return None
@@ -417,41 +374,26 @@ class PipelineService:
             logger.error(f"Error getting document step result: {e}")
             raise DatabaseError(f"Failed to get document step result: {str(e)}")
 
-    async def get_document_step_results(
-        self, document_id: UUID
-    ) -> Dict[str, StepResult]:
+    async def get_document_step_results(self, document_id: UUID) -> dict[str, StepResult]:
         """Get all step results for a document."""
         try:
-            result = (
-                self.supabase.table("documents")
-                .select("step_results")
-                .eq("id", str(document_id))
-                .execute()
-            )
+            result = self.supabase.table("documents").select("step_results").eq("id", str(document_id)).execute()
 
             if not result.data:
                 return {}
 
             step_results = result.data[0].get("step_results", {})
 
-            return {
-                step_name: StepResult(**step_data)
-                for step_name, step_data in step_results.items()
-            }
+            return {step_name: StepResult(**step_data) for step_name, step_data in step_results.items()}
 
         except Exception as e:
             logger.error(f"Error getting document step results: {e}")
             raise DatabaseError(f"Failed to get document step results: {str(e)}")
 
-    async def get_indexing_run(self, indexing_run_id: UUID) -> Optional[IndexingRun]:
+    async def get_indexing_run(self, indexing_run_id: UUID) -> IndexingRun | None:
         """Get a complete indexing run with all step results."""
         try:
-            result = (
-                self.supabase.table("indexing_runs")
-                .select("*")
-                .eq("id", str(indexing_run_id))
-                .execute()
-            )
+            result = self.supabase.table("indexing_runs").select("*").eq("id", str(indexing_run_id)).execute()
 
             if not result.data:
                 print(f"❌ No indexing run found for ID: {indexing_run_id}")
@@ -466,7 +408,7 @@ class PipelineService:
             print(f"❌ Error getting indexing run: {e}")
             raise DatabaseError(f"Failed to get indexing run: {str(e)}")
 
-    async def get_document_indexing_runs(self, document_id: UUID) -> List[IndexingRun]:
+    async def get_document_indexing_runs(self, document_id: UUID) -> list[IndexingRun]:
         """Get all indexing runs for a document."""
         try:
             result = (
@@ -483,9 +425,7 @@ class PipelineService:
             logger.error(f"Error getting document indexing runs: {e}")
             raise DatabaseError(f"Failed to get document indexing runs: {str(e)}")
 
-    async def get_latest_successful_indexing_run(
-        self, document_id: UUID
-    ) -> Optional[IndexingRun]:
+    async def get_latest_successful_indexing_run(self, document_id: UUID) -> IndexingRun | None:
         """Get the latest successful indexing run for a document."""
         try:
             result = (
@@ -505,37 +445,26 @@ class PipelineService:
 
         except Exception as e:
             logger.error(f"Error getting latest successful indexing run: {e}")
-            raise DatabaseError(
-                f"Failed to get latest successful indexing run: {str(e)}"
-            )
+            raise DatabaseError(f"Failed to get latest successful indexing run: {str(e)}")
 
-    async def get_all_indexing_runs(self) -> List[IndexingRun]:
+    async def get_all_indexing_runs(self) -> list[IndexingRun]:
         """Get all indexing runs, sorted by latest first."""
         logger.info("🔍 Getting all indexing runs from database...")
 
         try:
-            result = (
-                self.supabase.table("indexing_runs")
-                .select("*")
-                .order("started_at", desc=True)
-                .execute()
-            )
+            result = self.supabase.table("indexing_runs").select("*").order("started_at", desc=True).execute()
 
             logger.info(f"📊 Raw database result: {result.data}")
-            logger.info(
-                f"📊 Number of runs found: {len(result.data) if result.data else 0}"
-            )
+            logger.info(f"📊 Number of runs found: {len(result.data) if result.data else 0}")
 
             if result.data:
                 for i, run in enumerate(result.data):
                     logger.info(
-                        f"📊 Run {i+1}: ID={run.get('id')}, upload_type={run.get('upload_type')}, status={run.get('status')}"
+                        f"📊 Run {i + 1}: ID={run.get('id')}, upload_type={run.get('upload_type')}, status={run.get('status')}"
                     )
 
             indexing_runs = [IndexingRun(**run) for run in result.data]
-            logger.info(
-                f"✅ Successfully created {len(indexing_runs)} IndexingRun objects"
-            )
+            logger.info(f"✅ Successfully created {len(indexing_runs)} IndexingRun objects")
 
             return indexing_runs
 

@@ -11,7 +11,7 @@ try:
 except Exception:
     raise
 
-from ..config.database import get_supabase_client
+from ..config.database import get_db_client_for_request, get_supabase_client
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
 from ..services.pipeline_service import PipelineService
@@ -83,13 +83,14 @@ async def list_indexing_runs(
     limit: int = 20,
     offset: int = 0,
     current_user: dict[str, Any] = Depends(get_current_user),
+    db_client=Depends(get_db_client_for_request),
 ):
     """Flat list endpoint for indexing runs, scoped to user's projects.
 
     For now requires `project_id` to scope; later we can support multi-project list.
     """
     try:
-        reader = PipelineReadService()
+        reader = PipelineReadService(client=db_client)
         if project_id is None:
             # Fallback to recent runs across all user's projects
             runs = reader.list_recent_runs_for_user(current_user["id"], limit=min(limit, 50))
