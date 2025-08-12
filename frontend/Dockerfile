@@ -7,8 +7,8 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files from frontend directory
-COPY frontend/package.json frontend/package-lock.json ./
+# Copy package files (Railway sets build context to frontend/ directory)
+COPY package.json package-lock.json ./
 
 # Install all dependencies (including devDependencies for build)
 RUN npm ci
@@ -17,7 +17,7 @@ RUN npm ci
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/ .
+COPY . .
 
 # Disable telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
