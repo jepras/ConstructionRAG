@@ -123,26 +123,33 @@ class AuthService:
     async def get_current_user(self, access_token: str) -> dict[str, Any] | None:
         """Verify the access token with Supabase and return a minimal user dict."""
         try:
-            # Use Supabase Auth to verify and fetch the user
-            # supabase-py supports passing the access token directly
-            response = self.supabase_client.auth.get_user(access_token)
-            if not getattr(response, "user", None):
+            # Use admin client to verify the JWT token
+            # The get_user method with access_token parameter verifies the token
+            response = self.admin_client.auth.get_user(access_token)
+            
+            if not response or not response.user:
+                logger.warning("Failed to verify access token - no user returned")
                 return None
 
             user = response.user
-            user_id = getattr(user, "id", None) or user.get("id") if isinstance(user, dict) else None
-            email = getattr(user, "email", None) or user.get("email") if isinstance(user, dict) else None
+            user_id = user.id
+            email = user.email
+            
             if not user_id:
+                logger.warning("User ID missing from token response")
                 return None
 
             profile = await self._get_user_profile(user_id)
+            logger.info(f"Successfully authenticated user: {user_id}")
+            
             return {
                 "id": user_id,
                 "email": email,
                 "profile": profile,
             }
-        except Exception:
-            # On any verification error, treat as unauthenticated
+        except Exception as e:
+            # Log the specific error for debugging
+            logger.warning(f"Token verification failed: {str(e)}")
             return None
 
     async def refresh_token(self, refresh_token: str) -> dict[str, Any]:

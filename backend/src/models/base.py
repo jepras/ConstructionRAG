@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID
@@ -51,3 +52,13 @@ class BaseDocumentChunk(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict, description="Chunk metadata")
     page_number: int | None = Field(None, description="Source page number")
     section_title: str | None = Field(None, description="Section title if available")
+
+
+class BaseResponse(BaseModel):
+    """Minimal standardized API response base."""
+
+    status: str
+    message: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(from_attributes=True)

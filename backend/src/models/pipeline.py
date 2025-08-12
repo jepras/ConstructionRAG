@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.models.base import AccessLevel
 
@@ -76,8 +76,7 @@ class StepResult(BaseModel):
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: datetime | None = Field(None)
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat() if hasattr(v, "isoformat") else str(v)}
+    model_config = ConfigDict(ser_json_timedelta="iso8601")
 
 
 class WikiPageMetadata(BaseModel):
@@ -167,49 +166,50 @@ class WikiGenerationRun(BaseModel):
         """Get the number of pages in this wiki"""
         return len(self.pages_metadata)
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+    model_config = ConfigDict(from_attributes=True)
 
 
-class IndexingRun(BaseModel):
-    """Indexing pipeline run model matching the indexing_runs table"""
+class BasePipelineRun(BaseModel):
+    """Common fields/behavior for pipeline runs."""
 
-    id: UUID = Field(description="Indexing run unique identifier")
-    upload_type: UploadType = Field(UploadType.USER_PROJECT, description="Type of upload")
-    user_id: UUID | None = Field(None, description="Owner user ID (nullable for anonymous)")
-    access_level: AccessLevel = Field(default=AccessLevel.PRIVATE, description="Access control level")
-    project_id: UUID | None = Field(None, description="Project ID for user projects")
-    status: PipelineStatus = Field(PipelineStatus.PENDING, description="Indexing run status")
-    step_results: dict[str, StepResult] = Field(default_factory=dict, description="Detailed results from each step")
-    started_at: datetime = Field(default_factory=datetime.utcnow, description="Indexing start timestamp")
-    completed_at: datetime | None = Field(None, description="Indexing completion timestamp")
-    error_message: str | None = Field(None, description="Error message if indexing failed")
-    pipeline_config: dict[str, Any] | None = Field(None, description="Pipeline configuration used for this run")
+    id: UUID
+    status: PipelineStatus
+    started_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: datetime | None = None
+    error_message: str | None = None
 
-    # Computed properties for timing data
+    # Optional shared timings holder
+    step_results: dict[str, Any] | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
     @property
     def step_timings(self) -> dict[str, float]:
-        """Extract step timings from step_results"""
         if not self.step_results:
             return {}
-
-        timings = {}
+        timings: dict[str, float] = {}
         for step_name, step_result in self.step_results.items():
             if hasattr(step_result, "duration_seconds"):
-                timings[step_name] = step_result.duration_seconds
+                timings[step_name] = step_result.duration_seconds  # type: ignore[attr-defined]
             elif isinstance(step_result, dict) and "duration_seconds" in step_result:
-                timings[step_name] = step_result["duration_seconds"]
+                timings[step_name] = float(step_result["duration_seconds"])  # type: ignore[index]
         return timings
 
     @property
     def total_processing_time(self) -> float:
-        """Calculate total processing time across all steps"""
         return sum(self.step_timings.values())
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+
+class IndexingRun(BasePipelineRun):
+    """Indexing pipeline run model matching the indexing_runs table"""
+
+    upload_type: UploadType = Field(UploadType.USER_PROJECT, description="Type of upload")
+    user_id: UUID | None = Field(None, description="Owner user ID (nullable for anonymous)")
+    access_level: AccessLevel = Field(default=AccessLevel.PRIVATE, description="Access control level")
+    project_id: UUID | None = Field(None, description="Project ID for user projects")
+    step_results: dict[str, StepResult] = Field(default_factory=dict, description="Detailed results from each step")
+    pipeline_config: dict[str, Any] | None = Field(None, description="Pipeline configuration used for this run")
+    model_config = ConfigDict(from_attributes=True)
 
 
 class QueryRun(BaseModel):
@@ -226,9 +226,7 @@ class QueryRun(BaseModel):
     step_timings: dict[str, float] | None = Field(None, description="Individual step execution times in seconds")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Query creation timestamp")
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserConfigOverride(BaseModel):
@@ -241,9 +239,7 @@ class UserConfigOverride(BaseModel):
     config_value: dict[str, Any] = Field(description="Configuration value")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Legacy models for backward compatibility
@@ -333,12 +329,11 @@ class Project(BaseModel):
     user_id: UUID = Field(description="User ID from Supabase Auth")
     name: str = Field(description="Project name")
     description: str | None = Field(None, description="Project description")
+    access_level: AccessLevel = Field(default=AccessLevel.OWNER, description="Access control level for the project")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Project creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Project last update timestamp")
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailUpload(BaseModel):
@@ -358,9 +353,7 @@ class EmailUpload(BaseModel):
         description="Upload expiration timestamp",
     )
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectCreate(BaseModel):
@@ -369,6 +362,7 @@ class ProjectCreate(BaseModel):
     user_id: UUID
     name: str
     description: str | None = None
+    access_level: AccessLevel = AccessLevel.OWNER
 
 
 class ProjectUpdate(BaseModel):
@@ -376,6 +370,7 @@ class ProjectUpdate(BaseModel):
 
     name: str | None = None
     description: str | None = None
+    access_level: AccessLevel | None = None
 
 
 class EmailUploadCreate(BaseModel):
@@ -395,8 +390,7 @@ class EmailUploadUpdate(BaseModel):
     processing_results: dict[str, Any] | None = None
     completed_at: datetime | None = None
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
+    model_config = ConfigDict()
 
 
 class IndexingRunDocument(BaseModel):
@@ -407,9 +401,7 @@ class IndexingRunDocument(BaseModel):
     document_id: UUID = Field(description="Document ID")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        from_attributes = True
-        json_encoders = {datetime: lambda v: v.isoformat(), UUID: lambda v: str(v)}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IndexingRunDocumentCreate(BaseModel):
