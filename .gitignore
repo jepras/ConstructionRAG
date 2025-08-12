@@ -61,7 +61,6 @@ cover/
 *.bmp
 *.tiff
 *.tif
-*.svg
 *.webp
 *.ico
 *.raw

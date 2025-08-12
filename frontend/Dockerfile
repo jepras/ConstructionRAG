@@ -17,18 +17,19 @@ RUN npm ci
 FROM base AS builder
 WORKDIR /app
 
-# DEBUG: Check what Railway can access (force output with stderr redirect)
-RUN echo "=== DEBUGGING RAILWAY BUILD CONTEXT ===" >&2
-RUN echo "Build context contents:" >&2 && ls -la . >&2
-RUN echo "Looking for public directory:" >&2 && (find . -name "public" -type d 2>&1 || echo "No public directory found") >&2
-RUN echo "All directories in build context:" >&2 && find . -type d -maxdepth 2 >&2
+# DEBUG: Check what Railway can access (force output with cache busting)
+ARG CACHEBUST=1
+RUN echo "=== DEBUGGING RAILWAY BUILD CONTEXT BUST${CACHEBUST} ===" >&2
+RUN echo "Build context contents:" >&2 && ls -la . >&2 && echo "CACHE_BUST_A${CACHEBUST}" >&2
+RUN echo "Looking for public directory:" >&2 && (find . -name "public" -type d 2>&1 || echo "No public directory found") >&2 && echo "CACHE_BUST_B${CACHEBUST}" >&2
+RUN echo "All directories in build context:" >&2 && find . -type d -maxdepth 2 >&2 && echo "CACHE_BUST_C${CACHEBUST}" >&2
 RUN echo "=== END DEBUG ===" >&2
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # DEBUG: Check if public directory exists after COPY . .
-RUN echo "After COPY . . check:" >&2 && ls -la . >&2 && ls -la public >&2 || echo "No public dir after copy" >&2
+RUN echo "After COPY . . check:" >&2 && ls -la . >&2 && ls -la public >&2 || echo "No public dir after copy" >&2 && echo "CACHE_BUST_D${CACHEBUST}" >&2
 
 # Disable telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -48,10 +49,10 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # DEBUG: Check what's available in runner stage for copying public
-RUN echo "=== DEBUGGING RUNNER STAGE ===" >&2
-RUN echo "Current working directory:" >&2 && pwd >&2  
-RUN echo "Contents of current directory:" >&2 && ls -la . >&2
-RUN echo "Builder stage public check:" >&2 && ls -la /app/public >&2 || echo "No /app/public in builder stage" >&2
+RUN echo "=== DEBUGGING RUNNER STAGE BUST${CACHEBUST} ===" >&2
+RUN echo "Current working directory:" >&2 && pwd >&2 && echo "CACHE_BUST_E${CACHEBUST}" >&2
+RUN echo "Contents of current directory:" >&2 && ls -la . >&2 && echo "CACHE_BUST_F${CACHEBUST}" >&2
+RUN echo "Builder stage public check:" >&2 && ls -la /app/public >&2 || echo "No /app/public in builder stage" >&2 && echo "CACHE_BUST_G${CACHEBUST}" >&2
 RUN echo "=== END RUNNER DEBUG ===" >&2
 
 # Copy public assets directly from source (unchanged by build)
