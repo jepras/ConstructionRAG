@@ -110,7 +110,6 @@ class DocumentService:
             "upload_type": "user_project",
             "project_id": str(project_id),
             "index_run_id": index_run_id,
-            "upload_id": str(uuid4()),
             "access_level": "private",
         }
         try:
@@ -119,7 +118,7 @@ class DocumentService:
             raise
         except Exception as exc:  # noqa: BLE001
             self.logger.error("create document failed", error=str(exc))
-            raise DatabaseError("Failed to create document record")
+            raise DatabaseError("Failed to create document record") from exc
 
         # Create temp file for upload
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
