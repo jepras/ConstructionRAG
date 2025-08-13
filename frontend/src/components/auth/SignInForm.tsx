@@ -40,6 +40,25 @@ export function SignInForm() {
     }
   }
 
+  const handleDevSignIn = async () => {
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const result = await signIn('jeprasher@gmail.com', 'Test123!')
+      
+      if (result.success) {
+        router.push(redirectTo)
+      } else {
+        setError(result.error || 'Dev sign in failed')
+      }
+    } catch {
+      setError('An unexpected error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md bg-card border-border">
@@ -95,6 +114,18 @@ export function SignInForm() {
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
+            
+            {/* Development Sign In Button */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleDevSignIn}
+              disabled={isLoading}
+            >
+              🚀 Dev Sign In (jeprasher@gmail.com)
+            </Button>
+            
             <div className="text-center space-y-2">
               <Link
                 href="/auth/reset-password"
