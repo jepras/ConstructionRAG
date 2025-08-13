@@ -1,27 +1,42 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 interface HeaderProps {
   variant: "marketing" | "app";
 }
 
 export function Header({ variant }: HeaderProps) {
+  const { user, isAuthenticated, signOut } = useAuth();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      // Redirect to homepage after successful sign out
+      router.push('/')
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
+
   if (variant === "marketing") {
     return (
-      <header className="border-b border-supabase-border bg-supabase-dark">
+      <header className="border-b border-border bg-background">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="text-xl font-bold text-supabase-text-light">
+          <Link href="/" className="text-xl font-bold text-foreground">
             ConstructionRAG
           </Link>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
-            <Link 
-              href="/projects" 
-              className="text-supabase-text hover:text-supabase-text-light transition-colors"
+            <Link
+              href="/projects"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Public Projects
             </Link>
@@ -29,7 +44,7 @@ export function Header({ variant }: HeaderProps) {
               <Button variant="secondary" size="sm">
                 Upload Project
               </Button>
-              <span className="bg-supabase-green text-white text-xs px-2 py-1 rounded">
+              <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
                 free
               </span>
             </div>
@@ -37,20 +52,35 @@ export function Header({ variant }: HeaderProps) {
 
           {/* Auth Buttons */}
           <div className="flex items-center space-x-3">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="sm">
-                Log In
-              </Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button variant="default" size="sm">
-                Sign Up
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <>
+                <Link href="/dashboard">
+                  <Button variant="ghost" size="sm">
+                    Dashboard
+                  </Button>
+                </Link>
+                <Button variant="secondary" size="sm" onClick={handleSignOut}>
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/auth/signin">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/auth/signup">
+                  <Button variant="default" size="sm">
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button - TODO: implement mobile menu */}
-          <button className="md:hidden text-supabase-text-light">
+          <button className="md:hidden text-foreground">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
@@ -62,10 +92,10 @@ export function Header({ variant }: HeaderProps) {
 
   // App variant
   return (
-    <header className="border-b border-supabase-border bg-supabase-dark">
+    <header className="border-b border-border bg-background">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/dashboard" className="text-xl font-bold text-supabase-text-light">
+        <Link href="/dashboard" className="text-xl font-bold text-foreground">
           ConstructionRAG
         </Link>
 
@@ -83,16 +113,15 @@ export function Header({ variant }: HeaderProps) {
 
         {/* User Avatar */}
         <div className="flex items-center space-x-3">
-          <Link href="/settings">
-            <Button variant="ghost" size="sm">
-              Settings
-            </Button>
-          </Link>
-          <Link href="/settings">
-            <div className="w-8 h-8 bg-supabase-green rounded-full flex items-center justify-center text-white font-semibold cursor-pointer">
-              U
-            </div>
-          </Link>
+          <span className="text-muted-foreground text-sm">
+            {user?.email}
+          </span>
+          <Button variant="ghost" size="sm" onClick={handleSignOut}>
+            Sign Out
+          </Button>
+          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold">
+            {user?.email?.[0]?.toUpperCase() || 'U'}
+          </div>
         </div>
       </div>
     </header>

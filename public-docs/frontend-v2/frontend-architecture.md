@@ -77,7 +77,7 @@ interface AppState {
 ```
 app/
 ├── layout.tsx                    # Root layout with providers
-├── globals.css                   # Global styles with Supabase color system
+├── globals.css                   # Global styles with CSS variables color system
 ├── (marketing)/                  # Route group for public pages
 │   ├── layout.tsx               # Marketing layout with footer
 │   ├── page.tsx                 # Landing page (//)
@@ -187,7 +187,7 @@ components/
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-supabase-dark text-supabase-text font-sans antialiased">
+      <body className="bg-background text-foreground font-sans antialiased">
         <QueryProvider>
           <AuthProvider>
             <ToastProvider>
@@ -446,54 +446,66 @@ module.exports = {
 
 ## Styling System
 
-### Supabase-Inspired Color System
+### CSS Variables Color System
 
 ```css
-/* globals.css - Tailwind CSS custom colors */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* globals.css - Standard Tailwind CSS with CSS variables */
+@import "tailwindcss";
 
-@layer base {
-  :root {
-    --supabase-dark: #181818;
-    --supabase-dark-2: #232323;
-    --supabase-dark-3: #2a2a2a;
-    --supabase-border: #333333;
-    --supabase-text: #a8a8a8;
-    --supabase-text-light: #e0e0e0;
-    --supabase-green: #24b47e;
-    --supabase-green-hover: #1a9a6a;
-  }
+:root {
+  --radius: 0.65rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.705 0.213 47.604);  /* Orange theme color */
+  --primary-foreground: oklch(0.98 0.016 73.684);
+  --secondary: oklch(0.967 0.001 286.375);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.705 0.213 47.604);
 }
 
-@layer utilities {
-  .animate-fade-in {
-    @apply animate-in fade-in duration-500;
-  }
-  
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
-  }
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.646 0.222 41.116);  /* Orange theme color */
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
 }
 ```
 
-### Component Styling Patterns
+### Component Styling Guidelines
+
+**Use Standard Tailwind Color Classes:**
+- `bg-background` - Main app background
+- `bg-card` - Card/modal backgrounds  
+- `bg-primary` - Primary orange accent color
+- `text-foreground` - Main text color
+- `text-muted-foreground` - Secondary/muted text
+- `border-border` - Standard borders
+- `bg-input` - Form input backgrounds
 
 ```typescript
-// Consistent component styling
+// Consistent component styling patterns
 const buttonVariants = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-supabase-green",
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring",
   {
     variants: {
       variant: {
-        default: "bg-supabase-green text-white hover:bg-supabase-green-hover",
-        secondary: "bg-supabase-dark-3 border border-supabase-border text-supabase-text-light hover:bg-supabase-dark hover:border-supabase-text",
-        ghost: "hover:bg-supabase-dark-3 hover:text-supabase-text-light",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        outline: "border border-border bg-background hover:bg-accent hover:text-accent-foreground",
       },
       size: {
         sm: "h-9 px-3",
-        md: "h-10 px-4 py-2",
+        md: "h-10 px-4 py-2", 
         lg: "h-11 px-8",
       },
     },
@@ -504,6 +516,13 @@ const buttonVariants = cva(
   }
 );
 ```
+
+**Styling Best Practices:**
+1. **Never use custom color classes** (e.g., `supabase-*`, `custom-*`)
+2. **Always use CSS variable-based classes** that map to your `globals.css`
+3. **Maintain consistent spacing** with standard Tailwind scale (`p-4`, `m-6`, etc.)
+4. **Use semantic color naming** (`primary`, `secondary`, `muted`) over specific colors
+5. **Test all components in both light and dark themes** to ensure proper contrast
 
 ## SEO & Meta Tag Strategy
 
@@ -616,7 +635,7 @@ export function ExpertLanguages({ supportedLanguages }: { supportedLanguages: st
       {supportedLanguages.map((lang) => (
         <span
           key={lang}
-          className="inline-flex items-center gap-1 text-xs bg-supabase-dark-3 px-2 py-1 rounded"
+          className="inline-flex items-center gap-1 text-xs bg-accent px-2 py-1 rounded"
           title={SUPPORTED_LANGUAGES[lang as keyof typeof SUPPORTED_LANGUAGES]?.name}
         >
           {SUPPORTED_LANGUAGES[lang as keyof typeof SUPPORTED_LANGUAGES]?.flag}

@@ -6,15 +6,15 @@ import { Input } from "@/components/ui/input";
 
 export function Footer() {
   return (
-    <footer className="border-t border-supabase-border bg-supabase-dark-2 mt-auto">
+    <footer className="border-t border-border bg-card mt-auto">
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand and Contact */}
           <div className="space-y-4">
-            <div className="text-xl font-bold text-supabase-text-light">
+            <div className="text-xl font-bold text-foreground">
               ConstructionRAG
             </div>
-            <div className="text-sm text-supabase-text space-y-1">
+            <div className="text-sm text-muted-foreground space-y-1">
               <p>Made in Copenhagen</p>
               <p>hello@constructionrag.com</p>
             </div>
@@ -22,14 +22,14 @@ export function Footer() {
 
           {/* Product Links */}
           <div>
-            <h3 className="font-semibold text-supabase-text-light mb-4 text-sm uppercase tracking-wide">
+            <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
               Product
             </h3>
             <div className="space-y-3 text-sm">
               <div>
                 <Link 
                   href="/projects" 
-                  className="text-supabase-text hover:text-supabase-text-light transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Public Projects
                 </Link>
@@ -37,7 +37,7 @@ export function Footer() {
               <div>
                 <Link 
                   href="/pricing" 
-                  className="text-supabase-text hover:text-supabase-text-light transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Pricing
                 </Link>
@@ -45,7 +45,7 @@ export function Footer() {
               <div>
                 <Link 
                   href="/upload" 
-                  className="text-supabase-text hover:text-supabase-text-light transition-colors"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Upload Project
                 </Link>
@@ -55,7 +55,7 @@ export function Footer() {
 
           {/* Email Signup */}
           <div>
-            <h3 className="font-semibold text-supabase-text-light mb-4 text-sm uppercase tracking-wide">
+            <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
               Sign up for Product Updates
             </h3>
             <div className="space-y-3">
@@ -71,7 +71,7 @@ export function Footer() {
                   </svg>
                 </Button>
               </div>
-              <p className="text-xs text-supabase-text">
+              <p className="text-xs text-muted-foreground">
                 No spam, just updates on new features and improvements.
               </p>
             </div>
@@ -79,8 +79,8 @@ export function Footer() {
         </div>
 
         {/* Copyright */}
-        <div className="border-t border-supabase-border mt-8 pt-4">
-          <p className="text-sm text-supabase-text text-center">
+        <div className="border-t border-border mt-8 pt-4">
+          <p className="text-sm text-muted-foreground text-center">
             © 2025 ConstructionRAG. All rights reserved.
           </p>
         </div>

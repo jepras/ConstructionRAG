@@ -41,10 +41,10 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-supabase-text-light mb-2">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
           Settings
         </h1>
-        <p className="text-supabase-text">
+        <p className="text-muted-foreground">
           Manage your account and workspace settings.
         </p>
       </div>
@@ -58,8 +58,8 @@ export default function SettingsPage() {
                 key={item.id}
                 className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-left transition-colors ${
                   item.active
-                    ? "bg-supabase-dark-3 text-supabase-text-light border border-supabase-border"
-                    : "text-supabase-text hover:text-supabase-text-light hover:bg-supabase-dark-3"
+                    ? "bg-accent text-accent-foreground border border-border"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
               >
                 {item.icon}
@@ -73,31 +73,31 @@ export default function SettingsPage() {
         <div className="flex-1">
           <Card>
             <CardHeader>
-              <CardTitle className="text-supabase-text-light">Profile Settings</CardTitle>
-              <p className="text-sm text-supabase-text">
+              <CardTitle className="text-foreground">Profile Settings</CardTitle>
+              <p className="text-sm text-muted-foreground">
                 Update your personal information.
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-supabase-text-light">
+                <label className="text-sm font-medium text-foreground">
                   Full Name
                 </label>
                 <Input 
                   type="text"
                   defaultValue="User"
-                  className="bg-supabase-dark-3"
+                  className="bg-input"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-supabase-text-light">
+                <label className="text-sm font-medium text-foreground">
                   Email Address
                 </label>
                 <Input 
                   type="email"
                   defaultValue="user@example.com"
-                  className="bg-supabase-dark-3"
+                  className="bg-input"
                 />
               </div>
 
