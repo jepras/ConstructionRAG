@@ -122,7 +122,6 @@ components/
 ├── layout/
 │   ├── Header.tsx              # Main navigation with auth state
 │   ├── Footer.tsx              # Marketing footer with email signup
-│   ├── Sidebar.tsx             # App sidebar navigation
 │   └── ProjectHeader.tsx       # Project-specific navigation with context
 ├── features/
 │   ├── landing/
@@ -203,39 +202,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-### Marketing Layout
-```typescript
-// app/(marketing)/layout.tsx
-export default function MarketingLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <Header showAuthButtons />
-      <main className="flex-1">
-        {children}
-      </main>
-      <Footer /> {/* Includes email signup and product links */}
-    </>
-  );
-}
-```
-
-### App Layout
-```typescript
-// app/(app)/layout.tsx
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header showProjectSelector />
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-```
 
 ### Project Layout
 ```typescript
@@ -448,37 +414,6 @@ module.exports = {
 
 ### CSS Variables Color System
 
-```css
-/* globals.css - Standard Tailwind CSS with CSS variables */
-@import "tailwindcss";
-
-:root {
-  --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.705 0.213 47.604);  /* Orange theme color */
-  --primary-foreground: oklch(0.98 0.016 73.684);
-  --secondary: oklch(0.967 0.001 286.375);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.213 47.604);
-}
-
-.dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --primary: oklch(0.646 0.222 41.116);  /* Orange theme color */
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-}
-```
 
 ### Component Styling Guidelines
 
@@ -603,48 +538,6 @@ export function ProjectStructuredData({ project }: { project: Project }) {
 }
 ```
 
-## Internationalization Support
-
-### Next.js i18n Configuration
-
-```typescript
-// next.config.js
-module.exports = {
-  i18n: {
-    locales: ['en', 'da', 'de', 'fr'],
-    defaultLocale: 'en',
-    localeDetection: false, // Manual locale switching
-  },
-};
-```
-
-### Expert Marketplace Language Support
-
-```typescript
-// components/features/experts/ExpertLanguages.tsx
-const SUPPORTED_LANGUAGES = {
-  en: { name: 'English', flag: '🇺🇸' },
-  da: { name: 'Danish', flag: '🇩🇰' },
-  de: { name: 'German', flag: '🇩🇪' },
-  fr: { name: 'French', flag: '🇫🇷' },
-} as const;
-
-export function ExpertLanguages({ supportedLanguages }: { supportedLanguages: string[] }) {
-  return (
-    <div className="flex gap-1">
-      {supportedLanguages.map((lang) => (
-        <span
-          key={lang}
-          className="inline-flex items-center gap-1 text-xs bg-accent px-2 py-1 rounded"
-          title={SUPPORTED_LANGUAGES[lang as keyof typeof SUPPORTED_LANGUAGES]?.name}
-        >
-          {SUPPORTED_LANGUAGES[lang as keyof typeof SUPPORTED_LANGUAGES]?.flag}
-        </span>
-      ))}
-    </div>
-  );
-}
-```
 
 ## Backend Integration
 
@@ -777,141 +670,7 @@ describe('ProjectCard', () => {
     expect(screen.getByText('2.4 MB')).toBeInTheDocument(); // size
   });
 });
-```
 
-### API Integration Testing
-```typescript
-// __tests__/api/projects.test.ts
-import { apiClient } from '../../lib/api-client';
-
-// Mock fetch globally
-global.fetch = jest.fn();
-
-describe('API Client - Projects', () => {
-  beforeEach(() => {
-    (fetch as jest.Mock).mockClear();
-  });
-
-  it('fetches indexing runs with correct parameters', async () => {
-    const mockResponse = {
-      data: [{ id: '123', status: 'completed' }],
-      pagination: { page: 1, totalPages: 1 },
-    };
-
-    (fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
-    });
-
-    const result = await apiClient.getIndexingRuns({
-      page: 1,
-      page_size: 10,
-      status: 'completed',
-    });
-
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/indexing-runs?page=1&page_size=10&status=completed'),
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-        }),
-      })
-    );
-
-    expect(result).toEqual(mockResponse);
-  });
-});
-```
-
-## Deployment Configuration
-
-### Next.js Configuration
-```typescript
-// next.config.js
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/supabase-js'],
-  },
-  images: {
-    domains: [
-      'your-supabase-url.supabase.co',
-      'avatars.githubusercontent.com',
-    ],
-    formats: ['image/webp', 'image/avif'],
-  },
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.BACKEND_API_URL}/api/:path*`,
-      },
-    ];
-  },
-  async headers() {
-    return [
-      {
-        source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Credentials', value: 'true' },
-          { key: 'Access-Control-Allow-Origin', value: '*' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS,PATCH' },
-        ],
-      },
-    ];
-  },
-};
-
-module.exports = nextConfig;
-```
-
-### Railway Deployment
-```dockerfile
-# Dockerfile
-FROM node:18-alpine AS base
-
-# Install dependencies only when needed
-FROM base AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Build the application
-RUN npm run build
-
-# Production image
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
-EXPOSE 3000
-
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
-
-CMD ["node", "server.js"]
-```
 
 ## Summary
 
