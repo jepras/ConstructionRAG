@@ -190,7 +190,8 @@ function WikiLoadingSkeleton() {
 
 export default async function ProjectPage({ params, searchParams }: ProjectPageProps) {
   const { slug } = await params;
-  const search = await searchParams;
+  // Safe searchParams access - handle case where they're not available during static generation
+  const search = searchParams ? await searchParams : {};
   const isClientNavigation = search?.client === 'true';
   
   // Use client-side progressive loading for in-app navigation
