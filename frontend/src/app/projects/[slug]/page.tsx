@@ -126,9 +126,9 @@ async function ProjectWikiContent({ slug }: { slug: string }) {
 
 function WikiLoadingSkeleton() {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-full">
       {/* Sidebar skeleton */}
-      <div className="hidden lg:block w-64 bg-background border-r border-border">
+      <div className="hidden lg:block w-64 border-r border-border">
         <div className="p-4 space-y-4">
           <Skeleton className="h-6 w-32" />
           <div className="space-y-2">
@@ -153,7 +153,7 @@ function WikiLoadingSkeleton() {
       </div>
       
       {/* TOC skeleton */}
-      <div className="hidden xl:block w-64 bg-background border-l border-border">
+      <div className="hidden xl:block w-64 border-l border-border">
         <div className="p-4 space-y-2">
           <Skeleton className="h-5 w-24" />
           <div className="space-y-1">
@@ -171,11 +171,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   const { slug } = await params;
   
   return (
-    <div className="min-h-screen bg-background">
-      <Suspense fallback={<WikiLoadingSkeleton />}>
-        <ProjectWikiContent slug={slug} />
-      </Suspense>
-    </div>
+    <Suspense fallback={<WikiLoadingSkeleton />}>
+      <ProjectWikiContent slug={slug} />
+    </Suspense>
   );
 }
 

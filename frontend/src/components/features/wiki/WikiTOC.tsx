@@ -86,12 +86,12 @@ export default function WikiTOC({ content }: WikiTOCProps) {
   };
 
   return (
-    <div className="w-64 bg-background border-l border-border h-full">
+    <div className="w-64 bg-card h-full">
       <div className="p-4 sticky top-0">
-        <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wide">
+        <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wide pt-6">
           On This Page
         </h3>
-        
+
         <nav className="space-y-1">
           {tocItems.map((item) => (
             <button
@@ -113,7 +113,7 @@ export default function WikiTOC({ content }: WikiTOCProps) {
             </button>
           ))}
         </nav>
-        
+
         {/* Scroll to top button */}
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}

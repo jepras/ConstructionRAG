@@ -8,11 +8,15 @@ export default async function IndexingPage({ params }: IndexingPageProps) {
   const { slug } = await params;
   
   return (
-    <div className="container mx-auto px-4 py-6">
-      <h1 className="text-3xl font-bold text-foreground mb-6">
-        Indexing - {slug}
-      </h1>
-      <div className="bg-card border border-border rounded-lg p-6">
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-foreground mb-2">Index</h1>
+        <p className="text-muted-foreground">
+          Monitor document processing progress and view indexing details.
+        </p>
+      </div>
+      
+      <div className="space-y-4">
         <p className="text-muted-foreground">
           Indexing progress and details for project {slug} will be implemented here.
         </p>

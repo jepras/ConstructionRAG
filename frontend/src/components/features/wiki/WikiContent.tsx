@@ -133,9 +133,9 @@ const components = {
 
   // Links
   a: ({ href, children, ...props }: any) => (
-    <a 
-      href={href} 
-      className="text-primary hover:text-primary/80 underline underline-offset-4" 
+    <a
+      href={href}
+      className="text-primary hover:text-primary/80 underline underline-offset-4"
       target={href?.startsWith('http') ? '_blank' : undefined}
       rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
       {...props}
@@ -158,11 +158,11 @@ const components = {
 
   // Images
   img: ({ src, alt, ...props }: any) => (
-    <img 
-      src={src} 
-      alt={alt} 
-      className="max-w-full h-auto rounded-lg border border-border my-4" 
-      {...props} 
+    <img
+      src={src}
+      alt={alt}
+      className="max-w-full h-auto rounded-lg border border-border my-4"
+      {...props}
     />
   ),
 };
@@ -171,8 +171,8 @@ export default function WikiContent({ content }: WikiContentProps) {
   return (
     <div className="max-w-none">
       {/* Page header */}
-      <div className="mb-8 pb-4 border-b border-border">
-        <h1 className="text-3xl font-bold text-foreground mb-2">
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">
           {content.title}
         </h1>
         {content.metadata && (

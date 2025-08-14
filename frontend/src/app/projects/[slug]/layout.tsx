@@ -14,14 +14,14 @@ interface ProjectLayoutProps {
 
 export default function ProjectLayout({ children, params }: ProjectLayoutProps) {
   const { isAuthenticated } = useAuth();
-  
+
   // Handle params properly in client component
   const [slug, setSlug] = React.useState<string>('');
-  
+
   React.useEffect(() => {
     params.then(({ slug }) => setSlug(slug));
   }, [params]);
-  
+
   // Extract project name from slug (everything before the UUID)
   const uuidRegex = /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const projectName = slug.replace(uuidRegex, '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -29,12 +29,16 @@ export default function ProjectLayout({ children, params }: ProjectLayoutProps) 
   return (
     <div className="min-h-screen bg-background">
       <Header variant={isAuthenticated ? "app" : "marketing"} />
-      <ProjectHeader 
-        projectSlug={slug} 
+      <ProjectHeader
+        projectSlug={slug}
         projectName={projectName || "Project"}
       />
       <main className="flex-1">
-        {children}
+        <div className="container mx-auto px-4 py-6">
+          <div className="bg-card border border-border rounded-lg shadow-sm min-h-[calc(100vh-200px)]">
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   );

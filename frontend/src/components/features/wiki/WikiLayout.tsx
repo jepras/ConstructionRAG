@@ -21,18 +21,19 @@ export default function WikiLayout({
   currentPage 
 }: WikiLayoutProps) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-full overflow-hidden rounded-lg">
       {/* Left sidebar - Navigation */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:flex">
         <WikiNavigation 
           pages={pages} 
           projectSlug={projectSlug}
           currentPage={currentPage}
         />
+        <div className="w-px bg-border"></div>
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 bg-card">
         <div className="max-w-4xl mx-auto px-6 py-8">
           {children}
         </div>
@@ -40,7 +41,8 @@ export default function WikiLayout({
 
       {/* Right sidebar - Table of Contents */}
       {content && (
-        <div className="hidden xl:block">
+        <div className="hidden xl:flex">
+          <div className="w-px bg-border"></div>
           <WikiTOC content={content} />
         </div>
       )}

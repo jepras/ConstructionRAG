@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { WikiPage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { ChevronRight, ChevronDown, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
 interface WikiNavigationProps {
@@ -23,10 +23,10 @@ interface NavigationItemProps {
 
 function NavigationItem({ page, projectSlug, isActive, isExpanded, onToggle, isFirstPage }: NavigationItemProps & { isFirstPage: boolean }) {
   const hasSubsections = page.sections && page.sections.length > 0;
-  
+
   // First page routes to base project URL, others to specific page URLs
   const pageUrl = isFirstPage ? `/projects/${projectSlug}` : `/projects/${projectSlug}/${page.name}`;
-  
+
   return (
     <div className="mb-1">
       {/* Main page link */}
@@ -34,16 +34,15 @@ function NavigationItem({ page, projectSlug, isActive, isExpanded, onToggle, isF
         <Link
           href={pageUrl}
           className={cn(
-            "flex-1 flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors",
+            "flex-1 px-3 py-2 text-sm rounded-md transition-colors",
             isActive
               ? "bg-primary/10 text-primary font-medium"
               : "text-foreground hover:bg-accent hover:text-accent-foreground"
           )}
         >
-          <FileText className="w-4 h-4 flex-shrink-0" />
-          <span className="truncate">{page.title}</span>
+          <span className="line-clamp-2 text-left block">{page.title}</span>
         </Link>
-        
+
         {/* Expand/collapse button for pages with subsections */}
         {hasSubsections && (
           <button
@@ -111,12 +110,12 @@ export default function WikiNavigation({ pages, projectSlug, currentPage }: Wiki
   })();
 
   return (
-    <div className="w-64 bg-background border-r border-border h-full">
+    <div className="w-64 bg-card h-full">
       <div className="p-4">
-        <h2 className="text-lg font-semibold text-foreground mb-4">
-          Documentation
+        <h2 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wide pt-6">
+          Sections
         </h2>
-        
+
         <nav className="space-y-1">
           {sortedPages.map((page, index) => (
             <NavigationItem
@@ -130,7 +129,7 @@ export default function WikiNavigation({ pages, projectSlug, currentPage }: Wiki
             />
           ))}
         </nav>
-        
+
         {pages.length === 0 && (
           <div className="text-sm text-muted-foreground py-4">
             No wiki pages available yet.
