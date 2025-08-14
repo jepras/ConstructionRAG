@@ -15,6 +15,8 @@ from ..config.database import get_db_client_for_request, get_supabase_client
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
 from ..services.pipeline_service import PipelineService
+from ..shared.errors import ErrorCode
+from ..utils.exceptions import AppError
 
 # Indexing orchestrator only available on Beam, not FastAPI
 try:
@@ -33,12 +35,6 @@ except Exception:
 
 try:
     from .auth import get_current_user
-except Exception:
-    raise
-
-try:
-    from ..shared.errors import ErrorCode
-    from ..utils.exceptions import AppError
 except Exception:
     raise
 

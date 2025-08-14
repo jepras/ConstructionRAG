@@ -203,8 +203,9 @@ async def create_upload(
         db.table("indexing_runs").insert(
             {
                 "id": index_run_id,
-                "upload_type": "user_project",
+                "upload_type": "user_project", 
                 "status": "pending",
+                "user_id": current_user["id"],
                 "project_id": str(project_id),
                 "access_level": "private",
             }
