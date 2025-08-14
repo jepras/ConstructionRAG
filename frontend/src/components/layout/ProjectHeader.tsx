@@ -52,11 +52,8 @@ export default function ProjectHeader({ projectSlug, projectName }: ProjectHeade
     <div className="bg-background">
       <div className="container mx-auto px-4">
         {/* Project title */}
-        <div className="py-6">
-          <h1 className="text-3xl font-bold text-foreground mb-2">{projectName}</h1>
-          <p className="text-muted-foreground">
-            Explore project documentation, ask questions, and manage settings
-          </p>
+        <div className="py-6 text-center">
+          <h1 className="text-3xl font-bold text-white">{projectName}</h1>
         </div>
 
         {/* Navigation tabs with controls */}

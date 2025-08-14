@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Important Claude rules
 - Make a plan before coding. Do not code until I have confirmed the plan looks good.
 - Do not use git commands unless explicitly told to 
-
+- Before implementing new use of frontend API calls, then make the API calls as curl commands to test they return what you expect them to return before implementing it in the code. 
 
 
 ## Core development philosophy

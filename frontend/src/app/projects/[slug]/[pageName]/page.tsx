@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { apiClient, WikiPage, type WikiPageContent } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
-import WikiContent from '@/components/features/wiki/WikiContent';
+import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
 import WikiLayoutSkeleton from '@/components/features/wiki/WikiLayoutSkeleton';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -81,7 +81,7 @@ async function WikiPageContent({
         content={pageContent.content}
         currentPage={pageName}
       >
-        <WikiContent content={pageContent} />
+        <LazyWikiContent content={pageContent} />
       </WikiLayout>
     );
   } catch (error) {

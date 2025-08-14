@@ -127,23 +127,23 @@
 ## Phase 6: Wiki System & Navigation
 
 ### Tasks
-- [ ] Create three-column wiki layout (nav, content, toc)
-- [ ] Implement table of contents generation
+- [x] Create three-column wiki layout (nav, content, toc)
+- [x] Implement table of contents generation
 - [x] Create interactive diagram components
-- [ ] Set up wiki section state management
+- [x] Set up wiki section state management
 
 ### Verification Tests
-- [ ] **Layout Test**: Three-column layout renders correctly on desktop
-- [ ] **Navigation Test**: Sidebar sections expand/collapse properly
-- [ ] **TOC Test**: Table of contents generates from markdown headings
-- [ ] **Responsive Test**: Wiki layout adapts properly on mobile
-- [ ] **State Test**: Active section highlighting works when scrolling
+- [x] **Layout Test**: Three-column layout renders correctly on desktop
+- [x] **Navigation Test**: Sidebar sections expand/collapse properly
+- [x] **TOC Test**: Table of contents generates from markdown headings
+- [x] **Responsive Test**: Wiki layout adapts properly on mobile
+- [x] **State Test**: Active section highlighting works when scrolling
 
 ---
 
 ## Phase 7: Full projects page working
-- [ ] Show indexing stages
-- [ ] Show settings. 
+- [ ] Show indexing stages (postponed for later)
+- [x] Show settings. 
 
 ## Phase 7.5 Authenticated flow working 
 - [ ] Frontpage for the app with documents & create new project button
@@ -266,3 +266,8 @@
 - Performance and quality gates met
 - Security review completed
 - Monitoring and analytics configured
+
+## Tasks for later
+
+- Create indexing page
+- Make configs actually overwrite configs

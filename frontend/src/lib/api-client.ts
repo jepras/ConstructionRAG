@@ -84,6 +84,94 @@ export interface WikiRun {
   completed_at?: string
 }
 
+// Pipeline Configuration interfaces (matching actual API structure)
+export interface PipelineConfig {
+  storage?: {
+    collection_prefix: string
+    validation_sample_size: number
+  }
+  chunking?: {
+    overlap: number
+    strategy: string
+    chunk_size: number
+    separators: string[]
+    max_chunk_size: number
+    min_chunk_size: number
+  }
+  metadata?: {
+    detect_sections: boolean
+    preserve_formatting: boolean
+    extract_page_structure: boolean
+  }
+  embedding?: {
+    model: string
+    provider: string
+    batch_size: number
+    dimensions: number
+    max_retries: number
+    retry_delay: number
+    timeout_seconds?: number
+    cost_tracking?: boolean
+    resume_capability?: boolean
+  }
+  partition?: {
+    hybrid_mode: boolean
+    ocr_strategy: string
+    ocr_languages: string[]
+    extract_images: boolean
+    extract_tables: boolean
+    max_image_size_mb: number
+    scanned_detection: {
+      sample_pages: number
+      text_threshold: number
+    }
+  }
+  enrichment?: {
+    add_context_headers?: boolean
+    merge_related_elements?: boolean
+    min_content_length?: number
+  }
+  generation?: {
+    model: string
+    max_tokens: number
+    temperature: number
+  }
+  retrieval?: {
+    method?: string
+    top_k?: number
+    similarity_threshold?: number
+    similarity_metric?: string
+  }
+  orchestration?: {
+    max_concurrent_documents?: number
+    step_timeout_minutes?: number
+    retry_attempts?: number
+    fail_fast?: boolean
+  }
+}
+
+export interface IndexingRunDocument {
+  id: string
+  filename: string
+  file_size: number
+  file_type?: string
+  upload_path?: string
+  created_at: string
+  upload_type: string
+}
+
+export interface IndexingRunWithConfig {
+  id: string
+  name: string
+  status: string
+  created_at: string
+  completed_at?: string
+  upload_type: 'email' | 'user_project'
+  access_level: 'public' | 'auth' | 'owner' | 'private'
+  pipeline_config?: PipelineConfig
+  documents?: IndexingRunDocument[]
+}
+
 export interface ProjectDetails {
   id: string
   name: string
@@ -313,6 +401,43 @@ export class ApiClient {
         tags: [`project-${projectId}`, 'indexing-runs']
       }
     })
+  }
+
+  async getIndexingRunWithConfig(slug: string): Promise<IndexingRunWithConfig> {
+    // Extract UUID from slug (format: "project-name-uuid")
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const match = slug.match(uuidRegex);
+    
+    if (!match) {
+      throw new Error(`Invalid project slug format: ${slug}`);
+    }
+    
+    const projectId = match[0];
+    return this.request<IndexingRunWithConfig>(`/api/indexing-runs/${projectId}`, {
+      next: {
+        revalidate: 3600, // 1 hour cache for indexing run details
+        tags: [`indexing-run-config-${projectId}`, 'indexing-runs']
+      }
+    })
+  }
+
+  async deleteIndexingRun(indexingRunId: string): Promise<{ success: boolean; message: string }> {
+    const headers = await this.getAuthHeaders()
+    return this.request<{ success: boolean; message: string }>(`/api/indexing-runs/${indexingRunId}`, {
+      method: 'DELETE',
+      headers,
+    })
+  }
+
+  async getIndexingRunDocuments(indexingRunId: string): Promise<IndexingRunDocument[]> {
+    const response = await this.request<{ documents: IndexingRunDocument[] }>(`/api/documents`, {
+      params: { index_run_id: indexingRunId },
+      next: {
+        revalidate: 3600, // 1 hour cache for documents
+        tags: [`documents-${indexingRunId}`, 'documents']
+      }
+    })
+    return response.documents || []
   }
 }
 

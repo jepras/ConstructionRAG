@@ -10,7 +10,7 @@ import {
   useProjectWikiContent,
 } from '@/hooks/useApiQueries';
 import WikiLayout from './WikiLayout';
-import WikiContent from './WikiContent';
+import LazyWikiContent from './LazyWikiContent';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectWikiClientProps {
@@ -207,7 +207,7 @@ export default function ProjectWikiClient({ slug, optimisticData }: ProjectWikiC
       content={firstPageContent?.content || ''}
       currentPage={firstPage?.name || ''}
     >
-      <WikiContent content={firstPageContent!} />
+      <LazyWikiContent content={firstPageContent!} />
     </WikiLayout>
   );
 }

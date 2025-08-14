@@ -1,0 +1,1 @@
+Act as a UI/UX expert, create a detailed design plan based on established principles (hierarchy, spacing, color theory), and then execute that plan using the provided TailwindCSS design system with absolute consistency.

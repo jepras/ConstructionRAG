@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { apiClient, WikiPage, WikiPageContent } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
-import WikiContent from '@/components/features/wiki/WikiContent';
+import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
 import ProjectWikiClient from '@/components/features/wiki/ProjectWikiClient';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -136,7 +136,7 @@ async function ProjectWikiContent({ slug }: { slug: string }) {
         content={firstPageContent.content}
         currentPage={firstPage.name}
       >
-        <WikiContent content={firstPageContent} />
+        <LazyWikiContent content={firstPageContent} />
       </WikiLayout>
     );
   } catch (error) {

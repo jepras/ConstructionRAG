@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { WikiPageContent } from '@/lib/api-client';
-import MermaidDiagram from './MermaidDiagram';
+import LazyMermaidDiagram from './LazyMermaidDiagram';
 
 interface WikiContentProps {
   content: WikiPageContent;
@@ -122,7 +122,7 @@ const components = {
 
     // Handle mermaid diagrams
     if (language === 'mermaid') {
-      return <MermaidDiagram>{children as string}</MermaidDiagram>;
+      return <LazyMermaidDiagram>{children as string}</LazyMermaidDiagram>;
     }
 
     // Regular code blocks

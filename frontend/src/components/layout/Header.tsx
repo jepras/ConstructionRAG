@@ -25,10 +25,10 @@ export function Header({ variant }: HeaderProps) {
 
   if (variant === "marketing") {
     return (
-      <header className="border-b border-border bg-background">
+      <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="text-xl font-bold text-foreground">
+          <Link href="/" className="text-xl font-bold text-white">
             ConstructionRAG
           </Link>
 
@@ -92,10 +92,10 @@ export function Header({ variant }: HeaderProps) {
 
   // App variant
   return (
-    <header className="border-b border-border bg-background">
+    <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/dashboard" className="text-xl font-bold text-foreground">
+        <Link href="/dashboard" className="text-xl font-bold text-white">
           ConstructionRAG
         </Link>
 
