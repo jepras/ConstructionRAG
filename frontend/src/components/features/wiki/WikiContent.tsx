@@ -10,39 +10,86 @@ interface WikiContentProps {
   content: WikiPageContent;
 }
 
+// Helper function to extract text from React children
+function extractTextFromChildren(children: any): string {
+  if (typeof children === 'string') {
+    return children;
+  }
+  if (Array.isArray(children)) {
+    return children.map(extractTextFromChildren).join('');
+  }
+  if (children?.props?.children) {
+    return extractTextFromChildren(children.props.children);
+  }
+  return '';
+}
+
+// Helper function to generate ID from heading text (matching WikiTOC logic)
+function generateHeadingId(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .trim();
+}
+
 // Custom components for markdown rendering
 const components = {
-  // Headings with consistent styling
-  h1: ({ children, ...props }: any) => (
-    <h1 className="text-3xl font-bold text-foreground mt-8 mb-4 first:mt-0" {...props}>
-      {children}
-    </h1>
-  ),
-  h2: ({ children, ...props }: any) => (
-    <h2 className="text-2xl font-semibold text-foreground mt-6 mb-3 border-b border-border pb-2" {...props}>
-      {children}
-    </h2>
-  ),
-  h3: ({ children, ...props }: any) => (
-    <h3 className="text-xl font-semibold text-foreground mt-5 mb-2" {...props}>
-      {children}
-    </h3>
-  ),
-  h4: ({ children, ...props }: any) => (
-    <h4 className="text-lg font-medium text-foreground mt-4 mb-2" {...props}>
-      {children}
-    </h4>
-  ),
-  h5: ({ children, ...props }: any) => (
-    <h5 className="text-base font-medium text-foreground mt-3 mb-2" {...props}>
-      {children}
-    </h5>
-  ),
-  h6: ({ children, ...props }: any) => (
-    <h6 className="text-sm font-medium text-foreground mt-3 mb-2" {...props}>
-      {children}
-    </h6>
-  ),
+  // Headings with consistent styling and IDs for anchor navigation
+  h1: ({ children, ...props }: any) => {
+    const text = extractTextFromChildren(children);
+    const id = generateHeadingId(text);
+    return (
+      <h1 id={id} className="text-3xl font-bold text-foreground mt-8 mb-4 first:mt-0" {...props}>
+        {children}
+      </h1>
+    );
+  },
+  h2: ({ children, ...props }: any) => {
+    const text = extractTextFromChildren(children);
+    const id = generateHeadingId(text);
+    return (
+      <h2 id={id} className="text-2xl font-semibold text-foreground mt-6 mb-3 border-b border-border pb-2" {...props}>
+        {children}
+      </h2>
+    );
+  },
+  h3: ({ children, ...props }: any) => {
+    const text = extractTextFromChildren(children);
+    const id = generateHeadingId(text);
+    return (
+      <h3 id={id} className="text-xl font-semibold text-foreground mt-5 mb-2" {...props}>
+        {children}
+      </h3>
+    );
+  },
+  h4: ({ children, ...props }: any) => {
+    const text = extractTextFromChildren(children);
+    const id = generateHeadingId(text);
+    return (
+      <h4 id={id} className="text-lg font-medium text-foreground mt-4 mb-2" {...props}>
+        {children}
+      </h4>
+    );
+  },
+  h5: ({ children, ...props }: any) => {
+    const text = extractTextFromChildren(children);
+    const id = generateHeadingId(text);
+    return (
+      <h5 id={id} className="text-base font-medium text-foreground mt-3 mb-2" {...props}>
+        {children}
+      </h5>
+    );
+  },
+  h6: ({ children, ...props }: any) => {
+    const text = extractTextFromChildren(children);
+    const id = generateHeadingId(text);
+    return (
+      <h6 id={id} className="text-sm font-medium text-foreground mt-3 mb-2" {...props}>
+        {children}
+      </h6>
+    );
+  },
 
   // Paragraphs
   p: ({ children, ...props }: any) => (
