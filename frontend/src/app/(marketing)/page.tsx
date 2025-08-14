@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Search, Upload, MessageSquare, Download, Info, Eye, ArrowUp, Mic } from "lucide-react";
+import Link from "next/link";
 
 export default function Home() {
   const [query, setQuery] = useState("");
@@ -177,9 +178,11 @@ export default function Home() {
             <Button className="px-8 py-3 text-lg">
               Upload Project
             </Button>
-            <Button variant="outline" className="px-8 py-3 text-lg">
-              Explore public projects
-            </Button>
+            <Link href="/projects">
+              <Button variant="outline" className="px-8 py-3 text-lg">
+                Explore public projects
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

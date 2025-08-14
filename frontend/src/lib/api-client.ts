@@ -117,6 +117,47 @@ export class ApiClient {
       body: JSON.stringify({ email }),
     })
   }
+
+  // Public Projects methods
+  async getPublicProjects(limit: number = 50, offset: number = 0): Promise<any[]> {
+    // Fetch indexing runs that are public (email uploads)
+    // No auth headers needed for anonymous access to public runs
+    return this.request<any[]>('/api/indexing-runs', {
+      params: {
+        limit,
+        offset,
+      }
+    })
+  }
+
+  async getProjectWikiStatus(indexingRunId: string): Promise<any> {
+    // Check if a wiki generation exists for an indexing run
+    return this.request<any>(`/api/wiki/runs/${indexingRunId}`, {
+      // No auth required for public wikis
+    })
+  }
+
+  async getPublicProjectsWithWikis(limit: number = 50): Promise<any[]> {
+    // Query Supabase directly for completed wiki generations with public access
+    // We don't need the indexing run data from the database since we have indexing_run_id
+    const supabase = createClient()
+    
+    const { data: wikiRuns, error } = await supabase
+      .from('wiki_generation_runs')
+      .select('*')
+      .eq('status', 'completed')
+      .eq('upload_type', 'email')
+      .eq('access_level', 'public')
+      .order('completed_at', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Error fetching wiki runs:', error)
+      return []
+    }
+
+    return wikiRuns || []
+  }
 }
 
 export const apiClient = new ApiClient()

@@ -82,14 +82,30 @@ async def list_indexing_runs(
     project_id: UUID | None = None,
     limit: int = 20,
     offset: int = 0,
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
     db_client=Depends(get_db_client_for_request),
 ):
-    """Flat list endpoint for indexing runs, scoped to user's projects.
-
-    For now requires `project_id` to scope; later we can support multi-project list.
+    """Flat list endpoint for indexing runs.
+    
+    - If authenticated: scoped to user's projects
+    - If anonymous: only shows email upload types (public access)
     """
     try:
+        db = get_supabase_client()
+        
+        if current_user is None:
+            # Anonymous access: only show email uploads
+            res = (
+                db.table("indexing_runs")
+                .select("id, upload_type, project_id, status, started_at, completed_at, error_message")
+                .eq("upload_type", "email")
+                .order("started_at", desc=True)
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
+            return list(res.data or [])
+        
+        # Authenticated user logic
         reader = PipelineReadService(client=db_client)
         if project_id is None:
             # Fallback to recent runs across all user's projects
@@ -97,7 +113,6 @@ async def list_indexing_runs(
             return runs
         # Filter by specific project
         # Simple select with ownership check similar to get_run_for_user
-        db = get_supabase_client()
         proj = (
             db.table("projects")
             .select("id")
