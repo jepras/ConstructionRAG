@@ -272,6 +272,23 @@ class WikiGenerationOrchestrator:
         upload_type: str,
     ) -> WikiGenerationRun:
         """Create a new wiki generation run record."""
+        
+        # Get the access_level from the parent indexing run
+        indexing_run_response = (
+            self.supabase.table("indexing_runs")
+            .select("access_level")
+            .eq("id", index_run_id)
+            .limit(1)
+            .execute()
+        )
+        
+        # Default to 'private' if we can't find the indexing run
+        access_level = "private"
+        if indexing_run_response.data:
+            access_level = indexing_run_response.data[0].get("access_level", "private")
+        
+        logger.info(f"Creating wiki run for indexing run {index_run_id} with access_level: {access_level}")
+        
         wiki_run_data = WikiGenerationRunCreate(
             indexing_run_id=index_run_id,
             upload_type=upload_type,
@@ -288,6 +305,9 @@ class WikiGenerationOrchestrator:
             data_dict["project_id"] = str(data_dict["project_id"])
         if data_dict.get("indexing_run_id"):
             data_dict["indexing_run_id"] = str(data_dict["indexing_run_id"])
+        
+        # Set the inherited access_level
+        data_dict["access_level"] = access_level
 
         response = self.supabase.table("wiki_generation_runs").insert(data_dict).execute()
 

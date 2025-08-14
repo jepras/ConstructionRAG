@@ -18,86 +18,7 @@ function formatFileSize(bytes: number): string {
   return `${Math.round((bytes / Math.pow(k, i)) * 10) / 10} ${sizes[i]}`;
 }
 
-// Mock data for development
-const mockProjects: Project[] = [
-  {
-    id: '1',
-    name: 'Meridian Heights Development',
-    description: 'A 42-story mixed-use development with residential and commercial spaces in downtown area.',
-    stats: {
-      documents: 5,
-      wikiPages: 28,
-      totalSize: '1.2 GB'
-    },
-    slug: 'meridian-heights-development-1'
-  },
-  {
-    id: '2',
-    name: 'City General Hospital Wing',
-    description: 'Expansion project adding a new patient care wing and emergency department facilities.',
-    stats: {
-      documents: 12,
-      wikiPages: 75,
-      totalSize: '2.4 GB'
-    },
-    slug: 'city-general-hospital-wing-2'
-  },
-  {
-    id: '3',
-    name: 'Northwater Bridge Replacement',
-    description: 'Seismic retrofit and replacement of a major transportation corridor bridge.',
-    stats: {
-      documents: 8,
-      wikiPages: 41,
-      totalSize: '980 MB'
-    },
-    slug: 'northwater-bridge-replacement-3'
-  },
-  {
-    id: '4',
-    name: 'Suburban Mall Extension',
-    description: 'Addition of a new 50,000 sq. ft. two-story extension and food court.',
-    stats: {
-      documents: 3,
-      wikiPages: 15,
-      totalSize: '450 MB'
-    },
-    slug: 'suburban-mall-extension-4'
-  },
-  {
-    id: '5',
-    name: 'Heerup Skole Sikring',
-    description: 'Security and access control system upgrade for an educational facility.',
-    stats: {
-      documents: 2,
-      wikiPages: 9,
-      totalSize: '180 MB'
-    },
-    slug: 'heerup-skole-sikring-5'
-  },
-  {
-    id: '6',
-    name: 'Downtown Tower Renovation',
-    description: 'Complete facade and MEP systems overhaul for a 30-year-old high-rise.',
-    stats: {
-      documents: 21,
-      wikiPages: 110,
-      totalSize: '3.1 GB'
-    },
-    slug: 'downtown-tower-renovation-6'
-  },
-  {
-    id: '7',
-    name: 'Metro Line 3 Tunneling',
-    description: 'Geotechnical and structural plans for a new underground transit line.',
-    stats: {
-      documents: 15,
-      wikiPages: 55,
-      totalSize: '1.9 GB'
-    },
-    slug: 'metro-line-3-tunneling-7'
-  }
-];
+// Mock data removed - using real API data only
 
 export default function ProjectGrid() {
   const { data: wikiRuns, isLoading, error } = usePublicProjectsWithWikis(5);
@@ -109,20 +30,23 @@ export default function ProjectGrid() {
         
         const wikiStructure = wikiRun.wiki_structure || {};
         const pagesMetadata = wikiRun.pages_metadata || [];
+        
+        console.log(`📝 Wiki structure title: "${wikiStructure.title || 'NOT FOUND'}"`);
+        console.log(`📄 Pages metadata count: ${pagesMetadata.length}`);
 
         return {
           id: wikiRun.id, // Use wiki run ID instead of indexing_run_id to ensure uniqueness
-          name: wikiStructure.title || `Project ${index + 1}`,
+          name: wikiStructure.title || 'Name not found',
           description: wikiStructure.description || 'Construction project documentation',
           stats: {
             documents: 1, // Assume at least 1 document if wiki was generated
             wikiPages: pagesMetadata.length || 0,
             totalSize: formatFileSize(getTotalSize(pagesMetadata))
           },
-          slug: `${(wikiStructure.title || `project-${index + 1}`).toLowerCase().replace(/\s+/g, '-')}-${wikiRun.indexing_run_id}`
+          slug: `${(wikiStructure.title || 'name-not-found').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${wikiRun.indexing_run_id}`
         };
       })
-    : mockProjects.slice(0, 5); // Fallback to mock data
+    : []; // No fallback - show empty state if no real data
 
   if (isLoading) {
     return (
@@ -137,9 +61,29 @@ export default function ProjectGrid() {
 
   if (error) {
     console.error('❌ Failed to fetch projects:', error);
-    console.log('📋 Using mock data as fallback');
-    // Don't show error to user since we have fallback data
-    // Still render projects with mock data
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground mb-4">
+          Unable to load projects at the moment.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Please try again later.
+        </p>
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground mb-4">
+          No public projects with wikis available yet.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Upload your first project to get started!
+        </p>
+      </div>
+    );
   }
 
   return (

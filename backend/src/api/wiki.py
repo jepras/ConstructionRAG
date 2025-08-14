@@ -313,6 +313,9 @@ async def get_wiki_page_content(
         }
 
     except HTTPException as exc:
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+        
         status = getattr(exc, "status_code", 500)
         code = (
             ErrorCode.NOT_FOUND
@@ -323,6 +326,9 @@ async def get_wiki_page_content(
         )
         raise AppError(str(getattr(exc, "detail", "Failed to get wiki page content")), error_code=code) from exc
     except Exception as e:
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+        
         logger.error(f"Failed to get wiki page content: {e}")
         raise AppError("Failed to get wiki page content", error_code=ErrorCode.INTERNAL_ERROR) from e
 

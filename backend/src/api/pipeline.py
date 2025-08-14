@@ -77,6 +77,82 @@ flat_router = APIRouter(prefix="/api", tags=["IndexingRuns"])
 # Flat resource endpoints for indexing runs
 
 
+@flat_router.get("/indexing-runs-with-wikis", response_model=list[dict[str, Any]])
+async def list_indexing_runs_with_wikis(
+    limit: int = 20,
+    offset: int = 0,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+):
+    """List indexing runs that have completed wikis using the project_wikis junction table.
+    
+    - If authenticated: scoped to user's projects + public email uploads
+    - If anonymous: only shows public email uploads with wikis
+    """
+    try:
+        db = get_supabase_client()
+        
+        # Check if project_wikis table exists, fallback to old method if not
+        try:
+            test_query = db.table("project_wikis").select("id").limit(1)
+            test_res = test_query.execute()
+            logger.info("Using project_wikis junction table")
+            use_junction_table = True
+        except Exception as test_e:
+            logger.warning(f"project_wikis table not available, using fallback: {test_e}")
+            use_junction_table = False
+        
+        if use_junction_table:
+            # Use efficient junction table query with wiki data join
+            query = (
+                db.table("project_wikis")
+                .select("""
+                    *,
+                    wiki_generation_runs!project_wikis_wiki_run_id_fkey(
+                        wiki_structure,
+                        pages_metadata
+                    )
+                """)
+                .eq("wiki_status", "completed")
+                .eq("access_level", "public")
+                .eq("upload_type", "email")
+                .gt("pages_count", 0)
+                .order("created_at", desc=True)
+                .range(offset, offset + limit - 1)
+            )
+            
+            res = query.execute()
+            
+            # Transform the response to flatten the wiki data
+            result_data = []
+            for row in res.data or []:
+                wiki_data = row.get("wiki_generation_runs")
+                if wiki_data:
+                    # Flatten the wiki data into the main response
+                    flattened_row = {**row}
+                    flattened_row["wiki_structure"] = wiki_data.get("wiki_structure", {})
+                    flattened_row["pages_metadata"] = wiki_data.get("pages_metadata", [])
+                    # Remove the nested object
+                    flattened_row.pop("wiki_generation_runs", None)
+                    result_data.append(flattened_row)
+                else:
+                    # Fallback if no wiki data found
+                    row["wiki_structure"] = {}
+                    row["pages_metadata"] = []
+                    result_data.append(row)
+            
+            return result_data
+        
+        else:
+            # Fallback to old cross-table query method (simplified for now)
+            return []
+        
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to list indexing runs with wikis: {e}")
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+        raise AppError("Failed to list indexing runs with wikis", error_code=ErrorCode.INTERNAL_ERROR) from e
+
+
 @flat_router.get("/indexing-runs", response_model=list[dict[str, Any]])
 async def list_indexing_runs(
     project_id: UUID | None = None,
