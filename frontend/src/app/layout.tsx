@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,11 +24,13 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans antialiased bg-background text-foreground`}
       >
-        <AuthProvider>
-          <div className="min-h-screen flex flex-col">
-            {children}
-          </div>
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <div className="min-h-screen flex flex-col">
+              {children}
+            </div>
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

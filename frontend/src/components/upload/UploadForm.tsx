@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Globe, Lock, ExternalLink, Shield, Loader2 } from "lucide-react"
-import { apiClient } from "@/lib/api-client"
+import { useUploadFiles } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
 
 interface UploadFormProps {
@@ -19,12 +19,12 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [isPublic, setIsPublic] = useState(true)
   const [shareWithAI, setShareWithAI] = useState(true)
   const [language, setLanguage] = useState("English")
-  const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  
+  const uploadMutation = useUploadFiles()
 
   const handleFilesSelected = (newFiles: File[]) => {
     setFiles(newFiles)
-    setError(null)
+    uploadMutation.reset() // Clear any previous errors
   }
 
   const handleRemoveFile = (index: number) => {
@@ -33,38 +33,28 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
   const handleSubmit = async () => {
     if (files.length === 0) {
-      setError("Please select at least one PDF file")
-      return
+      return // Validation handled by button disabled state
     }
 
     if (!email || !email.includes("@")) {
-      setError("Please enter a valid email address")
-      return
+      return // Validation handled by button disabled state
     }
 
-    setIsUploading(true)
-    setError(null)
+    // Upload files
+    const formData = new FormData()
+    files.forEach(file => {
+      formData.append("files", file)
+    })
+    formData.append("email", email)
+    formData.append("upload_type", "email")
 
-    try {
-      // Upload files
-      const formData = new FormData()
-      files.forEach(file => {
-        formData.append("files", file)
-      })
-      formData.append("email", email)
-      formData.append("upload_type", "email")
-
-      const response = await apiClient.uploadFiles(formData)
-      
-      if (response.index_run_id) {
-        onUploadComplete(response.index_run_id)
-      } else {
-        throw new Error("Failed to start indexing")
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to upload files. Please try again.")
-      setIsUploading(false)
-    }
+    uploadMutation.mutate(formData, {
+      onSuccess: (response) => {
+        if (response.index_run_id) {
+          onUploadComplete(response.index_run_id)
+        }
+      },
+    })
   }
 
   return (
@@ -84,7 +74,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
           onFilesSelected={handleFilesSelected}
           selectedFiles={files}
           onRemoveFile={handleRemoveFile}
-          disabled={isUploading}
+          disabled={uploadMutation.isPending}
         />
       </div>
 
@@ -103,7 +93,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
               placeholder="your.email@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={isUploading}
+              disabled={uploadMutation.isPending}
               className="mt-1"
             />
           </div>
@@ -115,7 +105,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => setIsPublic(true)}
-                  disabled={isUploading}
+                  disabled={uploadMutation.isPending}
                   className={cn(
                     "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all",
                     isPublic 
@@ -129,7 +119,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => setIsPublic(false)}
-                  disabled={isUploading}
+                  disabled={uploadMutation.isPending}
                   className={cn(
                     "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all relative",
                     !isPublic 
@@ -152,7 +142,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => setShareWithAI(true)}
-                  disabled={isUploading}
+                  disabled={uploadMutation.isPending}
                   className={cn(
                     "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all",
                     shareWithAI 
@@ -166,7 +156,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
                 <button
                   type="button"
                   onClick={() => setShareWithAI(false)}
-                  disabled={isUploading}
+                  disabled={uploadMutation.isPending}
                   className={cn(
                     "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all relative",
                     !shareWithAI 
@@ -226,7 +216,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
               id="language"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              disabled={isUploading}
+              disabled={uploadMutation.isPending}
               className="w-full mt-1 px-3 py-2 bg-input border border-border rounded-lg text-foreground"
             >
               <option value="English">English</option>
@@ -241,18 +231,22 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
         </div>
       </div>
 
-      {error && (
+      {uploadMutation.error && (
         <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-sm text-destructive">
+            {uploadMutation.error instanceof Error 
+              ? uploadMutation.error.message 
+              : "Failed to upload files. Please try again."}
+          </p>
         </div>
       )}
 
       <Button
         onClick={handleSubmit}
-        disabled={isUploading || files.length === 0 || !email}
+        disabled={uploadMutation.isPending || files.length === 0 || !email}
         className="w-full h-12 text-base"
       >
-        {isUploading ? (
+        {uploadMutation.isPending ? (
           <>
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Indexing Repository...

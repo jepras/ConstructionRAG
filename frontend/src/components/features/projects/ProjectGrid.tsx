@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import AddProjectCard from './AddProjectCard';
 import ProjectCard, { Project } from './ProjectCard';
-import { apiClient } from '@/lib/api-client';
+import { usePublicProjectsWithWikis } from '@/hooks/useApiQueries';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Helper functions
@@ -101,62 +100,31 @@ const mockProjects: Project[] = [
 ];
 
 export default function ProjectGrid() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: wikiRuns, isLoading, error } = usePublicProjectsWithWikis(5);
 
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        console.log('🔍 Fetching public projects with wikis...');
+  // Transform wiki runs to project format
+  const projects: Project[] = wikiRuns && wikiRuns.length > 0 
+    ? wikiRuns.map((wikiRun, index) => {
+        console.log(`🔄 Processing wiki run ${index + 1}:`, wikiRun);
         
-        // Fetch completed wiki generations with their indexing run data
-        const wikiRuns = await apiClient.getPublicProjectsWithWikis(5);
-        console.log('📦 Wiki runs with indexing data:', wikiRuns);
-        
-        if (!wikiRuns || wikiRuns.length === 0) {
-          console.log('⚠️ No completed wiki runs found, using mock data');
-          setProjects(mockProjects.slice(0, 5));
-          return;
-        }
+        const wikiStructure = wikiRun.wiki_structure || {};
+        const pagesMetadata = wikiRun.pages_metadata || [];
 
-        // Transform wiki runs to project format
-        const transformedProjects: Project[] = wikiRuns.map((wikiRun, index) => {
-          console.log(`🔄 Processing wiki run ${index + 1}:`, wikiRun);
-          
-          const wikiStructure = wikiRun.wiki_structure || {};
-          const pagesMetadata = wikiRun.pages_metadata || [];
+        return {
+          id: wikiRun.id, // Use wiki run ID instead of indexing_run_id to ensure uniqueness
+          name: wikiStructure.title || `Project ${index + 1}`,
+          description: wikiStructure.description || 'Construction project documentation',
+          stats: {
+            documents: 1, // Assume at least 1 document if wiki was generated
+            wikiPages: pagesMetadata.length || 0,
+            totalSize: formatFileSize(getTotalSize(pagesMetadata))
+          },
+          slug: `${(wikiStructure.title || `project-${index + 1}`).toLowerCase().replace(/\s+/g, '-')}-${wikiRun.indexing_run_id}`
+        };
+      })
+    : mockProjects.slice(0, 5); // Fallback to mock data
 
-          return {
-            id: wikiRun.id, // Use wiki run ID instead of indexing_run_id to ensure uniqueness
-            name: wikiStructure.title || `Project ${index + 1}`,
-            description: wikiStructure.description || 'Construction project documentation',
-            stats: {
-              documents: 1, // Assume at least 1 document if wiki was generated
-              wikiPages: pagesMetadata.length || 0,
-              totalSize: formatFileSize(getTotalSize(pagesMetadata))
-            },
-            slug: `${(wikiStructure.title || `project-${index + 1}`).toLowerCase().replace(/\s+/g, '-')}-${wikiRun.indexing_run_id}`
-          };
-        });
-
-        console.log('✅ Transformed projects:', transformedProjects);
-        setProjects(transformedProjects);
-      } catch (err) {
-        console.error('❌ Failed to fetch projects:', err);
-        console.log('📋 Using mock data as fallback');
-        setProjects(mockProjects.slice(0, 5));
-        // Don't show error to user if we have fallback data
-        // setError('Failed to load projects. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchProjects();
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Skeleton className="h-[200px] rounded-lg" />
@@ -168,11 +136,10 @@ export default function ProjectGrid() {
   }
 
   if (error) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">{error}</p>
-      </div>
-    );
+    console.error('❌ Failed to fetch projects:', error);
+    console.log('📋 Using mock data as fallback');
+    // Don't show error to user since we have fallback data
+    // Still render projects with mock data
   }
 
   return (
