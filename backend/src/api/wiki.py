@@ -50,17 +50,55 @@ async def create_wiki_generation_run(
             raise
 
         # Access and metadata for indexing run
-        reader = PipelineReadService()
+        # CRITICAL: Use authenticated client for PipelineReadService to pass JWT context for RLS
+        db_client = get_supabase_client() if current_user else None
+        reader = PipelineReadService(client=db_client)
+        logger.info(f"🔧 Created PipelineReadService with client: {'authenticated' if db_client else 'anonymous'}")
+        
         upload_type = None
         project_id = None
         user_id = None
 
         if current_user:
             logger.info(f"🔐 Authenticated flow - checking access for user: {current_user['id']}")
+            logger.info(f"🔑 JWT sub claim should be: {current_user['id']}")
+            
+            # Debug: Let's verify the indexing run exists with the correct user_id
             try:
-                logger.info(f"🔍 Checking access for user {current_user['id']} to run {index_run_id}")
+                logger.info(f"🔍 Direct database check for indexing run: {index_run_id}")
+                # Use admin client to see raw data without RLS
+                from ..config.database import get_supabase_admin_client
+                admin_db = get_supabase_admin_client()
+                raw_run = admin_db.table("indexing_runs").select("*").eq("id", str(index_run_id)).execute()
+                if raw_run.data:
+                    raw_data = raw_run.data[0]
+                    logger.info(f"📊 Raw indexing run data:")
+                    logger.info(f"  - id: {raw_data.get('id')}")
+                    logger.info(f"  - user_id: {raw_data.get('user_id')}")
+                    logger.info(f"  - access_level: {raw_data.get('access_level')}")
+                    logger.info(f"  - upload_type: {raw_data.get('upload_type')}")
+                    logger.info(f"  - project_id: {raw_data.get('project_id')}")
+                    logger.info(f"  - status: {raw_data.get('status')}")
+                    
+                    # Check if user_id matches
+                    if raw_data.get('user_id') == current_user['id']:
+                        logger.info("✅ User ID matches in database")
+                    else:
+                        logger.warning(f"⚠️ User ID mismatch - DB: {raw_data.get('user_id')}, JWT: {current_user['id']}")
+                else:
+                    logger.warning(f"⚠️ Indexing run {index_run_id} not found in raw database check")
+            except Exception as debug_error:
+                logger.error(f"❌ Debug database check failed: {debug_error}")
+            
+            # Now test the authenticated client access
+            try:
+                logger.info(f"🔍 Checking access with authenticated client for user {current_user['id']} to run {index_run_id}")
                 allowed = reader.get_run_for_user(str(index_run_id), current_user["id"])
-                logger.info(f"🔍 Access check result: {bool(allowed)} - {allowed}")
+                logger.info(f"🔍 Access check result: {bool(allowed)}")
+                if allowed:
+                    logger.info(f"📋 Allowed run details: {allowed}")
+                else:
+                    logger.warning("❌ Access denied by PipelineReadService.get_run_for_user")
             except Exception as access_error:
                 logger.error(f"❌ Error checking user access: {access_error}")
                 logger.error(f"📍 Access check traceback: {traceback.format_exc()}")
