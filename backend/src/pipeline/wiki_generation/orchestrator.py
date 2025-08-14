@@ -11,6 +11,7 @@ from src.models import (
     WikiGenerationRunCreate,
     WikiGenerationStatus,
 )
+from src.models.pipeline import UploadType
 from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
 
@@ -86,7 +87,7 @@ class WikiGenerationOrchestrator:
         index_run_id: str,
         user_id: UUID | None = None,
         project_id: UUID | None = None,
-        upload_type: str = "user_project",
+        upload_type: UploadType | str = "user_project",
     ) -> WikiGenerationRun:
         """Run the complete wiki generation pipeline."""
         start_time = datetime.utcnow()
@@ -94,8 +95,14 @@ class WikiGenerationOrchestrator:
         try:
             logger.info(f"Starting wiki generation pipeline for index run: {index_run_id}")
 
+            # Convert string to enum if needed
+            if isinstance(upload_type, str):
+                upload_type_enum = UploadType.EMAIL if upload_type == "email" else UploadType.USER_PROJECT
+            else:
+                upload_type_enum = upload_type
+
             # Create wiki generation run record
-            wiki_run = await self._create_wiki_run(index_run_id, user_id, project_id, upload_type)
+            wiki_run = await self._create_wiki_run(index_run_id, user_id, project_id, upload_type_enum)
 
             # Step 1: Metadata Collection
             logger.info("Step 1: Metadata Collection")
@@ -211,7 +218,7 @@ class WikiGenerationOrchestrator:
                 wiki_structure,
                 generated_pages,
                 metadata,
-                upload_type,
+                upload_type_enum,
                 user_id,
                 project_id,
                 index_run_id,
@@ -248,7 +255,7 @@ class WikiGenerationOrchestrator:
         index_run_id: str,
         user_id: UUID | None,
         project_id: UUID | None,
-        upload_type: str,
+        upload_type: UploadType,
     ) -> WikiGenerationRun:
         """Create a new wiki generation run record."""
         
@@ -335,7 +342,7 @@ class WikiGenerationOrchestrator:
         wiki_structure: dict[str, Any],
         generated_pages: dict[str, Any],
         metadata: dict[str, Any],
-        upload_type: str,
+        upload_type: UploadType,
         user_id: UUID | None,
         project_id: UUID | None,
         index_run_id: str,

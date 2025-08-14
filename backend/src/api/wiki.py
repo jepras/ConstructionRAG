@@ -10,6 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
 from pydantic import BaseModel
 
 from ..config.database import get_supabase_client, get_supabase_admin_client
+from ..models.pipeline import UploadType
 from ..pipeline.wiki_generation.orchestrator import WikiGenerationOrchestrator
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
