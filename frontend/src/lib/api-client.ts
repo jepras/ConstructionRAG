@@ -118,7 +118,13 @@ export class ApiClient {
 
   private async request<T>(
     endpoint: string, 
-    options?: RequestInit & { params?: Record<string, unknown> }
+    options?: RequestInit & { 
+      params?: Record<string, unknown>
+      next?: { 
+        revalidate?: number | false
+        tags?: string[] 
+      }
+    }
   ): Promise<T> {
     const url = new URL(endpoint, this.baseURL)
     
@@ -130,13 +136,24 @@ export class ApiClient {
       })
     }
 
-    const response = await fetch(url.toString(), {
+    // Add Next.js fetch caching
+    const fetchOptions: RequestInit & { next?: any } = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
       },
-    })
+    }
+
+    // Only add Next.js caching for GET requests in static generation contexts
+    if ((!options?.method || options.method === 'GET') && options?.next !== false) {
+      fetchOptions.next = {
+        revalidate: options?.next?.revalidate !== undefined ? options.next.revalidate : 3600,
+        tags: options?.next?.tags || [`api-${endpoint.replace(/\//g, '-')}`],
+      }
+    }
+
+    const response = await fetch(url.toString(), fetchOptions)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -210,7 +227,12 @@ export class ApiClient {
   }
 
   async getPublicProjectsWithWikis(limit: number = 50): Promise<any[]> {
-    return this.request<any[]>(`/api/indexing-runs-with-wikis?limit=${limit}`);
+    return this.request<any[]>(`/api/indexing-runs-with-wikis?limit=${limit}`, {
+      next: {
+        revalidate: 1800, // 30 minutes cache for project list
+        tags: ['public-projects-with-wikis']
+      }
+    });
   }
 
   // File upload methods
@@ -239,11 +261,21 @@ export class ApiClient {
 
   // Wiki-related methods
   async getWikiPages(wikiRunId: string): Promise<{pages: WikiPage[], total_pages: number}> {
-    return this.request<{pages: WikiPage[], total_pages: number}>(`/api/wiki/runs/${wikiRunId}/pages`)
+    return this.request<{pages: WikiPage[], total_pages: number}>(`/api/wiki/runs/${wikiRunId}/pages`, {
+      next: {
+        revalidate: 3600, // 1 hour cache for wiki pages list
+        tags: [`wiki-pages-${wikiRunId}`, 'wiki-pages']
+      }
+    })
   }
 
   async getWikiPageContent(wikiRunId: string, pageName: string): Promise<WikiPageContent> {
-    return this.request<WikiPageContent>(`/api/wiki/runs/${wikiRunId}/pages/${pageName}`)
+    return this.request<WikiPageContent>(`/api/wiki/runs/${wikiRunId}/pages/${pageName}`, {
+      next: {
+        revalidate: 3600, // 1 hour cache for wiki page content
+        tags: [`wiki-content-${wikiRunId}-${pageName}`, 'wiki-content']
+      }
+    })
   }
 
   async getWikiMetadata(wikiRunId: string): Promise<WikiMetadata> {
@@ -255,7 +287,12 @@ export class ApiClient {
   }
 
   async getWikiRunsByIndexingRun(indexingRunId: string): Promise<WikiRun[]> {
-    return this.request<WikiRun[]>(`/api/wiki/runs/${indexingRunId}`)
+    return this.request<WikiRun[]>(`/api/wiki/runs/${indexingRunId}`, {
+      next: {
+        revalidate: 3600, // 1 hour cache for wiki runs
+        tags: [`wiki-runs-${indexingRunId}`, 'wiki-runs']
+      }
+    })
   }
 
   // Project-related methods
@@ -270,7 +307,12 @@ export class ApiClient {
     }
     
     const projectId = match[0];
-    return this.request<ProjectDetails>(`/api/indexing-runs/${projectId}`)
+    return this.request<ProjectDetails>(`/api/indexing-runs/${projectId}`, {
+      next: {
+        revalidate: 3600, // 1 hour cache for project details
+        tags: [`project-${projectId}`, 'indexing-runs']
+      }
+    })
   }
 }
 

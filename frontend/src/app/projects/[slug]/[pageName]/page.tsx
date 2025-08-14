@@ -118,4 +118,5 @@ export default async function WikiPageRoute({ params }: WikiPageProps) {
 }
 
 // Enable ISR without automatic revalidation
-export const revalidate = false;
+export const revalidate = 3600; // Revalidate every hour
+export const dynamicParams = true; // Allow dynamic params for pages not pre-built

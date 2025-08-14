@@ -14,21 +14,40 @@ interface ProjectPageProps {
 // Generate static params for ISR
 export async function generateStaticParams() {
   try {
-    // Get public projects with completed wikis
-    const projects = await apiClient.getPublicProjectsWithWikis(50);
+    // Use direct fetch to avoid circular dependency and ensure proper caching
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/indexing-runs-with-wikis?limit=10`, {
+      next: {
+        revalidate: 1800, // 30 minutes cache
+        tags: ['static-params']
+      }
+    });
     
-    return projects.map((project) => {
-      // Use a generic project name since indexing runs don't have names
-      const projectName = 'project';
+    if (!response.ok) {
+      console.warn('Failed to fetch projects for static generation:', response.status);
+      return [];
+    }
+    
+    const projects = await response.json();
+    
+    return projects.map((project: any) => {
+      // Create slug format: wiki-for-[name]-[indexing_run_id]
+      // Use indexing_run_id since that's what the frontend expects
+      const projectName = project.wiki_structure?.title ? 
+        project.wiki_structure.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 
+        'project';
       return {
-        slug: `${projectName}-${project.id}`,
+        slug: `wiki-for-${projectName}-${project.indexing_run_id}`,
       };
     });
   } catch (error) {
     console.error('Error generating static params:', error);
+    // Return empty array to allow on-demand generation
     return [];
   }
 }
+
+// Allow dynamic params for projects not pre-built
+export const dynamicParams = true;
 
 // Generate metadata for SEO
 export async function generateMetadata({ params }: ProjectPageProps) {
@@ -178,4 +197,4 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 }
 
 // Enable ISR without automatic revalidation
-export const revalidate = false;
+export const revalidate = 3600; // Revalidate every hour
