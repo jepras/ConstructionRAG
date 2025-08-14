@@ -45,18 +45,22 @@ class PipelineService:
     async def create_indexing_run(
         self,
         upload_type: UploadType = UploadType.USER_PROJECT,
+        user_id: UUID | None = None,
         project_id: UUID | None = None,
     ) -> IndexingRun:
         """Create a new indexing run."""
         try:
             indexing_run_data = IndexingRunCreate(
                 upload_type=upload_type,
+                user_id=user_id,
                 project_id=project_id,
                 status="pending",
             )
 
             # Convert UUIDs to strings for JSON serialization
             data_dict = indexing_run_data.model_dump()
+            if data_dict.get("user_id"):
+                data_dict["user_id"] = str(data_dict["user_id"])
             if data_dict.get("project_id"):
                 data_dict["project_id"] = str(data_dict["project_id"])
 

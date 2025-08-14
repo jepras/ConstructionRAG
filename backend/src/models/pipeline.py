@@ -260,6 +260,7 @@ class IndexingRunCreate(BaseModel):
     """Model for creating a new indexing run"""
 
     upload_type: UploadType = UploadType.USER_PROJECT
+    user_id: UUID | None = None
     project_id: UUID | None = None
     status: PipelineStatus = PipelineStatus.PENDING
 

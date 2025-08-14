@@ -261,6 +261,7 @@ class IndexingOrchestrator:
             else:
                 indexing_run = await self.pipeline_service.create_indexing_run(
                     upload_type=document_input.upload_type,
+                    user_id=document_input.user_id,
                     project_id=document_input.project_id,
                 )
 
@@ -435,6 +436,7 @@ class IndexingOrchestrator:
             else:
                 indexing_run = await self.pipeline_service.create_indexing_run(
                     upload_type=document_inputs[0].upload_type,
+                    user_id=document_inputs[0].user_id,
                     project_id=document_inputs[0].project_id,
                 )
 

@@ -422,6 +422,7 @@ async def create_indexing_run(
                 raise AppError("Project not found or access denied", error_code=ErrorCode.NOT_FOUND)
         run = await pipeline_service.create_indexing_run(
             upload_type="user_project",
+            user_id=UUID(current_user["id"]),
             project_id=project_id,
         )
         return {
