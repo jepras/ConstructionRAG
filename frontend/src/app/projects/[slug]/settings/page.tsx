@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { apiClient, type IndexingRunWithConfig, type IndexingRunDocument } from '@/lib/api-client';
 import { Globe, Lock, FileText, File, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface SettingsPageProps {
   params: Promise<{
@@ -21,6 +22,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
 
   // Handle params properly in client component
   useEffect(() => {
@@ -115,10 +117,12 @@ export default function SettingsPage({ params }: SettingsPageProps) {
       setIsDeleting(true);
       await apiClient.deleteIndexingRun(indexingRun.id);
       
-      // Redirect to projects page after successful deletion
-      window.location.href = '/projects';
+      toast.success(`Project "${indexingRun.name}" deleted successfully`)
+      router.push('/projects');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete indexing run');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete indexing run';
+      setError(errorMessage);
+      toast.error("Failed to delete project. Please try again.");
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);

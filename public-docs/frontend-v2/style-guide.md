@@ -27,3 +27,41 @@
 4. **Implement proper TypeScript interfaces** for all components
 5. **Use CSS variables exclusively** for colors and theming
 6. **Test components work in both light and dark themes**
+
+### User Feedback & Notifications
+
+**ALWAYS use shadcn/ui components for user feedback:**
+
+✅ **For Toast Notifications:**
+```bash
+npx shadcn@latest add sonner
+```
+```tsx
+import { toast } from "sonner";
+
+// Success feedback
+toast.success("Profile updated successfully!");
+
+// Error feedback  
+toast.error("Failed to update profile. Please try again.");
+
+// Info/validation feedback
+toast.error("Passwords don't match");
+```
+
+✅ **Setup Requirements:**
+- Add `<Toaster />` to root layout from `@/components/ui/sonner`
+- Import `toast` from `"sonner"` (not the component)
+- Automatic dark/light theme integration
+
+❌ **Never Use:**
+- `alert()` - Browser alerts (poor UX, blocks interaction)
+- `confirm()` - Browser dialogs (not styled, inconsistent)
+- Custom toast implementations
+- Third-party toast libraries (react-hot-toast, etc.)
+
+**Other UI Feedback Patterns:**
+- **Form validation**: Use toast for immediate feedback
+- **Loading states**: Use existing button disabled states + loading text
+- **Confirmations**: Use shadcn Dialog component (when needed)
+- **Success actions & errors**: Toast notifications are preferred

@@ -295,6 +295,32 @@ export class ApiClient {
     })
   }
 
+  async updateUserProfile(updates: { full_name?: string; email?: string }): Promise<any> {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      throw new Error('Not authenticated')
+    }
+
+    // Use upsert to handle both update and insert cases
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        id: user.id,
+        email: user.email,
+        ...updates,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(`Failed to update profile: ${error.message}`)
+    }
+
+    return data
+  }
+
   // Public Projects methods
   async getPublicProjects(limit: number = 50, offset: number = 0): Promise<any[]> {
     // Fetch indexing runs that are public (email uploads)

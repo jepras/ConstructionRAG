@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/components/providers/AuthProvider'
+import { toast } from 'sonner'
 
 export function SignInForm() {
   const [email, setEmail] = useState('')
@@ -29,6 +30,7 @@ export function SignInForm() {
       const result = await signIn(email, password)
       
       if (result.success) {
+        toast.success('Welcome back!')
         router.push(redirectTo)
       } else {
         setError(result.error || 'Sign in failed')
@@ -48,6 +50,7 @@ export function SignInForm() {
       const result = await signIn('jeprasher@gmail.com', 'Test123!')
       
       if (result.success) {
+        toast.success('Welcome back!')
         router.push(redirectTo)
       } else {
         setError(result.error || 'Dev sign in failed')

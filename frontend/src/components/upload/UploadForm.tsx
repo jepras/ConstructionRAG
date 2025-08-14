@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Globe, Lock, ExternalLink, Shield, Loader2 } from "lucide-react"
 import { useUploadFiles } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface UploadFormProps {
   onUploadComplete: (indexingRunId: string) => void
@@ -50,10 +51,15 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
     uploadMutation.mutate(formData, {
       onSuccess: (response) => {
+        toast.success("Documents uploaded and processing started!")
         if (response.index_run_id) {
           onUploadComplete(response.index_run_id)
         }
       },
+      onError: (error) => {
+        console.error("Upload error:", error)
+        toast.error("Failed to upload documents. Please try again.")
+      }
     })
   }
 

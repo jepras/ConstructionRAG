@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/components/providers/AuthProvider'
+import { toast } from 'sonner'
 
 export function SignUpForm() {
   const [email, setEmail] = useState('')
@@ -42,6 +43,7 @@ export function SignUpForm() {
       const result = await signUp(email, password)
       
       if (result.success) {
+        toast.success('Account created! Check your email to verify.')
         setSuccess(true)
         // Don't redirect immediately - user needs to confirm email
       } else {

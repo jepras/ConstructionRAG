@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Globe, Lock, ExternalLink, Shield, Loader2, FolderOpen } from "lucide-react"
 import { useCreateProject } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface CreateProjectFormProps {
   onProjectCreated: (projectId: string) => void
@@ -64,10 +65,12 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
 
     createProjectMutation.mutate(projectData, {
       onSuccess: (response) => {
+        toast.success(`Project "${projectName}" created successfully!`)
         onProjectCreated(response.project_id || response.id)
       },
       onError: (error) => {
         console.error("Error creating project:", error)
+        toast.error("Failed to create project. Please try again.")
       }
     })
   }
