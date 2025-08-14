@@ -92,18 +92,12 @@ class WikiGenerationOrchestrator:
         start_time = datetime.utcnow()
 
         try:
-            print(
-                f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting pipeline for index run: {index_run_id}"
-            )
             logger.info(f"Starting wiki generation pipeline for index run: {index_run_id}")
 
             # Create wiki generation run record
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Creating wiki generation run record")
             wiki_run = await self._create_wiki_run(index_run_id, user_id, project_id, upload_type)
-            print(f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Created wiki run: {wiki_run.id}")
 
             # Step 1: Metadata Collection
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 1: Metadata Collection")
             logger.info("Step 1: Metadata Collection")
             metadata_result = await self.steps["metadata_collection"].execute(
                 {
@@ -118,11 +112,9 @@ class WikiGenerationOrchestrator:
                 await self._update_wiki_run_status(wiki_run.id, "failed", metadata_result.error_message)
                 return wiki_run
 
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 completed successfully")
             metadata = to_metadata_output(metadata_result.data).model_dump(exclude_none=True)
 
             # Step 2: Overview Generation
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 2: Overview Generation")
             logger.info("Step 2: Overview Generation")
             overview_result = await self.steps["overview_generation"].execute(
                 {
@@ -137,11 +129,9 @@ class WikiGenerationOrchestrator:
                 await self._update_wiki_run_status(wiki_run.id, "failed", overview_result.error_message)
                 return wiki_run
 
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 completed successfully")
             project_overview = to_overview_output(overview_result.data).project_overview
 
             # Step 3: Semantic Clustering
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 3: Semantic Clustering")
             logger.info("Step 3: Semantic Clustering")
             clustering_result = await self.steps["semantic_clustering"].execute(
                 {
@@ -156,11 +146,9 @@ class WikiGenerationOrchestrator:
                 await self._update_wiki_run_status(wiki_run.id, "failed", clustering_result.error_message)
                 return wiki_run
 
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 completed successfully")
             semantic_analysis = to_semantic_output(clustering_result.data).model_dump(exclude_none=True)
 
             # Step 4: Structure Generation
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 4: Structure Generation")
             logger.info("Step 4: Structure Generation")
             structure_result = await self.steps["structure_generation"].execute(
                 {
@@ -177,11 +165,9 @@ class WikiGenerationOrchestrator:
                 await self._update_wiki_run_status(wiki_run.id, "failed", structure_result.error_message)
                 return wiki_run
 
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 completed successfully")
             wiki_structure = to_structure_output(structure_result.data).wiki_structure
 
             # Step 5: Page Content Retrieval
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 5: Page Content Retrieval")
             logger.info("Step 5: Page Content Retrieval")
             content_result = await self.steps["page_content_retrieval"].execute(
                 {
@@ -197,11 +183,9 @@ class WikiGenerationOrchestrator:
                 await self._update_wiki_run_status(wiki_run.id, "failed", content_result.error_message)
                 return wiki_run
 
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 completed successfully")
             page_contents = to_page_contents_output(content_result.data).page_contents
 
             # Step 6: Markdown Generation
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 6: Markdown Generation")
             logger.info("Step 6: Markdown Generation")
             markdown_result = await self.steps["markdown_generation"].execute(
                 {
@@ -218,11 +202,9 @@ class WikiGenerationOrchestrator:
                 await self._update_wiki_run_status(wiki_run.id, "failed", markdown_result.error_message)
                 return wiki_run
 
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 completed successfully")
             generated_pages = to_markdown_output(markdown_result.data).generated_pages
 
             # Step 7: Save to Storage
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Starting Step 7: Saving to Storage")
             logger.info("Step 7: Saving to Storage")
             await self._save_wiki_to_storage(
                 wiki_run.id,
@@ -236,7 +218,6 @@ class WikiGenerationOrchestrator:
             )
 
             # Update wiki run status to completed
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Updating wiki run status to completed")
             await self._update_wiki_run_status(
                 wiki_run.id,
                 "completed",
@@ -244,15 +225,13 @@ class WikiGenerationOrchestrator:
             )
 
             # Update wiki run with final data
-            print("🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Getting final wiki run data")
             final_wiki_run = await self._get_wiki_run(wiki_run.id)
-            print(f"🔍 [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Final wiki run: {final_wiki_run.id}")
 
             logger.info(f"Wiki generation pipeline completed successfully: {final_wiki_run.id}")
             return final_wiki_run
 
         except Exception as e:
-            print(f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Pipeline failed: {e}")
+            logger.error(f"Wiki generation pipeline failed: {e}")
             logger.error(f"Wiki generation pipeline failed: {e}")
 
             # Update wiki run status to failed

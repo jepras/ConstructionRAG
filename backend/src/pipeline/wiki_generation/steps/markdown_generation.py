@@ -27,7 +27,6 @@ class MarkdownGenerationStep(PipelineStep):
         progress_tracker=None,
         db_client=None,
     ):
-        print("🔍 [DEBUG] MarkdownGenerationStep.__init__() - Starting initialization")
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
         # Allow DI of db client; default to admin for pipeline safety
@@ -38,17 +37,10 @@ class MarkdownGenerationStep(PipelineStep):
             settings = get_settings()
 
             self.openrouter_api_key = settings.openrouter_api_key
-            print(
-                f"🔍 [DEBUG] MarkdownGenerationStep.__init__() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
-            )
-            if self.openrouter_api_key:
-                print(
-                    f"🔍 [DEBUG] MarkdownGenerationStep.__init__() - API key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
-                )
             if not self.openrouter_api_key:
                 raise ValueError("OPENROUTER_API_KEY not found in environment variables")
         except Exception as e:
-            print(f"❌ [DEBUG] MarkdownGenerationStep.__init__() - Error loading OpenRouter API key: {e}")
+            logger.error(f"Failed to load OpenRouter API key: {e}")
             raise
 
         wiki_cfg = ConfigService().get_effective_config("wiki")

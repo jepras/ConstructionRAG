@@ -59,7 +59,6 @@ class PageContentRetrievalStep(PipelineStep):
             metadata = input_data["metadata"]
             wiki_structure = input_data["wiki_structure"]
             logger.info(f"Starting page content retrieval for {len(wiki_structure['pages'])} pages")
-            print(f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Pages to process: {len(wiki_structure['pages'])}")
 
             # Retrieve content for each page
             page_contents = {}
@@ -85,7 +84,6 @@ class PageContentRetrievalStep(PipelineStep):
                 logger.info(
                     f"[Wiki:Retrieval] Sample chunk embedding length detected: {sample_len}; similarity_threshold={self.similarity_threshold}"
                 )
-                print(f"🔍 [DEBUG] PageContentRetrievalStep.execute() - Sample chunk embedding length: {sample_len}")
 
             for page in wiki_structure["pages"]:
                 page_id = page["id"]

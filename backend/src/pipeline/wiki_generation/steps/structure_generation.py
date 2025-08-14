@@ -28,30 +28,19 @@ class StructureGenerationStep(PipelineStep):
         progress_tracker=None,
         db_client=None,
     ):
-        print("🔍 [DEBUG] StructureGenerationStep.__init__() - Starting initialization")
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        print("🔍 [DEBUG] StructureGenerationStep.__init__() - Loading OpenRouter API key from settings")
         # Load OpenRouter API key from settings
         try:
             settings = get_settings()
-            print(f"🔍 [DEBUG] StructureGenerationStep.__init__() - Settings loaded: {type(settings)}")
             self.openrouter_api_key = settings.openrouter_api_key
-            print(
-                f"🔍 [DEBUG] StructureGenerationStep.__init__() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
-            )
-            if self.openrouter_api_key:
-                print(
-                    f"🔍 [DEBUG] StructureGenerationStep.__init__() - API key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
-                )
             if not self.openrouter_api_key:
-                print("❌ [DEBUG] StructureGenerationStep.__init__() - OpenRouter API key not found!")
                 raise ValueError("OPENROUTER_API_KEY not found in environment variables")
         except Exception as e:
-            print(f"❌ [DEBUG] StructureGenerationStep.__init__() - Error loading OpenRouter API key: {e}")
+            logger.error(f"Failed to load OpenRouter API key: {e}")
             raise
 
         # Read generation settings from SoT (wiki.generation) with config fallback
@@ -62,7 +51,6 @@ class StructureGenerationStep(PipelineStep):
         self.max_tokens = config.get("structure_max_tokens", 6000)
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        print("🔍 [DEBUG] StructureGenerationStep.__init__() - Initialization completed successfully")
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute structure generation step."""

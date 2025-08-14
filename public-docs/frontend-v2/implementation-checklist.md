@@ -82,32 +82,29 @@
 ## Phase 4: Core Features Implementation
 
 ### Tasks
-- [ ] Build landing page hero section with query interface
-- [ ] Create project grid with card components
-- [ ] Implement file upload with drag & drop
-- [ ] Add project search and filtering
-- [ ] Build basic query interface
-- [ ] Set up TanStack Query for API integration
+- [x] Build landing page hero section with query interface
+- [x] Create project grid with card components
+- [x] Implement file upload with drag & drop
+- [x] Set up TanStack Query for API integration
 
 ### Verification Tests
-- [ ] **Visual Test**: Landing page matches hero design screenshot
-- [ ] **Interaction Test**: Project cards display stats and hover effects work
-- [ ] **Upload Test**: Drag and drop files trigger upload interface
-- [ ] **Search Test**: Project search filters results in real-time
-- [ ] **API Test**: Query interface connects to backend and returns results
-- [ ] **State Test**: TanStack Query caches and refetches data correctly
+- [x] **Visual Test**: Landing page matches hero design screenshot
+- [x] **Interaction Test**: Project cards display stats and hover effects work
+- [x] **Upload Test**: Drag and drop files trigger upload interface
+- [x] **API Test**: Query interface connects to backend and returns results
+- [x] **State Test**: TanStack Query caches and refetches data correctly
 
 ---
 
 ## Phase 5: Dynamic Project Pages
 
 ### Tasks
-- [ ] Set up dynamic routing for /projects/[slug]
-- [ ] Implement ISR (Incremental Static Regeneration) for project pages
-- [ ] Create project-specific layout with navigation
-- [ ] Build wiki content rendering from markdown
-- [ ] Add project context switching
-- [ ] Set up revalidation webhook endpoint
+- [x] Set up dynamic routing for /projects/[slug]
+- [x] Implement ISR (Incremental Static Regeneration) for project pages
+- [x] Create project-specific layout with navigation
+- [x] Build wiki content rendering from markdown
+- [x] Add project context switching
+- [x] Set up revalidation webhook endpoint
 
 ### Verification Tests
 - [ ] **Routing Test**: Navigate to /projects/project-name-123 loads correct project
@@ -139,29 +136,10 @@
 
 ---
 
-## Phase 7: Expert Marketplace
-
-### Tasks
-- [ ] Build expert grid with filtering capabilities
-- [ ] Create expert card components with stats
-- [ ] Implement expert modal for detailed view
-- [ ] Add multilingual support indicators
-- [ ] Create expert usage statistics display
-- [ ] Set up expert addition workflow for authenticated users
-
-### Verification Tests
-- [ ] **Grid Test**: Expert cards display in responsive grid layout
-- [ ] **Filter Test**: Expert filtering by category and language works
-- [ ] **Modal Test**: Expert detail modal opens and displays information
-- [ ] **Stats Test**: Usage statistics display correctly for each expert
-- [ ] **Language Test**: Multilingual flags render with correct tooltips
-- [ ] **Auth Test**: "Create New Expert" button shows only for authenticated users
-
----
-
 ## Phase 8: Advanced Query Features
 
 ### Tasks
+- [ ] Build basic query interface
 - [ ] Enhance query interface with chat-style interaction
 - [ ] Add query history with search and filtering
 - [ ] Implement document viewer with PDF display

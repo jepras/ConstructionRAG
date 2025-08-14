@@ -33,30 +33,19 @@ class OverviewGenerationStep(PipelineStep):
         progress_tracker=None,
         db_client=None,
     ):
-        print("🔍 [DEBUG] OverviewGenerationStep.__init__() - Starting initialization")
         super().__init__(config, progress_tracker)
         self.storage_service = storage_service or StorageService()
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        print("🔍 [DEBUG] OverviewGenerationStep.__init__() - Loading OpenRouter API key from settings")
         # Load OpenRouter API key from settings
         try:
             settings = get_settings()
-            print(f"🔍 [DEBUG] OverviewGenerationStep.__init__() - Settings loaded: {type(settings)}")
             self.openrouter_api_key = settings.openrouter_api_key
-            print(
-                f"🔍 [DEBUG] OverviewGenerationStep.__init__() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
-            )
-            if self.openrouter_api_key:
-                print(
-                    f"🔍 [DEBUG] OverviewGenerationStep.__init__() - API key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
-                )
             if not self.openrouter_api_key:
-                print("❌ [DEBUG] OverviewGenerationStep.__init__() - OpenRouter API key not found!")
                 raise ValueError("OPENROUTER_API_KEY not found in environment variables")
         except Exception as e:
-            print(f"❌ [DEBUG] OverviewGenerationStep.__init__() - Error loading OpenRouter API key: {e}")
+            logger.error(f"Failed to load OpenRouter API key: {e}")
             raise
 
         # Configure embedding client for queries via SoT (align with retrieval)
@@ -85,11 +74,9 @@ class OverviewGenerationStep(PipelineStep):
         self.max_chunks_in_prompt = config.get("max_chunks_in_prompt", 10)  # Reduced from 15
         self.content_preview_length = config.get("content_preview_length", 600)  # Reduced from 800
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        print("🔍 [DEBUG] OverviewGenerationStep.__init__() - Initialization completed successfully")
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute overview generation step."""
-        print("🔍 [DEBUG] OverviewGenerationStep.execute() - Starting execution")
         start_time = datetime.utcnow()
 
         try:
@@ -100,12 +87,9 @@ class OverviewGenerationStep(PipelineStep):
             logger.info(f"Starting overview generation for {metadata['total_documents']} documents")
 
             # Generate overview queries
-            print("🔍 [DEBUG] OverviewGenerationStep.execute() - Generating overview queries")
             overview_queries = self._generate_overview_queries(metadata)
-            print(f"🔍 [DEBUG] OverviewGenerationStep.execute() - Overview queries generated: {len(overview_queries)}")
 
             # Perform vector search for each query
-            print("🔍 [DEBUG] OverviewGenerationStep.execute() - Performing vector search")
             overview_data = await self._perform_vector_search(overview_queries, metadata)
             total_chunks = len(overview_data.get("retrieved_chunks", []))
             print(
@@ -113,7 +97,6 @@ class OverviewGenerationStep(PipelineStep):
             )
 
             # Generate LLM overview
-            print("🔍 [DEBUG] OverviewGenerationStep.execute() - Generating LLM overview")
             project_overview = await self._generate_llm_overview(overview_data, metadata)
 
             # Create step result
@@ -141,12 +124,11 @@ class OverviewGenerationStep(PipelineStep):
                 completed_at=datetime.utcnow(),
             )
 
-            print("🔍 [DEBUG] OverviewGenerationStep.execute() - Execution completed successfully")
             logger.info(f"Overview generation completed: {len(project_overview)} characters")
             return result
 
         except Exception as e:
-            print(f"❌ [DEBUG] OverviewGenerationStep.execute() - Error during execution: {e}")
+            logger.error(f"Error during overview generation: {e}")
             logger.error(f"Overview generation failed: {e}")
             raise AppError(
                 "Overview generation failed",
@@ -231,7 +213,6 @@ class OverviewGenerationStep(PipelineStep):
         if top_k is None:
             top_k = self.max_chunks_per_query
 
-        print(f"🔍 Real pgvector search for: '{query_text[:60]}...'")
 
         try:
             # Generate embedding for query using Voyage API
@@ -486,13 +467,11 @@ Generer projektoversigten på dansk:"""
 
     async def _call_openrouter_api(self, prompt: str, max_tokens: int = 4000) -> str:
         """Call OpenRouter API with the given prompt."""
-        print("🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - Starting API call")
         print(
             f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
         )
 
         if not self.openrouter_api_key:
-            print("❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - OpenRouter API key not configured!")
             raise Exception("OpenRouter API key not configured")
 
         headers = {
@@ -509,10 +488,6 @@ Generer projektoversigten på dansk:"""
             "temperature": self.config.get("temperature", 0.3),
         }
 
-        print("🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - Making request to OpenRouter API")
-        print(f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - Model: {self.model}")
-        print(f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - Max tokens: {max_tokens}")
-        print(f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - Timeout: {self.api_timeout}s")
 
         try:
             import requests
@@ -523,7 +498,6 @@ Generer projektoversigten på dansk:"""
                 json=data,
                 timeout=self.api_timeout,  # Add timeout
             )
-            print(f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - Response status: {response.status_code}")
 
             if response.status_code != 200:
                 print(
@@ -544,5 +518,5 @@ Generer projektoversigten på dansk:"""
             )
             raise Exception(f"OpenRouter API request timed out after {self.api_timeout} seconds")
         except Exception as e:
-            print(f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - Exception during API call: {e}")
+            logger.error(f"Exception during OpenRouter API call: {e}")
             raise
