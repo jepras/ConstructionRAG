@@ -41,12 +41,10 @@ export function Header({ variant }: HeaderProps) {
               Public Projects
             </Link>
             <div className="flex items-center space-x-2">
-              <Link href="/upload">
-                <Button variant="secondary" size="sm">
-                  Upload Project
-                </Button>
+              <Link href="/upload" className="text-muted-foreground hover:text-foreground transition-colors">
+                Upload Project
               </Link>
-              <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
+              <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded">
                 free
               </span>
             </div>
