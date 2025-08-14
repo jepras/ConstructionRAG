@@ -113,3 +113,58 @@ export function useResetPassword() {
     mutationFn: (email: string) => apiClient.resetPassword(email),
   })
 }
+
+// Progressive project loading hooks for client-side navigation
+export function useProjectBasic(slug: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['project-basic', slug],
+    queryFn: () => slug ? apiClient.getProjectFromSlug(slug) : null,
+    enabled: enabled && !!slug,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  })
+}
+
+export function useProjectWikiRuns(indexingRunId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['project-wiki-runs', indexingRunId],
+    queryFn: () => indexingRunId ? apiClient.getWikiRunsByIndexingRun(indexingRunId) : null,
+    enabled: enabled && !!indexingRunId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  })
+}
+
+export function useProjectWikiPages(wikiRunId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['project-wiki-pages', wikiRunId],
+    queryFn: () => wikiRunId ? apiClient.getWikiPages(wikiRunId) : null,
+    enabled: enabled && !!wikiRunId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  })
+}
+
+export function useProjectWikiContent(wikiRunId: string | null, pageName: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['project-wiki-content', wikiRunId, pageName],
+    queryFn: () => (wikiRunId && pageName) ? apiClient.getWikiPageContent(wikiRunId, pageName) : null,
+    enabled: enabled && !!wikiRunId && !!pageName,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  })
+}
+
+// Prefetching hook for project cards hover
+export function usePrefetchProject() {
+  const queryClient = useQueryClient()
+  
+  return (slug: string) => {
+    // Prefetch basic project data
+    queryClient.prefetchQuery({
+      queryKey: ['project-basic', slug],
+      queryFn: () => apiClient.getProjectFromSlug(slug),
+      staleTime: 10 * 60 * 1000, // 10 minutes
+    })
+  }
+}

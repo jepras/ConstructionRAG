@@ -146,10 +146,10 @@ export class ApiClient {
     }
 
     // Only add Next.js caching for GET requests in static generation contexts
-    if ((!options?.method || options.method === 'GET') && options?.next !== false) {
+    if ((!options?.method || options.method === 'GET') && options?.next && typeof options.next === 'object') {
       fetchOptions.next = {
-        revalidate: options?.next?.revalidate !== undefined ? options.next.revalidate : 3600,
-        tags: options?.next?.tags || [`api-${endpoint.replace(/\//g, '-')}`],
+        revalidate: options.next.revalidate !== undefined ? options.next.revalidate : 3600,
+        tags: options.next.tags || [`api-${endpoint.replace(/\//g, '-')}`],
       }
     }
 

@@ -1,7 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import { FileText, BookOpen, HardDrive, ArrowRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { FileText, BookOpen, HardDrive, ArrowRight, Loader2 } from 'lucide-react';
+import { usePrefetchProject } from '@/hooks/useApiQueries';
 
 export interface ProjectStats {
   documents: number;
@@ -22,10 +24,28 @@ interface ProjectCardProps {
 }
 
 export default function ProjectCard({ project }: ProjectCardProps) {
+  const router = useRouter();
+  const prefetchProject = usePrefetchProject();
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsNavigating(true);
+    
+    // Navigate to project page with client-side routing
+    router.push(`/projects/${project.slug}?client=true`);
+  };
+
+  const handleMouseEnter = () => {
+    // Prefetch project data on hover for instant navigation
+    prefetchProject(project.slug);
+  };
+
   return (
-    <Link 
-      href={`/projects/${project.slug}`}
-      className="group relative flex flex-col p-6 rounded-lg border border-border bg-card hover:bg-accent/5 hover:border-primary/20 transition-all duration-200 min-h-[200px]"
+    <div 
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      className="group relative flex flex-col p-6 rounded-lg border border-border bg-card hover:bg-accent/5 hover:border-primary/20 transition-all duration-200 min-h-[200px] cursor-pointer"
     >
       <div className="flex-1">
         <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-1">
@@ -52,8 +72,12 @@ export default function ProjectCard({ project }: ProjectCardProps) {
           </div>
         </div>
         
-        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+        {isNavigating ? (
+          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+        ) : (
+          <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+        )}
       </div>
-    </Link>
+    </div>
   );
 }

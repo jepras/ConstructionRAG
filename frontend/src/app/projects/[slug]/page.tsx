@@ -3,12 +3,14 @@ import { notFound } from 'next/navigation';
 import { apiClient, WikiPage, WikiPageContent } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
 import WikiContent from '@/components/features/wiki/WikiContent';
+import ProjectWikiClient from '@/components/features/wiki/ProjectWikiClient';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectPageProps {
   params: Promise<{
     slug: string;
   }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // Generate static params for ISR
@@ -186,9 +188,17 @@ function WikiLoadingSkeleton() {
   );
 }
 
-export default async function ProjectPage({ params }: ProjectPageProps) {
+export default async function ProjectPage({ params, searchParams }: ProjectPageProps) {
   const { slug } = await params;
+  const search = await searchParams;
+  const isClientNavigation = search?.client === 'true';
   
+  // Use client-side progressive loading for in-app navigation
+  if (isClientNavigation) {
+    return <ProjectWikiClient slug={slug} />;
+  }
+  
+  // Use server-side rendering for SEO/direct visits
   return (
     <Suspense fallback={<WikiLoadingSkeleton />}>
       <ProjectWikiContent slug={slug} />
