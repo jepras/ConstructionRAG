@@ -168,3 +168,72 @@ export function usePrefetchProject() {
     })
   }
 }
+
+// Project management hooks for authenticated users
+export function useCreateProject() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (projectData: {
+      name: string
+      initial_version_name?: string
+      visibility: 'public' | 'private'
+      share_with_ai: boolean
+      language: string
+      expert_modules?: string[]
+      files: File[]
+    }) => {
+      return apiClient.createProject(projectData)
+    },
+    onSuccess: () => {
+      // Invalidate projects list when new project is created
+      queryClient.invalidateQueries({ queryKey: ['user-projects'] })
+    },
+  })
+}
+
+export function useUserProjects(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['user-projects', limit, offset],
+    queryFn: () => apiClient.getUserProjects(limit, offset),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+export function useProject(projectId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projectId ? apiClient.getProject(projectId) : null,
+    enabled: enabled && !!projectId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+export function useUpdateProject(projectId: string) {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (updates: {
+      name?: string
+      visibility?: 'public' | 'private'
+      description?: string
+    }) => apiClient.updateProject(projectId, updates),
+    onSuccess: () => {
+      // Invalidate both individual project and projects list
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['user-projects'] })
+    },
+  })
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (projectId: string) => apiClient.deleteProject(projectId),
+    onSuccess: () => {
+      // Invalidate projects list when project is deleted
+      queryClient.invalidateQueries({ queryKey: ['user-projects'] })
+    },
+  })
+}

@@ -439,6 +439,116 @@ export class ApiClient {
     })
     return response.documents || []
   }
+
+  // Project management methods for authenticated users
+  async createProject(projectData: {
+    name: string
+    initial_version_name?: string
+    visibility: 'public' | 'private'
+    share_with_ai: boolean
+    language: string
+    expert_modules?: string[]
+    files: File[]
+  }): Promise<{ project_id: string; id: string }> {
+    const headers = await this.getAuthHeaders()
+    
+    // First create the project with metadata
+    const projectPayload = {
+      name: projectData.name,
+      initial_version_name: projectData.initial_version_name || 'Initial Version',
+      visibility: projectData.visibility,
+      share_with_ai: projectData.share_with_ai,
+      language: projectData.language,
+      expert_modules: projectData.expert_modules || []
+    }
+
+    const projectResponse = await fetch(`${this.baseURL}/api/projects`, {
+      method: 'POST',
+      body: JSON.stringify(projectPayload),
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      }
+    })
+
+    if (!projectResponse.ok) {
+      const errorText = await projectResponse.text()
+      throw new Error(`Project creation failed: ${errorText}`)
+    }
+
+    const project = await projectResponse.json()
+
+    // If there are files, upload them to the project
+    if (projectData.files.length > 0) {
+      const formData = new FormData()
+      projectData.files.forEach(file => {
+        formData.append('files', file)
+      })
+      formData.append('upload_type', 'user_project')
+      formData.append('project_id', project.project_id || project.id)
+
+      const uploadResponse = await fetch(`${this.baseURL}/api/uploads`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          ...headers,
+          // Don't set Content-Type for FormData
+        }
+      })
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text()
+        // Project was created but file upload failed
+        console.error(`File upload failed for project ${project.id}: ${errorText}`)
+        // Could delete the project here if needed, but for now just log the error
+      }
+    }
+
+    return project
+  }
+
+  async getUserProjects(limit: number = 50, offset: number = 0): Promise<any[]> {
+    const headers = await this.getAuthHeaders()
+    return this.request<any[]>('/api/projects', {
+      headers,
+      params: {
+        limit,
+        offset,
+      }
+    })
+  }
+
+  async getProject(projectId: string): Promise<any> {
+    const headers = await this.getAuthHeaders()
+    return this.request<any>(`/api/projects/${projectId}`, {
+      headers,
+      next: {
+        revalidate: 3600, // 1 hour cache for project details
+        tags: [`project-${projectId}`, 'projects']
+      }
+    })
+  }
+
+  async updateProject(projectId: string, updates: {
+    name?: string
+    visibility?: 'public' | 'private'
+    description?: string
+  }): Promise<any> {
+    const headers = await this.getAuthHeaders()
+    return this.request<any>(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(updates),
+    })
+  }
+
+  async deleteProject(projectId: string): Promise<{ success: boolean; message: string }> {
+    const headers = await this.getAuthHeaders()
+    return this.request<{ success: boolean; message: string }>(`/api/projects/${projectId}`, {
+      method: 'DELETE',
+      headers,
+    })
+  }
 }
 
 export const apiClient = new ApiClient()

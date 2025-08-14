@@ -4,6 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Settings, Store, HelpCircle, LogOut } from "lucide-react";
 
 interface HeaderProps {
   variant: "marketing" | "app";
@@ -111,17 +121,46 @@ export function Header({ variant }: HeaderProps) {
           </div>
         </div>
 
-        {/* User Avatar */}
+        {/* User Dropdown Menu */}
         <div className="flex items-center space-x-3">
-          <span className="text-muted-foreground text-sm">
-            {user?.email}
-          </span>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            Sign Out
-          </Button>
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold">
-            {user?.email?.[0]?.toUpperCase() || 'U'}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 px-2">
+                <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold">
+                  {user?.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <span className="text-muted-foreground text-sm max-w-32 truncate">
+                  {user?.email}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings" className="cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                <Store className="mr-2 h-4 w-4" />
+                Marketplace
+                <DropdownMenuShortcut>Soon</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href="mailto:support@constructionrag.com" className="cursor-pointer">
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Support
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
