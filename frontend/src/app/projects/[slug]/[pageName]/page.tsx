@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { apiClient, WikiPage, WikiPageContent } from '@/lib/api-client';
+import { apiClient, WikiPage, type WikiPageContent } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
 import WikiContent from '@/components/features/wiki/WikiContent';
+import WikiLayoutSkeleton from '@/components/features/wiki/WikiLayoutSkeleton';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface WikiPageProps {
@@ -12,45 +13,70 @@ interface WikiPageProps {
   }>;
 }
 
-async function WikiPageContent({ slug, pageName }: { slug: string; pageName: string }) {
+// Component to load pages data first, then show smart skeleton while content loads
+async function WikiPageWithSmartSkeleton({ slug, pageName }: { slug: string; pageName: string }) {
   try {
-    // Get project details (indexing run)
+    // Get project details and pages data first (for stable sidebar)
     const project = await apiClient.getProjectFromSlug(slug);
-    
-    // Get wiki runs for this indexing run
     const wikiRuns = await apiClient.getWikiRunsByIndexingRun(project.id);
-    
-    // Find the first completed wiki run
-    const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
+    const completedWikiRun = wikiRuns.find((run: any) => run.status === 'completed');
     
     if (!completedWikiRun) {
       notFound();
     }
 
-    // Get wiki pages and specific page content
-    const [wikiPagesResponse, pageContent] = await Promise.all([
-      apiClient.getWikiPages(completedWikiRun.id),
-      apiClient.getWikiPageContent(completedWikiRun.id, pageName)
-    ]);
-
-    // Extract and format pages
+    const wikiPagesResponse = await apiClient.getWikiPages(completedWikiRun.id);
     const backendPages = wikiPagesResponse.pages || [];
     const sortedPages = backendPages
-      .sort((a, b) => a.order - b.order)
-      .map(page => ({
+      .sort((a: any, b: any) => a.order - b.order)
+      .map((page: any) => ({
         ...page,
         name: page.filename.replace('.md', '')
       }));
 
     // Verify the requested page exists
-    const requestedPage = sortedPages.find(page => page.name === pageName);
+    const requestedPage = sortedPages.find((page: any) => page.name === pageName);
     if (!requestedPage) {
       notFound();
     }
 
+    // Now show smart skeleton while content loads
+    return (
+      <Suspense fallback={
+        <WikiLayoutSkeleton 
+          pages={sortedPages} 
+          projectSlug={slug} 
+          currentPage={pageName}
+        />
+      }>
+        <WikiPageContent slug={slug} pageName={pageName} pages={sortedPages} wikiRunId={completedWikiRun.id} />
+      </Suspense>
+    );
+  } catch (error) {
+    console.error('Error loading wiki page structure:', error);
+    notFound();
+  }
+}
+
+// Component to load just the page content (pages already loaded)
+async function WikiPageContent({ 
+  slug, 
+  pageName, 
+  pages, 
+  wikiRunId 
+}: { 
+  slug: string; 
+  pageName: string; 
+  pages: WikiPage[]; 
+  wikiRunId: string;
+}) {
+  try {
+    // Only load the page content now
+    const pageContent = await apiClient.getWikiPageContent(wikiRunId, pageName);
+
     return (
       <WikiLayout 
-        pages={sortedPages}
+        pages={pages}
         projectSlug={slug}
         content={pageContent.content}
         currentPage={pageName}
@@ -59,7 +85,7 @@ async function WikiPageContent({ slug, pageName }: { slug: string; pageName: str
       </WikiLayout>
     );
   } catch (error) {
-    console.error('Error loading wiki page:', error);
+    console.error('Error loading wiki page content:', error);
     notFound();
   }
 }
@@ -112,7 +138,7 @@ export default async function WikiPageRoute({ params }: WikiPageProps) {
   
   return (
     <Suspense fallback={<WikiPageLoadingSkeleton />}>
-      <WikiPageContent slug={slug} pageName={pageName} />
+      <WikiPageWithSmartSkeleton slug={slug} pageName={pageName} />
     </Suspense>
   );
 }
