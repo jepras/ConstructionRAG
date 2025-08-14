@@ -175,9 +175,11 @@ export default function Home() {
 
           {/* CTA Buttons */}
           <div className="flex justify-center space-x-4 mt-12">
-            <Button className="px-8 py-3 text-lg">
-              Upload Project
-            </Button>
+            <Link href="/upload">
+              <Button className="px-8 py-3 text-lg">
+                Upload Project
+              </Button>
+            </Link>
             <Link href="/projects">
               <Button variant="outline" className="px-8 py-3 text-lg">
                 Explore public projects

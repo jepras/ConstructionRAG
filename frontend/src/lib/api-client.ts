@@ -158,6 +158,30 @@ export class ApiClient {
 
     return wikiRuns || []
   }
+
+  // File upload methods
+  async uploadFiles(formData: FormData): Promise<any> {
+    const response = await fetch(`${this.baseURL}/api/uploads`, {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - let browser set it with boundary for multipart/form-data
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Upload failed: ${errorText}`)
+    }
+
+    return response.json()
+  }
+
+  async getIndexingProgress(indexingRunId: string): Promise<any> {
+    return this.request<any>(`/api/indexing-runs/${indexingRunId}/progress`)
+  }
+
+  async getIndexingRun(indexingRunId: string): Promise<any> {
+    return this.request<any>(`/api/indexing-runs/${indexingRunId}`)
+  }
 }
 
 export const apiClient = new ApiClient()
