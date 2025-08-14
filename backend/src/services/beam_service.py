@@ -28,6 +28,7 @@ class BeamService:
         document_ids: List[str],
         user_id: str = None,
         project_id: str = None,
+        auth_token: str = None,
     ) -> Dict[str, Any]:
         """
         Trigger the indexing pipeline on Beam.
@@ -37,6 +38,7 @@ class BeamService:
             document_ids: List of document IDs to process
             user_id: User ID (optional for email uploads)
             project_id: Project ID (optional for email uploads)
+            auth_token: JWT token for authenticated wiki generation (optional)
 
         Returns:
             Dict containing the task_id and status
@@ -52,6 +54,22 @@ class BeamService:
                 payload["user_id"] = user_id
             if project_id:
                 payload["project_id"] = project_id
+            
+            # Add backend URL for wiki generation webhook
+            backend_url = os.getenv("BACKEND_API_URL")
+            logger.info(f"🔍 DEBUG: BACKEND_API_URL from environment: {backend_url}")
+            if backend_url:
+                payload["backend_url"] = backend_url
+                logger.info(f"✅ Added backend_url to payload: {backend_url}")
+            else:
+                logger.warning("⚠️ BACKEND_API_URL not set in local environment - wiki generation will be skipped")
+            
+            # Add auth token for authenticated wiki generation
+            if auth_token:
+                payload["auth_token"] = auth_token
+                logger.info(f"✅ Added auth_token to payload for authenticated wiki generation")
+            else:
+                logger.info("ℹ️ No auth_token provided - wiki generation will be anonymous")
 
             headers = {
                 "Content-Type": "application/json",
@@ -60,6 +78,7 @@ class BeamService:
 
             logger.info(f"Triggering Beam task for indexing run: {indexing_run_id}")
             logger.info(f"Document IDs: {document_ids}")
+            logger.info(f"🔍 DEBUG: Complete payload being sent to Beam: {payload}")
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(

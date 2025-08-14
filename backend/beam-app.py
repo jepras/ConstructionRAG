@@ -10,6 +10,7 @@ import os
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 
+import httpx
 from beam import Image, task_queue, env
 
 # Import our existing pipeline components
@@ -20,11 +21,84 @@ from src.config.database import get_supabase_admin_client
 from src.services.storage_service import StorageService
 
 
+async def trigger_wiki_generation(indexing_run_id: str, backend_url: str, auth_token: str = None, user_id: str = None, project_id: str = None):
+    """
+    Trigger wiki generation for a completed indexing run.
+    
+    Args:
+        indexing_run_id: The completed indexing run ID
+        backend_url: The backend URL to call for wiki generation
+        auth_token: JWT token for authenticated requests (optional)
+        user_id: User ID (optional for email uploads)
+        project_id: Project ID (optional for email uploads)
+    """
+    try:
+        if not backend_url:
+            print("⚠️ Backend URL not provided, skipping wiki generation")
+            return
+        
+        wiki_url = f"{backend_url}/api/wiki/runs?index_run_id={indexing_run_id}"
+        payload = {}  # Empty payload since index_run_id is now a query parameter
+        
+        print(f"🔄 Triggering wiki generation for run: {indexing_run_id}")
+        print(f"🔍 DEBUG: Wiki URL: {wiki_url}")
+        print(f"🔍 DEBUG: Payload: {payload}")
+        print(f"🔍 DEBUG: Auth token provided: {bool(auth_token)}")
+        print(f"🔍 DEBUG: User ID: {user_id}")
+        print(f"🔍 DEBUG: Project ID: {project_id}")
+        
+        # Set up headers for authentication if token is provided
+        headers = {"Content-Type": "application/json"}
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
+            print(f"🔐 Using JWT token for authenticated wiki generation")
+            print(f"🔍 DEBUG: Auth header set: Bearer {auth_token[:20]}...{auth_token[-10:] if len(auth_token) > 30 else auth_token}")
+        else:
+            print(f"🔓 Making anonymous wiki generation request")
+        
+        print(f"🌐 Making HTTP POST request to: {wiki_url}")
+        print(f"📤 Headers: {list(headers.keys())}")
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(wiki_url, json=payload, headers=headers)
+                
+                print(f"📥 Response status: {response.status_code}")
+                print(f"📥 Response headers: {dict(response.headers)}")
+                print(f"📥 Response text: {response.text}")
+                
+                if response.status_code == 200:
+                    print(f"✅ Wiki generation triggered successfully")
+                    try:
+                        response_json = response.json()
+                        print(f"📄 Response JSON: {response_json}")
+                    except Exception as json_error:
+                        print(f"⚠️ Could not parse response as JSON: {json_error}")
+                else:
+                    print(f"⚠️ Wiki generation trigger failed: {response.status_code} - {response.text}")
+                    print(f"🔍 DEBUG: Response reason: {response.reason_phrase}")
+                    
+            except httpx.TimeoutException as timeout_error:
+                print(f"⏰ Request timed out: {timeout_error}")
+            except httpx.RequestError as req_error:
+                print(f"🌐 Request error: {req_error}")
+            except Exception as http_error:
+                print(f"💥 Unexpected HTTP error: {http_error}")
+                
+    except Exception as e:
+        print(f"⚠️ Error triggering wiki generation: {type(e).__name__}: {e}")
+        import traceback
+        print(f"📍 Full traceback: {traceback.format_exc()}")
+        # Don't fail the indexing pipeline if wiki generation fails
+
+
 async def run_indexing_pipeline_on_beam(
     indexing_run_id: str,
     document_ids: List[str],
     user_id: str = None,
     project_id: str = None,
+    backend_url: str = None,
+    auth_token: str = None,
 ) -> Dict[str, Any]:
     """
     Main Beam worker function for document indexing pipeline.
@@ -147,6 +221,13 @@ async def run_indexing_pipeline_on_beam(
 
         if success:
             print(f"✅ Indexing pipeline completed successfully")
+            
+            # Trigger wiki generation
+            if backend_url:
+                await trigger_wiki_generation(indexing_run_id, backend_url, auth_token, user_id, project_id)
+            else:
+                print("⚠️ Backend URL not provided, skipping wiki generation")
+            
             return {
                 "status": "completed",
                 "indexing_run_id": indexing_run_id,
@@ -184,6 +265,7 @@ async def run_indexing_pipeline_on_beam(
             "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libxrender1 libgomp1 libgcc-s1 libstdc++6 fonts-liberation poppler-utils tesseract-ocr tesseract-ocr-dan"
         ],
     ),
+    # Remove environment variable dependency - pass URL as parameter instead
     # Timeout set to 30 minutes to match current pipeline expectations
     timeout=1800,
 )
@@ -192,6 +274,8 @@ def process_documents(
     document_ids: list,
     user_id: str = None,
     project_id: str = None,
+    backend_url: str = None,
+    auth_token: str = None,
 ):
     """
     Beam task queue entry point for document indexing pipeline.
@@ -206,10 +290,19 @@ def process_documents(
         project_id: Project ID the documents belong to (optional for email uploads)
     """
     if env.is_remote():
+        # Debug: Log all parameters received
+        print(f"🔍 DEBUG: Received parameters:")
+        print(f"  - indexing_run_id: {indexing_run_id}")
+        print(f"  - document_ids: {document_ids}")
+        print(f"  - user_id: {user_id}")
+        print(f"  - project_id: {project_id}")
+        print(f"  - backend_url: {backend_url}")
+        print(f"  - auth_token: {bool(auth_token)}")
+        
         # Run the async function in an event loop
         return asyncio.run(
             run_indexing_pipeline_on_beam(
-                indexing_run_id, document_ids, user_id, project_id
+                indexing_run_id, document_ids, user_id, project_id, backend_url, auth_token
             )
         )
     else:

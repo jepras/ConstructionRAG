@@ -12,12 +12,13 @@ from fastapi import (
     Form,
     UploadFile,
 )
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from src.config.database import get_db_client_for_request, get_supabase_admin_client
 from src.middleware.request_id import get_request_id
 from src.models.pipeline import UploadType
-from src.services.auth_service import get_current_user_optional
+from src.services.auth_service import get_current_user_optional, optional_security
 from src.services.document_read_service import DocumentReadService
 from src.services.storage_service import StorageService
 from src.shared.errors import ErrorCode
@@ -67,6 +68,7 @@ async def create_upload(
     email: str | None = Form(None),  # noqa: B008
     project_id: UUID | None = Form(None),  # noqa: B008
     current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
 ):
     """Create an upload for email (anonymous) or project (authenticated).
 
@@ -153,10 +155,13 @@ async def create_upload(
                 )
 
             background_tasks.add_task(
-                process_email_upload_async,
+                process_upload_async,
                 index_run_id=index_run_id,
                 email=email,
                 document_data=document_data,
+                user_id=None,
+                project_id=None,
+                auth_token=None,  # Email uploads are anonymous
             )
 
             return UploadCreateResponse(
@@ -218,6 +223,20 @@ async def create_upload(
                 file_size=file.size,
             )
             document_ids.append(created["document_id"])
+
+        # Extract JWT token for authenticated API calls
+        auth_token = credentials.credentials if credentials else None
+        
+        # Trigger background processing for project uploads
+        background_tasks.add_task(
+            process_upload_async,
+            index_run_id=index_run_id,
+            email=None,
+            document_data=document_ids,  # Pass the document IDs directly
+            user_id=current_user["id"],
+            project_id=str(project_id),
+            auth_token=auth_token,
+        )
 
         return UploadCreateResponse(
             index_run_id=index_run_id,
@@ -434,18 +453,41 @@ async def get_document(
 ## Background processing helpers for project uploads removed in v2
 
 
-async def process_email_upload_async(
+async def process_upload_async(
     index_run_id: str,
-    email: str,
-    document_data: list[dict[str, Any]],
+    email: str | None = None,
+    document_data: list[dict[str, Any]] | None = None,
+    user_id: str | None = None,
+    project_id: str | None = None,
+    auth_token: str | None = None,
 ):
-    """Background processing for email uploads using Beam"""
+    """Background processing for uploads (email and project) using Beam"""
 
     try:
-        logger.info(f"Starting email upload processing for {email} (index run: {index_run_id})")
+        upload_type = "email" if email else "project"
+        identifier = email if email else f"project:{project_id}"
+        logger.info(f"Starting {upload_type} upload processing for {identifier} (index run: {index_run_id})")
 
         # Extract document IDs for Beam
-        document_ids = [doc_data["document_id"] for doc_data in document_data]
+        if document_data and len(document_data) > 0:
+            # Check if document_data is list of IDs (project uploads) or list of dicts (email uploads)
+            if isinstance(document_data[0], str):
+                # Project uploads: document_data is list of document IDs
+                document_ids = document_data
+            else:
+                # Email uploads: document_data is list of document metadata dicts
+                document_ids = [doc_data["document_id"] for doc_data in document_data]
+        else:
+            # Fallback: get document IDs from indexing run
+            from src.config.database import get_supabase_admin_client
+            db = get_supabase_admin_client()
+            docs_result = (
+                db.table("indexing_run_documents")
+                .select("document_id")
+                .eq("indexing_run_id", index_run_id)
+                .execute()
+            )
+            document_ids = [doc["document_id"] for doc in (docs_result.data or [])]
 
         # Trigger Beam task for document processing
         try:
@@ -455,7 +497,9 @@ async def process_email_upload_async(
             beam_result = await beam_service.trigger_indexing_pipeline(
                 indexing_run_id=index_run_id,
                 document_ids=document_ids,
-                # No user_id or project_id for email uploads
+                user_id=user_id,
+                project_id=project_id,
+                auth_token=auth_token,
             )
 
             if beam_result["status"] == "triggered":
@@ -467,4 +511,4 @@ async def process_email_upload_async(
             logger.error(f"Error triggering Beam task: {e}")
 
     except Exception as e:
-        logger.error(f"Error in email upload processing for {email}: {e}")
+        logger.error(f"Error in {upload_type} upload processing for {identifier}: {e}")

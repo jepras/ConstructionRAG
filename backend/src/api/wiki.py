@@ -1,6 +1,7 @@
 """Wiki generation API endpoints."""
 
 import logging
+import traceback
 from typing import Any
 from uuid import UUID
 
@@ -11,6 +12,8 @@ from ..pipeline.wiki_generation.orchestrator import WikiGenerationOrchestrator
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
 from ..services.storage_service import StorageService
+from ..shared.errors import ErrorCode
+from ..utils.exceptions import AppError
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +35,19 @@ async def create_wiki_generation_run(
 ):
     """Create and start a new wiki generation run for an indexing run."""
     try:
+        logger.info(f"🚀 Starting wiki generation for index_run_id: {index_run_id}")
+        logger.info(f"🔍 Current user: {'authenticated' if current_user else 'anonymous'}")
+        logger.info(f"📋 Request details - user authenticated: {current_user is not None}")
+        
         # Get orchestrator (use anon client for authenticated user paths)
-        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+        try:
+            logger.info("🔧 Initializing WikiGenerationOrchestrator...")
+            orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+            logger.info("✅ WikiGenerationOrchestrator initialized successfully")
+        except Exception as orchestrator_error:
+            logger.error(f"❌ Failed to initialize WikiGenerationOrchestrator: {orchestrator_error}")
+            logger.error(f"📍 Orchestrator init traceback: {traceback.format_exc()}")
+            raise
 
         # Access and metadata for indexing run
         reader = PipelineReadService()
@@ -42,46 +56,71 @@ async def create_wiki_generation_run(
         user_id = None
 
         if current_user:
-            allowed = reader.get_run_for_user(str(index_run_id), current_user["id"])
+            logger.info(f"🔐 Authenticated flow - checking access for user: {current_user['id']}")
+            try:
+                logger.info(f"🔍 Checking access for user {current_user['id']} to run {index_run_id}")
+                allowed = reader.get_run_for_user(str(index_run_id), current_user["id"])
+                logger.info(f"🔍 Access check result: {bool(allowed)} - {allowed}")
+            except Exception as access_error:
+                logger.error(f"❌ Error checking user access: {access_error}")
+                logger.error(f"📍 Access check traceback: {traceback.format_exc()}")
+                raise
+                
             if not allowed:
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
+                logger.warning(f"🚫 Access denied for user {current_user['id']} to indexing run {index_run_id}")
                 raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
             upload_type = allowed.get("upload_type", "user_project")
             project_id = allowed.get("project_id")
             user_id = current_user["id"]
+            logger.info(f"✅ Access granted - upload_type: {upload_type}, project_id: {project_id}")
         else:
+            logger.info("🔓 Anonymous flow - checking email upload access")
             # Anonymous: fetch minimal run info via orchestrator/pipeline (email-only allowed)
             from ..services.pipeline_service import PipelineService
 
-            pipeline_service = PipelineService(use_admin_client=True)
-            indexing_run = await pipeline_service.get_indexing_run(str(index_run_id))
+            try:
+                logger.info(f"📡 Fetching anonymous indexing run: {index_run_id}")
+                pipeline_service = PipelineService(use_admin_client=True)
+                indexing_run = await pipeline_service.get_indexing_run(str(index_run_id))
+                logger.info(f"🔍 Indexing run found: {bool(indexing_run)}")
+                if indexing_run:
+                    logger.info(f"📋 Run details - ID: {getattr(indexing_run, 'id', 'N/A')}, " + 
+                           f"Status: {getattr(indexing_run, 'status', 'N/A')}")
+            except Exception as pipeline_error:
+                logger.error(f"❌ Error fetching indexing run: {pipeline_error}")
+                logger.error(f"📍 Pipeline fetch traceback: {traceback.format_exc()}")
+                raise
+                
             if not indexing_run:
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
+                logger.warning(f"🚫 Indexing run {index_run_id} not found")
                 raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
             upload_type = getattr(indexing_run, "upload_type", "user_project")
             project_id = getattr(indexing_run, "project_id", None)
+            logger.info(f"📋 Run details - upload_type: {upload_type}, project_id: {project_id}")
+            
             if upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
+                logger.warning(f"🚫 Anonymous access denied for non-email upload type: {upload_type}")
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
                 )
 
         # Start wiki generation in background
-        background_tasks.add_task(
-            orchestrator.run_pipeline,
-            str(index_run_id),
-            user_id,
-            project_id,
-            upload_type,
-        )
-
+        logger.info(f"🔄 Starting background task with: user_id={user_id}, " + 
+                    f"project_id={project_id}, upload_type={upload_type}")
+        try:
+            background_tasks.add_task(
+                orchestrator.run_pipeline,
+                str(index_run_id),
+                user_id,
+                project_id,
+                upload_type,
+            )
+            logger.info("✅ Wiki generation background task added successfully")
+        except Exception as task_error:
+            logger.error(f"❌ Failed to add background task: {task_error}")
+            logger.error(f"📍 Background task traceback: {traceback.format_exc()}")
+            raise
         return {
             "message": "Wiki generation started",
             "index_run_id": str(index_run_id),
@@ -89,6 +128,8 @@ async def create_wiki_generation_run(
         }
 
     except HTTPException as exc:
+        logger.error(f"📡 HTTPException in wiki generation: {exc}")
+        logger.error(f"📍 HTTPException traceback: {traceback.format_exc()}")
         status = getattr(exc, "status_code", 500)
         code = (
             ErrorCode.NOT_FOUND
@@ -98,8 +139,12 @@ async def create_wiki_generation_run(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to start wiki generation")), error_code=code) from exc
+    except AppError:
+        # Re-raise AppError as-is
+        raise
     except Exception as e:
-        logger.error(f"Failed to start wiki generation: {e}")
+        logger.error(f"💥 Unexpected error in wiki generation: {type(e).__name__}: {e}")
+        logger.error(f"📍 Full traceback: {traceback.format_exc()}")
         raise AppError("Failed to start wiki generation", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
@@ -119,9 +164,6 @@ async def list_wiki_runs(
         if current_user:
             allowed = reader.get_run_for_user(str(index_run_id), current_user["id"])
             if not allowed:
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
             upload_type = allowed.get("upload_type", "user_project")
         else:
@@ -130,15 +172,9 @@ async def list_wiki_runs(
             pipeline_service = PipelineService(use_admin_client=True)
             indexing_run = await pipeline_service.get_indexing_run(str(index_run_id))
             if not indexing_run:
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
             upload_type = getattr(indexing_run, "upload_type", "user_project")
             if upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -162,6 +198,7 @@ async def list_wiki_runs(
         ]
 
     except HTTPException as exc:
+        logger.error(f"HTTPException in list_wiki_runs: {exc}")
         status = getattr(exc, "status_code", 500)
         code = (
             ErrorCode.NOT_FOUND
@@ -171,8 +208,11 @@ async def list_wiki_runs(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to list wiki runs")), error_code=code) from exc
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to list wiki runs: {e}")
+        logger.error(f"Unexpected error in list_wiki_runs: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to list wiki runs", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
@@ -188,17 +228,11 @@ async def get_wiki_pages(
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
         if not wiki_run:
-            from ..shared.errors import ErrorCode
-            from ..utils.exceptions import AppError
-
             raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         # For authenticated users, validate ownership
         if current_user:
             if wiki_run.user_id and str(current_user.get("id")) != str(wiki_run.user_id):
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: This wiki run does not belong to you", error_code=ErrorCode.ACCESS_DENIED
                 )
@@ -206,9 +240,6 @@ async def get_wiki_pages(
         # For unauthenticated users, only allow access to email uploads
         if not current_user:
             if wiki_run.upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -246,8 +277,11 @@ async def get_wiki_pages(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to get wiki pages")), error_code=code) from exc
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to get wiki pages: {e}")
+        logger.error(f"Unexpected error in get_wiki_pages: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to get wiki pages", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
@@ -265,17 +299,11 @@ async def get_wiki_page_content(
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
         if not wiki_run:
-            from ..shared.errors import ErrorCode
-            from ..utils.exceptions import AppError
-
             raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         # For authenticated users, validate ownership
         if current_user:
             if wiki_run.user_id and str(current_user.get("id")) != str(wiki_run.user_id):
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: This wiki run does not belong to you", error_code=ErrorCode.ACCESS_DENIED
                 )
@@ -283,9 +311,6 @@ async def get_wiki_page_content(
         # For unauthenticated users, only allow access to email uploads
         if not current_user:
             if wiki_run.upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -325,11 +350,11 @@ async def get_wiki_page_content(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to get wiki page content")), error_code=code) from exc
+    except AppError:
+        raise
     except Exception as e:
-        from ..shared.errors import ErrorCode
-        from ..utils.exceptions import AppError
-        
-        logger.error(f"Failed to get wiki page content: {e}")
+        logger.error(f"Unexpected error in get_wiki_page_content: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to get wiki page content", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
@@ -345,17 +370,11 @@ async def get_wiki_metadata(
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
         if not wiki_run:
-            from ..shared.errors import ErrorCode
-            from ..utils.exceptions import AppError
-
             raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         # For authenticated users, validate ownership
         if current_user:
             if wiki_run.user_id and str(current_user.get("id")) != str(wiki_run.user_id):
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: This wiki run does not belong to you", error_code=ErrorCode.ACCESS_DENIED
                 )
@@ -363,9 +382,6 @@ async def get_wiki_metadata(
         # For unauthenticated users, only allow access to email uploads
         if not current_user:
             if wiki_run.upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -393,8 +409,11 @@ async def get_wiki_metadata(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to get wiki metadata")), error_code=code) from exc
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to get wiki metadata: {e}")
+        logger.error(f"Unexpected error in get_wiki_metadata: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to get wiki metadata", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
@@ -410,17 +429,11 @@ async def delete_wiki_run(
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
         if not wiki_run:
-            from ..shared.errors import ErrorCode
-            from ..utils.exceptions import AppError
-
             raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         # For authenticated users, validate ownership
         if current_user:
             if wiki_run.user_id and str(current_user.get("id")) != str(wiki_run.user_id):
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: This wiki run does not belong to you",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -429,9 +442,6 @@ async def delete_wiki_run(
         # For unauthenticated users, only allow access to email uploads
         if not current_user:
             if wiki_run.upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -441,9 +451,6 @@ async def delete_wiki_run(
         success = await orchestrator.delete_wiki_run(str(wiki_run_id))
 
         if not success:
-            from ..shared.errors import ErrorCode
-            from ..utils.exceptions import AppError
-
             raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         return {
@@ -461,8 +468,11 @@ async def delete_wiki_run(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to delete wiki run")), error_code=code) from exc
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to delete wiki run: {e}")
+        logger.error(f"Unexpected error in delete_wiki_run: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to delete wiki run", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
@@ -477,17 +487,11 @@ async def get_wiki_run_status(
 
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
         if not wiki_run:
-            from ..shared.errors import ErrorCode
-            from ..utils.exceptions import AppError
-
             raise AppError("Wiki run not found", error_code=ErrorCode.NOT_FOUND)
 
         # For authenticated users, validate ownership
         if current_user:
             if wiki_run.user_id and str(current_user.get("id")) != str(wiki_run.user_id):
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: This wiki run does not belong to you", error_code=ErrorCode.ACCESS_DENIED
                 )
@@ -495,9 +499,6 @@ async def get_wiki_run_status(
         # For unauthenticated users, only allow access to email uploads
         if not current_user:
             if wiki_run.upload_type != "email":
-                from ..shared.errors import ErrorCode
-                from ..utils.exceptions import AppError
-
                 raise AppError(
                     "Access denied: Authentication required for user project wikis",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -522,6 +523,9 @@ async def get_wiki_run_status(
             else ErrorCode.INTERNAL_ERROR
         )
         raise AppError(str(getattr(exc, "detail", "Failed to get wiki run status")), error_code=code) from exc
+    except AppError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to get wiki run status: {e}")
+        logger.error(f"Unexpected error in get_wiki_run_status: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to get wiki run status", error_code=ErrorCode.INTERNAL_ERROR) from e
