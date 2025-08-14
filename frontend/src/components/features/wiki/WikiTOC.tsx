@@ -86,9 +86,9 @@ export default function WikiTOC({ content }: WikiTOCProps) {
   };
 
   return (
-    <div className="w-64 bg-card h-full">
-      <div className="p-4 sticky top-0">
-        <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wide pt-6">
+    <div className="w-64 bg-card h-full flex flex-col">
+      <div className="p-4 flex-1 overflow-y-auto">
+        <h3 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wide pt-6 sticky top-0 bg-card">
           On This Page
         </h3>
 

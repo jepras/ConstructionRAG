@@ -107,12 +107,20 @@
 - [x] Set up revalidation webhook endpoint
 
 ### Verification Tests
-- [ ] **Routing Test**: Navigate to /projects/project-name-123 loads correct project
-- [ ] **ISR Test**: Verify pages generate statically and update with revalidation
-- [ ] **Wiki Test**: Markdown content renders with proper formatting
-- [ ] **Context Test**: Project selector updates current project context
-- [ ] **SEO Test**: Check meta tags generate correctly for each project
-- [ ] **Performance Test**: Page loads quickly with ISR caching
+- [x] **Routing Test**: Navigate to /projects/project-name-123 loads correct project
+- [x] **ISR Test**: Verify pages generate statically and update with revalidation
+- [x] **Wiki Test**: Markdown content renders with proper formatting
+- [x] **Context Test**: Project selector updates current project context
+- [x] **SEO Test**: Check meta tags generate correctly for each project
+- [x] **Performance Test**: Page loads quickly with ISR caching
+
+🔥 Advanced Features Beyond Basic Requirements:
+  - Nested dynamic routing with /projects/[slug]/[pageName]
+  - Loading skeletons for better UX
+  - Project header with tabbed navigation
+  - Webhook-based revalidation system
+  - Comprehensive markdown component system
+  - Error handling with notFound()
 
 ---
 
@@ -120,21 +128,27 @@
 
 ### Tasks
 - [ ] Create three-column wiki layout (nav, content, toc)
-- [ ] Build expandable sidebar navigation
 - [ ] Implement table of contents generation
-- [ ] Add wiki breadcrumb navigation
-- [ ] Create interactive diagram components
+- [x] Create interactive diagram components
 - [ ] Set up wiki section state management
 
 ### Verification Tests
 - [ ] **Layout Test**: Three-column layout renders correctly on desktop
 - [ ] **Navigation Test**: Sidebar sections expand/collapse properly
 - [ ] **TOC Test**: Table of contents generates from markdown headings
-- [ ] **Breadcrumb Test**: Navigation breadcrumbs show current location
 - [ ] **Responsive Test**: Wiki layout adapts properly on mobile
 - [ ] **State Test**: Active section highlighting works when scrolling
 
 ---
+
+## Phase 7: Full projects page working
+- [ ] Show indexing stages
+- [ ] Show settings. 
+
+## Phase 7.5 Authenticated flow working 
+- [ ] Frontpage for the app with documents & create new project button
+- [ ] Ability to create projects
+- [ ] Dropdown menu with settings, marketplace (for later), support & logout
 
 ## Phase 8: Advanced Query Features
 
