@@ -21,61 +21,57 @@ from src.config.database import get_supabase_admin_client
 from src.services.storage_service import StorageService
 
 
-async def trigger_wiki_generation(indexing_run_id: str, backend_url: str, auth_token: str = None, user_id: str = None, project_id: str = None):
+async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhook_api_key: str):
     """
-    Trigger wiki generation for a completed indexing run.
+    Trigger wiki generation for a completed indexing run via webhook.
     
     Args:
         indexing_run_id: The completed indexing run ID
-        backend_url: The backend URL to call for wiki generation
-        auth_token: JWT token for authenticated requests (optional)
-        user_id: User ID (optional for email uploads)
-        project_id: Project ID (optional for email uploads)
+        webhook_url: The webhook URL to call for wiki generation
+        webhook_api_key: API key for webhook authentication
     """
     try:
-        if not backend_url:
-            print("⚠️ Backend URL not provided, skipping wiki generation")
+        if not webhook_url:
+            print("⚠️ Webhook URL not provided, skipping wiki generation")
             return
         
-        wiki_url = f"{backend_url}/api/wiki/runs?index_run_id={indexing_run_id}"
-        payload = {}  # Empty payload since index_run_id is now a query parameter
+        if not webhook_api_key:
+            print("⚠️ Webhook API key not provided, skipping wiki generation")
+            return
         
-        print(f"🔄 Triggering wiki generation for run: {indexing_run_id}")
-        print(f"🔍 DEBUG: Wiki URL: {wiki_url}")
+        payload = {"indexing_run_id": indexing_run_id}
+        
+        print(f"🔄 Triggering wiki generation via webhook for run: {indexing_run_id}")
+        print(f"🔍 DEBUG: Webhook URL: {webhook_url}")
         print(f"🔍 DEBUG: Payload: {payload}")
-        print(f"🔍 DEBUG: Auth token provided: {bool(auth_token)}")
-        print(f"🔍 DEBUG: User ID: {user_id}")
-        print(f"🔍 DEBUG: Project ID: {project_id}")
+        print(f"🔍 DEBUG: API key provided: {bool(webhook_api_key)}")
         
-        # Set up headers for authentication if token is provided
-        headers = {"Content-Type": "application/json"}
-        if auth_token:
-            headers["Authorization"] = f"Bearer {auth_token}"
-            print(f"🔐 Using JWT token for authenticated wiki generation")
-            print(f"🔍 DEBUG: Auth header set: Bearer {auth_token[:20]}...{auth_token[-10:] if len(auth_token) > 30 else auth_token}")
-        else:
-            print(f"🔓 Making anonymous wiki generation request")
+        # Set up headers with API key authentication
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": webhook_api_key
+        }
         
-        print(f"🌐 Making HTTP POST request to: {wiki_url}")
+        print(f"🌐 Making HTTP POST request to webhook: {webhook_url}")
         print(f"📤 Headers: {list(headers.keys())}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
-                response = await client.post(wiki_url, json=payload, headers=headers)
+                response = await client.post(webhook_url, json=payload, headers=headers)
                 
                 print(f"📥 Response status: {response.status_code}")
                 print(f"📥 Response headers: {dict(response.headers)}")
                 print(f"📥 Response text: {response.text}")
                 
                 if response.status_code == 200:
-                    print(f"✅ Wiki generation triggered successfully")
+                    print(f"✅ Wiki generation triggered successfully via webhook")
                     try:
                         response_json = response.json()
                         print(f"📄 Response JSON: {response_json}")
                     except Exception as json_error:
                         print(f"⚠️ Could not parse response as JSON: {json_error}")
                 else:
-                    print(f"⚠️ Wiki generation trigger failed: {response.status_code} - {response.text}")
+                    print(f"⚠️ Wiki generation webhook trigger failed: {response.status_code} - {response.text}")
                     print(f"🔍 DEBUG: Response reason: {response.reason_phrase}")
                     
             except httpx.TimeoutException as timeout_error:
@@ -97,8 +93,8 @@ async def run_indexing_pipeline_on_beam(
     document_ids: List[str],
     user_id: str = None,
     project_id: str = None,
-    backend_url: str = None,
-    auth_token: str = None,
+    webhook_url: str = None,
+    webhook_api_key: str = None,
 ) -> Dict[str, Any]:
     """
     Main Beam worker function for document indexing pipeline.
@@ -111,6 +107,8 @@ async def run_indexing_pipeline_on_beam(
         document_ids: List of document IDs to process
         user_id: User ID who uploaded the documents (optional for email uploads)
         project_id: Project ID the documents belong to (optional for email uploads)
+        webhook_url: URL to call for wiki generation after indexing completion
+        webhook_api_key: API key for webhook authentication
 
     Returns:
         Dict containing processing results and statistics
@@ -222,11 +220,11 @@ async def run_indexing_pipeline_on_beam(
         if success:
             print(f"✅ Indexing pipeline completed successfully")
             
-            # Trigger wiki generation
-            if backend_url:
-                await trigger_wiki_generation(indexing_run_id, backend_url, auth_token, user_id, project_id)
+            # Trigger wiki generation via webhook
+            if webhook_url and webhook_api_key:
+                await trigger_wiki_generation(indexing_run_id, webhook_url, webhook_api_key)
             else:
-                print("⚠️ Backend URL not provided, skipping wiki generation")
+                print("⚠️ Webhook URL or API key not provided, skipping wiki generation")
             
             return {
                 "status": "completed",
@@ -274,8 +272,8 @@ def process_documents(
     document_ids: list,
     user_id: str = None,
     project_id: str = None,
-    backend_url: str = None,
-    auth_token: str = None,
+    webhook_url: str = None,
+    webhook_api_key: str = None,
 ):
     """
     Beam task queue entry point for document indexing pipeline.
@@ -296,13 +294,13 @@ def process_documents(
         print(f"  - document_ids: {document_ids}")
         print(f"  - user_id: {user_id}")
         print(f"  - project_id: {project_id}")
-        print(f"  - backend_url: {backend_url}")
-        print(f"  - auth_token: {bool(auth_token)}")
+        print(f"  - webhook_url: {webhook_url}")
+        print(f"  - webhook_api_key: {bool(webhook_api_key)}")
         
         # Run the async function in an event loop
         return asyncio.run(
             run_indexing_pipeline_on_beam(
-                indexing_run_id, document_ids, user_id, project_id, backend_url, auth_token
+                indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
             )
         )
     else:

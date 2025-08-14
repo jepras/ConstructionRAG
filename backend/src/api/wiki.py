@@ -1,16 +1,19 @@
 """Wiki generation API endpoints."""
 
 import logging
+import os
 import traceback
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header
+from pydantic import BaseModel
 
-from ..config.database import get_supabase_client
+from ..config.database import get_supabase_client, get_supabase_admin_client
 from ..pipeline.wiki_generation.orchestrator import WikiGenerationOrchestrator
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
+from ..services.pipeline_service import PipelineService
 from ..services.storage_service import StorageService
 from ..shared.errors import ErrorCode
 from ..utils.exceptions import AppError
@@ -18,6 +21,86 @@ from ..utils.exceptions import AppError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/wiki", tags=["Wiki"])
+
+
+class WebhookRequest(BaseModel):
+    indexing_run_id: str
+
+@router.post("/internal/webhook", response_model=dict[str, Any])
+async def trigger_wiki_from_beam(
+    request: WebhookRequest,
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(..., alias="X-API-Key"),
+):
+    """Internal webhook endpoint for Beam to trigger wiki generation after indexing completion.
+    
+    This endpoint is called by Beam after indexing runs complete, eliminating the need
+    to pass JWT tokens to external services. The endpoint fetches the indexing run
+    details and initiates wiki generation with proper authentication context.
+    """
+    try:
+        # Verify API key
+        expected_api_key = os.getenv("BEAM_WEBHOOK_API_KEY")
+        if not expected_api_key:
+            logger.error("BEAM_WEBHOOK_API_KEY environment variable not configured")
+            raise AppError("Webhook authentication not configured", error_code=ErrorCode.INTERNAL_ERROR)
+        
+        if x_api_key != expected_api_key:
+            logger.warning(f"Invalid API key provided for webhook: {x_api_key[:10]}...")
+            raise AppError("Invalid API key", error_code=ErrorCode.UNAUTHORIZED)
+        
+        indexing_run_id = request.indexing_run_id
+        logger.info(f"🔗 Webhook triggered for indexing run: {indexing_run_id}")
+        
+        # Fetch indexing run details using admin client
+        admin_db = get_supabase_admin_client()
+        run_result = admin_db.table("indexing_runs").select("*").eq("id", str(indexing_run_id)).execute()
+        
+        if not run_result.data:
+            logger.error(f"Indexing run {indexing_run_id} not found")
+            raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
+        
+        run_data = run_result.data[0]
+        upload_type = run_data.get("upload_type")
+        user_id = run_data.get("user_id")
+        project_id = run_data.get("project_id")
+        
+        logger.info(f"📋 Run details - upload_type: {upload_type}, user_id: {user_id}, project_id: {project_id}")
+        
+        # Initialize orchestrator based on upload type
+        if upload_type == "email":
+            # Email uploads: Use admin client (no user context needed)
+            orchestrator = WikiGenerationOrchestrator(db_client=None)
+            logger.info("🔓 Using admin context for email upload wiki generation")
+        else:
+            # User project uploads: Use admin client but pass user context
+            orchestrator = WikiGenerationOrchestrator(db_client=None)
+            logger.info(f"🔐 Using admin context for user project wiki generation (user: {user_id})")
+        
+        # Start wiki generation in background
+        background_tasks.add_task(
+            orchestrator.run_pipeline,
+            str(indexing_run_id),
+            user_id,
+            project_id,
+            upload_type,
+        )
+        
+        logger.info(f"✅ Wiki generation background task added for run: {indexing_run_id}")
+        
+        return {
+            "message": "Wiki generation started via webhook",
+            "indexing_run_id": str(indexing_run_id),
+            "upload_type": upload_type,
+            "status": "started",
+        }
+        
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Unexpected error in webhook: {type(e).__name__}: {e}")
+        logger.error(f"📍 Full traceback: {traceback.format_exc()}")
+        raise AppError("Failed to process webhook", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 async def get_optional_user(

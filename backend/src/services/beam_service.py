@@ -28,7 +28,6 @@ class BeamService:
         document_ids: List[str],
         user_id: str = None,
         project_id: str = None,
-        auth_token: str = None,
     ) -> Dict[str, Any]:
         """
         Trigger the indexing pipeline on Beam.
@@ -38,7 +37,6 @@ class BeamService:
             document_ids: List of document IDs to process
             user_id: User ID (optional for email uploads)
             project_id: Project ID (optional for email uploads)
-            auth_token: JWT token for authenticated wiki generation (optional)
 
         Returns:
             Dict containing the task_id and status
@@ -55,21 +53,19 @@ class BeamService:
             if project_id:
                 payload["project_id"] = project_id
             
-            # Add backend URL for wiki generation webhook
+            # Add webhook URL and API key for wiki generation
             backend_url = os.getenv("BACKEND_API_URL")
+            webhook_api_key = os.getenv("BEAM_WEBHOOK_API_KEY")
             logger.info(f"🔍 DEBUG: BACKEND_API_URL from environment: {backend_url}")
-            if backend_url:
-                payload["backend_url"] = backend_url
-                logger.info(f"✅ Added backend_url to payload: {backend_url}")
-            else:
-                logger.warning("⚠️ BACKEND_API_URL not set in local environment - wiki generation will be skipped")
+            logger.info(f"🔍 DEBUG: BEAM_WEBHOOK_API_KEY configured: {bool(webhook_api_key)}")
             
-            # Add auth token for authenticated wiki generation
-            if auth_token:
-                payload["auth_token"] = auth_token
-                logger.info(f"✅ Added auth_token to payload for authenticated wiki generation")
+            if backend_url and webhook_api_key:
+                payload["webhook_url"] = f"{backend_url}/api/wiki/internal/webhook"
+                payload["webhook_api_key"] = webhook_api_key
+                logger.info(f"✅ Added webhook configuration to payload")
+                logger.info(f"📡 Webhook URL: {payload['webhook_url']}")
             else:
-                logger.info("ℹ️ No auth_token provided - wiki generation will be anonymous")
+                logger.warning("⚠️ BACKEND_API_URL or BEAM_WEBHOOK_API_KEY not set - wiki generation will be skipped")
 
             headers = {
                 "Content-Type": "application/json",

@@ -161,7 +161,6 @@ async def create_upload(
                 document_data=document_data,
                 user_id=None,
                 project_id=None,
-                auth_token=None,  # Email uploads are anonymous
             )
 
             return UploadCreateResponse(
@@ -225,9 +224,6 @@ async def create_upload(
             )
             document_ids.append(created["document_id"])
 
-        # Extract JWT token for authenticated API calls
-        auth_token = credentials.credentials if credentials else None
-        
         # Trigger background processing for project uploads
         background_tasks.add_task(
             process_upload_async,
@@ -236,7 +232,6 @@ async def create_upload(
             document_data=document_ids,  # Pass the document IDs directly
             user_id=current_user["id"],
             project_id=str(project_id),
-            auth_token=auth_token,
         )
 
         return UploadCreateResponse(
@@ -460,7 +455,6 @@ async def process_upload_async(
     document_data: list[dict[str, Any]] | None = None,
     user_id: str | None = None,
     project_id: str | None = None,
-    auth_token: str | None = None,
 ):
     """Background processing for uploads (email and project) using Beam"""
 
@@ -500,7 +494,6 @@ async def process_upload_async(
                 document_ids=document_ids,
                 user_id=user_id,
                 project_id=project_id,
-                auth_token=auth_token,
             )
 
             if beam_result["status"] == "triggered":
