@@ -42,9 +42,6 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
         payload = {"indexing_run_id": indexing_run_id}
         
         print(f"🔄 Triggering wiki generation via webhook for run: {indexing_run_id}")
-        print(f"🔍 DEBUG: Webhook URL: {webhook_url}")
-        print(f"🔍 DEBUG: Payload: {payload}")
-        print(f"🔍 DEBUG: API key provided: {bool(webhook_api_key)}")
         
         # Set up headers with API key authentication
         headers = {
@@ -52,27 +49,15 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
             "X-API-Key": webhook_api_key
         }
         
-        print(f"🌐 Making HTTP POST request to webhook: {webhook_url}")
-        print(f"📤 Headers: {list(headers.keys())}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(webhook_url, json=payload, headers=headers)
                 
-                print(f"📥 Response status: {response.status_code}")
-                print(f"📥 Response headers: {dict(response.headers)}")
-                print(f"📥 Response text: {response.text}")
-                
                 if response.status_code == 200:
                     print(f"✅ Wiki generation triggered successfully via webhook")
-                    try:
-                        response_json = response.json()
-                        print(f"📄 Response JSON: {response_json}")
-                    except Exception as json_error:
-                        print(f"⚠️ Could not parse response as JSON: {json_error}")
                 else:
-                    print(f"⚠️ Wiki generation webhook trigger failed: {response.status_code} - {response.text}")
-                    print(f"🔍 DEBUG: Response reason: {response.reason_phrase}")
+                    print(f"⚠️ Wiki generation webhook trigger failed: {response.status_code}")
                     
             except httpx.TimeoutException as timeout_error:
                 print(f"⏰ Request timed out: {timeout_error}")
@@ -83,8 +68,6 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
                 
     except Exception as e:
         print(f"⚠️ Error triggering wiki generation: {type(e).__name__}: {e}")
-        import traceback
-        print(f"📍 Full traceback: {traceback.format_exc()}")
         # Don't fail the indexing pipeline if wiki generation fails
 
 
@@ -288,15 +271,6 @@ def process_documents(
         project_id: Project ID the documents belong to (optional for email uploads)
     """
     if env.is_remote():
-        # Debug: Log all parameters received
-        print(f"🔍 DEBUG: Received parameters:")
-        print(f"  - indexing_run_id: {indexing_run_id}")
-        print(f"  - document_ids: {document_ids}")
-        print(f"  - user_id: {user_id}")
-        print(f"  - project_id: {project_id}")
-        print(f"  - webhook_url: {webhook_url}")
-        print(f"  - webhook_api_key: {bool(webhook_api_key)}")
-        
         # Run the async function in an event loop
         return asyncio.run(
             run_indexing_pipeline_on_beam(

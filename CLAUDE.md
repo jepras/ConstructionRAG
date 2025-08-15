@@ -143,6 +143,14 @@ frontend/
    - **Page Content Retrieval**: Gather relevant content for each wiki page
    - **Markdown Generation**: Generate final markdown pages with proper formatting
 
+### Webhook Integration Flow
+
+The current working webhook path for automatic wiki generation after indexing:
+
+1. **Upload triggers indexing** → BeamService sends request to Beam with `webhook_url` and `webhook_api_key`
+2. **Beam runs indexing** → When complete, calls webhook at `{BACKEND_API_URL}/api/wiki/internal/webhook`
+3. **Webhook endpoint** → Verifies API key and triggers wiki generation in background
+
 ### Configuration Management
 - Pipeline settings in single JSON SoT: `config/pipeline/pipeline_config.json`
 - ConfigService loads from JSON with environment variable substitution

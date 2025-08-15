@@ -25,6 +25,7 @@ def setup_logging(log_level: str | None = None) -> None:
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
+            structlog.processors.EventRenamer("msg"),  # Rename 'event' to 'msg' for Railway
             structlog.processors.JSONRenderer(),
         ],
         context_class=dict,
@@ -36,11 +37,12 @@ def setup_logging(log_level: str | None = None) -> None:
     # Configure standard library logging to use ProcessorFormatter
     # so stdlib logging is rendered as structured JSON
     formatter = structlog.stdlib.ProcessorFormatter(
-        processor=structlog.processors.JSONRenderer(),
+        processor=structlog.dev.ConsoleRenderer() if log_level == "DEBUG" else structlog.processors.JSONRenderer(),
         foreign_pre_chain=[
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
             structlog.stdlib.add_logger_name,
+            structlog.processors.EventRenamer("msg"),  # Ensure stdlib logs also use 'msg'
         ],
     )
 

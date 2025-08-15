@@ -56,16 +56,13 @@ class BeamService:
             # Add webhook URL and API key for wiki generation
             backend_url = os.getenv("BACKEND_API_URL")
             webhook_api_key = os.getenv("BEAM_WEBHOOK_API_KEY")
-            logger.info(f"🔍 DEBUG: BACKEND_API_URL from environment: {backend_url}")
-            logger.info(f"🔍 DEBUG: BEAM_WEBHOOK_API_KEY configured: {bool(webhook_api_key)}")
             
             if backend_url and webhook_api_key:
                 payload["webhook_url"] = f"{backend_url}/api/wiki/internal/webhook"
                 payload["webhook_api_key"] = webhook_api_key
-                logger.info(f"✅ Added webhook configuration to payload")
-                logger.info(f"📡 Webhook URL: {payload['webhook_url']}")
+                logger.info("Added webhook configuration for wiki generation")
             else:
-                logger.warning("⚠️ BACKEND_API_URL or BEAM_WEBHOOK_API_KEY not set - wiki generation will be skipped")
+                logger.warning("BACKEND_API_URL or BEAM_WEBHOOK_API_KEY not set - wiki generation will be skipped")
 
             headers = {
                 "Content-Type": "application/json",
@@ -74,7 +71,6 @@ class BeamService:
 
             logger.info(f"Triggering Beam task for indexing run: {indexing_run_id}")
             logger.info(f"Document IDs: {document_ids}")
-            logger.info(f"🔍 DEBUG: Complete payload being sent to Beam: {payload}")
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(

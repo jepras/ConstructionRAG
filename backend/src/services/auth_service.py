@@ -35,21 +35,21 @@ class AuthService:
     async def sign_up(self, email: str, password: str) -> dict[str, Any]:
         """Sign up a new user"""
         try:
-            logger.info(f"Starting signup process for: {email}")
+            logger.info("Starting signup process", email=email)
 
             response = self.supabase_client.auth.sign_up({"email": email, "password": password})
 
-            logger.info(f"Supabase auth response: {response}")
+            logger.info("Supabase auth response received", has_user=bool(response.user))
 
             if response.user:
-                logger.info(f"User created in auth.users with ID: {response.user.id}")
+                logger.info("User created in auth.users", user_id=response.user.id)
 
                 # Auto-create user profile
                 try:
                     await self._create_user_profile(response.user.id, email)
-                    logger.info(f"User profile created successfully for: {response.user.id}")
+                    logger.info("User profile created successfully", user_id=response.user.id)
                 except Exception as profile_error:
-                    logger.error(f"Failed to create user profile: {str(profile_error)}")
+                    logger.error("Failed to create user profile", error=str(profile_error))
                     # Don't fail the signup if profile creation fails
 
                 return {
@@ -66,7 +66,7 @@ class AuthService:
                 raise AuthenticationError("Failed to create user")
 
         except Exception as e:
-            logger.error(f"Sign up failed for {email}: {str(e)}")
+            logger.error("Sign up failed", email=email, error=str(e))
             raise AuthenticationError("Sign up failed")
 
     async def sign_in(self, email: str, password: str) -> dict[str, Any]:
@@ -75,7 +75,7 @@ class AuthService:
             response = self.supabase_client.auth.sign_in_with_password({"email": email, "password": password})
 
             if response.user and response.session:
-                logger.info(f"User signed in successfully: {email}")
+                logger.info("User signed in successfully", email=email)
 
                 return {
                     "success": True,
@@ -90,7 +90,7 @@ class AuthService:
                 raise AuthenticationError("Invalid credentials")
 
         except Exception as e:
-            logger.error(f"Sign in failed for {email}: {str(e)}")
+            logger.error("Sign in failed", email=email, error=str(e))
             raise AuthenticationError("Invalid credentials")
 
     async def sign_out(self, access_token: str) -> dict[str, Any]:
@@ -102,14 +102,14 @@ class AuthService:
             return {"success": True, "message": "Signed out successfully"}
 
         except Exception as e:
-            logger.error(f"Sign out failed: {str(e)}")
+            logger.error("Sign out failed", error=str(e))
             raise AppError("Sign out failed")
 
     async def reset_password(self, email: str) -> dict[str, Any]:
         """Send password reset email"""
         try:
             self.supabase_client.auth.reset_password_email(email)
-            logger.info(f"Password reset email sent to: {email}")
+            logger.info("Password reset email sent", email=email)
 
             return {
                 "success": True,
@@ -117,7 +117,7 @@ class AuthService:
             }
 
         except Exception as e:
-            logger.error(f"Password reset failed for {email}: {str(e)}")
+            logger.error("Password reset failed", email=email, error=str(e))
             raise AppError("Password reset failed")
 
     async def get_current_user(self, access_token: str) -> dict[str, Any] | None:
@@ -140,7 +140,7 @@ class AuthService:
                 return None
 
             profile = await self._get_user_profile(user_id)
-            logger.info(f"Successfully authenticated user: {user_id}")
+            logger.info("Successfully authenticated user", user_id=user_id)
             
             return {
                 "id": user_id,
