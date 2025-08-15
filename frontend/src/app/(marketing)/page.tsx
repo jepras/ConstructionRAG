@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Search, Upload, MessageSquare, Download, Info, Eye, ArrowUp, Mic } from "lucide-react";
+import { Search, Upload, MessageSquare, Download, Info, ArrowUp, Mic } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
@@ -171,9 +171,9 @@ export default function Home() {
             {/* PDF Viewer */}
             <div className="bg-card border border-border rounded-lg overflow-hidden h-[500px] flex flex-col">
               {/* PDF Header */}
-              <div className="bg-secondary p-3 flex items-center justify-between border-b border-border">
+              <div className="bg-secondary p-2 flex items-center justify-between border-b border-border">
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-secondary-foreground">
+                  <span className="text-xs font-medium text-secondary-foreground">
                     {showResponse ? "meridian-heights-concrete.pdf" : "meridian-heights-overall-description.pdf"}
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -186,9 +186,6 @@ export default function Home() {
                   </Button>
                   <Button variant="ghost" size="sm">
                     <Search className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Eye className="w-4 h-4" />
                   </Button>
                   <Button variant="ghost" size="sm">
                     <Download className="w-4 h-4" />
@@ -297,7 +294,7 @@ export default function Home() {
           {/* CTA Button */}
           <div className="flex justify-center mt-12">
             <Link href="/projects">
-              <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20">
+              <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{animation: 'scale-pulse 2s ease-in-out infinite'}}>
                 Try search on a real project
               </Button>
             </Link>
