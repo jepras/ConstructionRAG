@@ -54,7 +54,7 @@ async def sign_up(request: SignUpRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Sign up error: {str(e)}")
+        logger.error("Sign up error", error=str(e))
         raise AppError("Sign up failed")
 
 
@@ -67,7 +67,7 @@ async def sign_in(request: SignInRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Sign in error: {str(e)}")
+        logger.error("Sign in error", error=str(e))
         raise AppError("Failed to sign in", error_code=AuthenticationError("").error_code) from e
 
 
@@ -75,12 +75,14 @@ async def sign_in(request: SignInRequest):
 async def sign_out(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Sign out the current user"""
     try:
+        logger.info("Sign out request received", token_prefix=credentials.credentials[:10] if credentials.credentials else None)
         result = await auth_service.sign_out(credentials.credentials)
+        logger.info("User signed out via API endpoint")
         return AuthResponse(**result)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Sign out error: {str(e)}")
+        logger.error("Sign out error", error=str(e))
         raise AppError("Failed to sign out", error_code=AuthenticationError("").error_code) from e
 
 
@@ -93,7 +95,7 @@ async def reset_password(request: PasswordResetRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Password reset error: {str(e)}")
+        logger.error("Password reset error", error=str(e))
         raise AppError("Failed to reset password") from e
 
 
@@ -120,7 +122,7 @@ async def refresh_token(request: RefreshTokenRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Token refresh error: {str(e)}")
+        logger.error("Token refresh error", error=str(e))
         raise AppError("Failed to refresh token", error_code=AuthenticationError("").error_code) from e
 
 

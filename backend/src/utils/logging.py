@@ -34,21 +34,9 @@ def setup_logging(log_level: str | None = None) -> None:
         cache_logger_on_first_use=True,
     )
 
-    # Configure standard library logging to use ProcessorFormatter
-    # so stdlib logging is rendered as structured JSON
-    formatter = structlog.stdlib.ProcessorFormatter(
-        processor=structlog.dev.ConsoleRenderer() if log_level == "DEBUG" else structlog.processors.JSONRenderer(),
-        foreign_pre_chain=[
-            structlog.contextvars.merge_contextvars,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.add_logger_name,
-            structlog.processors.EventRenamer("msg"),  # Ensure stdlib logs also use 'msg'
-        ],
-    )
-
+    # Configure standard library logging
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-
+    
     root_logger = logging.getLogger()
     root_logger.handlers = [handler]
     root_logger.setLevel(getattr(logging, log_level.upper()))
