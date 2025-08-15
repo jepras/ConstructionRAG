@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from src.config.database import get_db_client_for_request
+from src.config.database import get_db_client_for_request, get_supabase_client
 from src.models.base import AccessLevel
 from src.models.pipeline import ProjectCreate, ProjectUpdate
 from src.services.auth_service import get_current_user
@@ -25,6 +25,20 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None = None
     access_level: AccessLevel
+
+    class Config:
+        from_attributes = True
+
+
+class ProjectWithIndexingRunResponse(BaseModel):
+    """Enhanced project response that includes latest indexing run ID for frontend compatibility."""
+    id: UUID  # This will be the indexing run ID for frontend compatibility
+    name: str
+    description: str | None = None
+    access_level: AccessLevel
+    project_id: UUID | None = None  # The actual project ID
+    upload_type: str | None = None
+    status: str | None = None
 
     class Config:
         from_attributes = True
@@ -71,12 +85,13 @@ async def list_projects(
     return [ProjectResponse.model_validate(p) for p in items]
 
 
-@router.get("/projects/{project_id}", response_model=ProjectResponse)
+@router.get("/projects/{project_id}", response_model=ProjectWithIndexingRunResponse)
 async def get_project(
     project_id: UUID,
     current_user: dict[str, Any] = CURRENT_USER_DEP,
     db_client=DB_CLIENT_DEP,
 ):
+    """Get a project with its latest indexing run information for frontend compatibility."""
     svc = ProjectService(db_client)
     proj = svc.get(project_id, user_id=current_user["id"])
     if not proj:
@@ -84,7 +99,43 @@ async def get_project(
         from src.utils.exceptions import AppError
 
         raise AppError("Project not found", error_code=ErrorCode.NOT_FOUND)
-    return ProjectResponse.model_validate(proj)
+    
+    # Get the latest completed indexing run for this project from project_wikis table
+    db = get_supabase_client()
+    try:
+        latest_run_query = (
+            db.table("project_wikis")
+            .select("indexing_run_id, upload_type, wiki_status")
+            .eq("project_id", str(project_id))
+            .eq("user_id", current_user["id"])
+            .eq("wiki_status", "completed")
+            .order("created_at", desc=True)
+            .limit(1)
+        )
+        
+        latest_run_res = latest_run_query.execute()
+        
+        if latest_run_res.data:
+            # Return indexing run ID as the main ID for frontend compatibility
+            latest_run = latest_run_res.data[0]
+            return ProjectWithIndexingRunResponse(
+                id=UUID(latest_run["indexing_run_id"]),  # Frontend expects this as the main ID
+                name=proj.name,
+                description=proj.description,
+                access_level=proj.access_level,
+                project_id=proj.id,  # Store actual project ID separately
+                upload_type=latest_run.get("upload_type"),
+                status=latest_run.get("wiki_status")
+            )
+        else:
+            # No completed wikis found, fall back to project info
+            raise AppError("No completed wikis found for this project", error_code=ErrorCode.NOT_FOUND)
+            
+    except Exception as e:
+        # If project_wikis lookup fails, return basic project info
+        import logging
+        logging.warning(f"Failed to get latest indexing run for project {project_id}: {e}")
+        raise AppError("No completed wikis found for this project", error_code=ErrorCode.NOT_FOUND)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)

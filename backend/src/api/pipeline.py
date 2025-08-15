@@ -149,6 +149,135 @@ async def list_indexing_runs_with_wikis(
         raise AppError("Failed to list indexing runs with wikis", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
+@flat_router.get("/user-projects-with-wikis", response_model=list[dict[str, Any]])
+async def list_user_projects_with_wikis(
+    limit: int = 50,
+    offset: int = 0,
+    current_user: dict[str, Any] = Depends(get_current_user),
+    db_client=Depends(get_db_client_for_request),
+):
+    """List user's projects that have completed wikis using the project_wikis junction table.
+    
+    Returns project data grouped by project_id with latest completed wiki for each project.
+    Requires authentication.
+    """
+    try:
+        logger.info(f"🔍 list_user_projects_with_wikis called - user_id: {current_user.get('id', 'NONE')}")
+        db = db_client  # Use authenticated client for RLS
+        
+        # Check if project_wikis table exists
+        try:
+            test_query = db.table("project_wikis").select("id").limit(1)
+            test_res = test_query.execute()
+            logger.info("✅ Using project_wikis junction table for user projects")
+        except Exception as test_e:
+            logger.warning(f"❌ project_wikis table not available: {test_e}")
+            # Fallback: return empty for now - could implement legacy logic if needed
+            return []
+        
+        # Start with a basic query to see what exists
+        basic_query = (
+            db.table("project_wikis")
+            .select("*")
+            .eq("user_id", current_user["id"])
+            .eq("upload_type", "user_project")
+            .limit(10)
+        )
+        
+        logger.info(f"🔍 First checking basic query: user_id={current_user['id']}, upload_type=user_project")
+        basic_res = basic_query.execute()
+        logger.info(f"🔢 Basic query returned {len(basic_res.data or [])} rows")
+        
+        for row in basic_res.data or []:
+            logger.info(f"🐛 Found: project_id={row.get('project_id')}, wiki_status={row.get('wiki_status')}, pages_count={row.get('pages_count')}")
+        
+        # Now apply the full query with joins and proper filters
+        query = (
+            db.table("project_wikis")
+            .select("""
+                *,
+                wiki_generation_runs!project_wikis_wiki_run_id_fkey(
+                    wiki_structure,
+                    pages_metadata
+                ),
+                projects!project_wikis_project_id_fkey(
+                    name,
+                    description,
+                    created_at,
+                    updated_at
+                )
+            """)
+            .eq("user_id", current_user["id"])
+            .eq("upload_type", "user_project")
+            .eq("wiki_status", "completed")
+            .gt("pages_count", 0)
+            .order("project_id, created_at", desc=True)
+        )
+        
+        logger.info(f"🔍 Full query filters: user_id={current_user['id']}, upload_type=user_project, wiki_status=completed, pages_count>0")
+        
+        logger.info(f"📊 Executing query for user {current_user['id']}")
+        res = query.execute()
+        logger.info(f"🔢 Query returned {len(res.data or [])} rows")
+        
+        # Group by project_id and take the latest wiki for each project
+        projects_dict = {}
+        for row in res.data or []:
+            project_id = row.get("project_id")
+            if not project_id:
+                logger.warning(f"⚠️ Row missing project_id: {row}")
+                continue
+                
+            # Skip if we already have this project (since we ordered by created_at desc, first is latest)
+            if project_id in projects_dict:
+                continue
+                
+            wiki_data = row.get("wiki_generation_runs")
+            project_data = row.get("projects")
+            
+            if wiki_data and project_data:
+                # Create flattened response similar to public projects
+                flattened_row = {
+                    "id": project_id,  # Use project_id for consistency
+                    "indexing_run_id": row.get("indexing_run_id"),
+                    "wiki_run_id": row.get("wiki_run_id"),
+                    "project_name": project_data.get("name") or row.get("project_name"),
+                    "project_description": project_data.get("description"),
+                    "upload_type": row.get("upload_type"),
+                    "access_level": row.get("access_level"),
+                    "user_id": row.get("user_id"),
+                    "pages_count": row.get("pages_count", 0),
+                    "total_word_count": row.get("total_word_count", 0),
+                    "wiki_status": row.get("wiki_status"),
+                    "created_at": project_data.get("created_at"),
+                    "updated_at": max(project_data.get("updated_at", ""), row.get("updated_at", "")),
+                    "wiki_structure": wiki_data.get("wiki_structure", {}),
+                    "pages_metadata": wiki_data.get("pages_metadata", [])
+                }
+                projects_dict[project_id] = flattened_row
+        
+        # Convert to list and apply pagination
+        result_data = list(projects_dict.values())
+        
+        # Sort by updated_at desc (most recently updated first)
+        result_data.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        
+        # Apply pagination
+        start_idx = offset
+        end_idx = offset + limit
+        paginated_data = result_data[start_idx:end_idx]
+        
+        logger.info(f"✅ Returning {len(paginated_data)} projects for user {current_user['id']}")
+        return paginated_data
+        
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to list user projects with wikis: {e}")
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+        raise AppError("Failed to list user projects with wikis", error_code=ErrorCode.INTERNAL_ERROR) from e
+
+
+
 @flat_router.get("/indexing-runs", response_model=list[dict[str, Any]])
 async def list_indexing_runs(
     project_id: UUID | None = None,

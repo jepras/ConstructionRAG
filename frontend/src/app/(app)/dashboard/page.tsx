@@ -3,12 +3,41 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/providers/AuthProvider'
-import { useUserProjects } from '@/hooks/useApiQueries'
+import { useUserProjectsWithWikis } from '@/hooks/useApiQueries'
 import { Button } from '@/components/ui/button'
 import { ProjectCard } from '@/components/projects/ProjectCard'
 import { EmptyProjectsState } from '@/components/projects/EmptyProjectsState'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Plus } from 'lucide-react'
+
+// Utility function to transform backend project data to frontend ProjectCard format
+function transformUserProject(backendProject: any) {
+  const projectName = backendProject.project_name || 'Unnamed Project'
+  const projectId = backendProject.id
+  
+  // Generate slug: project-name-{project_id}
+  const slug = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${projectId}`
+  
+  // Map backend status to frontend status
+  let status: 'processing' | 'wiki_generated' | 'failed' | 'no_documents' = 'no_documents'
+  if (backendProject.wiki_status === 'completed') {
+    status = 'wiki_generated'
+  } else if (backendProject.wiki_status === 'running' || backendProject.wiki_status === 'pending') {
+    status = 'processing'
+  } else if (backendProject.wiki_status === 'failed') {
+    status = 'failed'
+  }
+  
+  return {
+    id: projectId,
+    name: projectName,
+    slug: slug,
+    status: status,
+    documentCount: backendProject.pages_count || 1, // Use pages_count as proxy for document count
+    createdAt: backendProject.created_at || new Date().toISOString(),
+    lastUpdated: backendProject.updated_at
+  }
+}
 
 // Mock data - replace with real API call later
 const mockProjects = [
@@ -61,12 +90,15 @@ function DashboardContent() {
   const { isLoading: authLoading } = useAuth()
   const [showMockData, setShowMockData] = useState(false) // Toggle for demo
   
-  // Fetch user projects from API - only when authenticated
+  // Fetch user projects with wikis from API - only when authenticated
   const { 
-    data: userProjects = [], 
+    data: backendProjects = [], 
     isLoading: projectsLoading,
     error: projectsError 
-  } = useUserProjects(50, 0)
+  } = useUserProjectsWithWikis(50, 0)
+
+  // Transform backend projects to frontend format
+  const transformedProjects = backendProjects.map(transformUserProject)
 
   // Show loading only during initial auth check
   if (authLoading) {
@@ -77,8 +109,8 @@ function DashboardContent() {
     )
   }
 
-  // Use mock data for demo or real data from API
-  const projects = showMockData ? mockProjects : userProjects
+  // Use mock data for demo or transformed real data from API
+  const projects = showMockData ? mockProjects : transformedProjects
 
   return (
     <div className="min-h-screen bg-background">

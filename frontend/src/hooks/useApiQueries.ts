@@ -200,6 +200,14 @@ export function useUserProjects(limit = 50, offset = 0) {
   })
 }
 
+export function useUserProjectsWithWikis(limit = 50, offset = 0) {
+  return useQuery({
+    queryKey: ['user-projects-with-wikis', limit, offset],
+    queryFn: () => apiClient.getUserProjectsWithWikis(limit, offset),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
 export function useProject(projectId: string | null, enabled = true) {
   return useQuery({
     queryKey: ['project', projectId],

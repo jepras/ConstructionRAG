@@ -460,13 +460,34 @@ export class ApiClient {
       throw new Error(`Invalid project slug format: ${slug}`);
     }
     
-    const projectId = match[0];
-    return this.request<ProjectDetails>(`/api/indexing-runs/${projectId}`, {
-      next: {
-        revalidate: 3600, // 1 hour cache for project details
-        tags: [`project-${projectId}`, 'indexing-runs']
+    const id = match[0];
+    
+    // Try to determine if this is a project ID or indexing run ID by checking data source
+    // First attempt: Try as indexing run (for public projects)
+    try {
+      const result = await this.request<ProjectDetails>(`/api/indexing-runs/${id}`, {
+        next: {
+          revalidate: 3600, // 1 hour cache for project details
+          tags: [`indexing-run-${id}`, 'indexing-runs']
+        }
+      });
+      return result;
+    } catch (error) {
+      // If indexing run lookup fails, try as project ID (for private user projects)
+      console.log(`Indexing run lookup failed for ${id}, trying as project ID`);
+      
+      try {
+        const result = await this.request<ProjectDetails>(`/api/projects/${id}`, {
+          next: {
+            revalidate: 3600, // 1 hour cache for project details  
+            tags: [`project-${id}`, 'projects']
+          }
+        });
+        return result;
+      } catch (projectError) {
+        throw new Error(`Project not found for slug: ${slug}`);
       }
-    })
+    }
   }
 
   async getIndexingRunWithConfig(slug: string): Promise<IndexingRunWithConfig> {
@@ -580,6 +601,21 @@ export class ApiClient {
       params: {
         limit,
         offset,
+      }
+    })
+  }
+
+  async getUserProjectsWithWikis(limit: number = 50, offset: number = 0): Promise<any[]> {
+    const headers = await this.getAuthHeaders()
+    return this.request<any[]>('/api/user-projects-with-wikis', {
+      headers,
+      params: {
+        limit,
+        offset,
+      },
+      next: {
+        revalidate: 300, // 5 minutes cache for user projects with wikis
+        tags: ['user-projects-with-wikis']
       }
     })
   }

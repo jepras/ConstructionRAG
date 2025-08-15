@@ -5,7 +5,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Important Claude rules
 - Make a plan before coding. Do not code until I have confirmed the plan looks good.
 - Do not use git commands unless explicitly told to 
-- Before implementing new use of frontend API calls, then make the API calls as curl commands to test they return what you expect them to return before implementing it in the code. 
+- Before implementing new use of frontend API calls, then make the API calls as curl commands to test they return what you expect them to return before implementing it in the code.
+
+## Authentication & RLS (Row Level Security) Best Practices
+
+### Critical: Backend Authenticated Requests
+When creating backend API endpoints that need to access user-specific data with RLS policies:
+
+**✅ CORRECT Pattern:**
+```python
+@router.get("/user-data")
+async def get_user_data(
+    current_user: dict[str, Any] = Depends(get_current_user),
+    db_client = Depends(get_db_client_for_request),  # ← Use authenticated client
+):
+    db = db_client  # This client includes the user's JWT for RLS
+    result = db.table("user_specific_table").select("*").execute()
+```
+
+**❌ WRONG Pattern:**
+```python
+@router.get("/user-data") 
+async def get_user_data(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    db = get_supabase_client()  # ← This is the anon client - RLS will block queries!
+    result = db.table("user_specific_table").select("*").execute()  # Returns 0 rows
+```
+
+**Why this matters:** Supabase RLS policies require the authenticated user's JWT token to determine data access. The anon client (`get_supabase_client()`) doesn't have this context, so RLS policies will block all queries even if the user is authenticated at the API level. 
 
 
 ## Core development philosophy

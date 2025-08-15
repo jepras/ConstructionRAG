@@ -359,6 +359,37 @@ function useUserData() {
 }
 ```
 
+#### Backend RLS (Row Level Security) Integration
+
+**Critical for authenticated API endpoints:** The backend must use the authenticated Supabase client to properly handle RLS policies.
+
+```python
+# ✅ CORRECT: Backend endpoint with RLS support
+@router.get("/user-projects-with-wikis")
+async def list_user_projects_with_wikis(
+    current_user: dict[str, Any] = Depends(get_current_user),
+    db_client = Depends(get_db_client_for_request),  # ← Authenticated client with JWT
+):
+    db = db_client  # Includes user's JWT for RLS policies
+    result = db.table("project_wikis").select("*").eq("user_id", current_user["id"]).execute()
+    return result.data  # ✅ Returns user's data correctly
+
+# ❌ WRONG: Using anon client breaks RLS
+@router.get("/user-projects-with-wikis") 
+async def list_user_projects_with_wikis(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    db = get_supabase_client()  # ← Anon client - no JWT context!
+    result = db.table("project_wikis").select("*").eq("user_id", current_user["id"]).execute() 
+    return result.data  # ❌ Returns [] - RLS blocks the query
+```
+
+**Why this matters:** 
+- Supabase RLS policies need the user's JWT token to determine data access
+- The anon client (`get_supabase_client()`) has no user context
+- Even with proper `current_user` authentication, RLS policies will block anon client queries
+- Always use `get_db_client_for_request()` for user-specific database operations
+
 #### Error Boundaries for Auth
 - **Wrap authenticated routes** with `ErrorBoundary` to handle auth failures gracefully
 - **Provide fallback UI** for auth errors with sign-in prompts

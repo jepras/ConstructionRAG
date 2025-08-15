@@ -12,24 +12,34 @@ export default function Home() {
   const [showResponse, setShowResponse] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const handleQuerySubmit = () => {
     if (query.trim() && !isLoading) {
       const submittedQuery = query;
-      setQuery(""); // Clear input immediately
       setIsLoading(true);
       
       // Show user message immediately
       setTimeout(() => {
         setShowTyping(true);
         
+        // Start PDF loading during typing
+        setTimeout(() => {
+          setPdfLoading(true);
+        }, 800); // Start PDF loading 0.8s into typing
+        
         // Show AI response after typing simulation
         setTimeout(() => {
           setShowTyping(false);
           setShowResponse(true);
-          setIsLoading(false);
-          setCurrentPage(currentPage === 1 ? 2 : 1); // Toggle between different mock pages
+          
+          // Complete PDF loading shortly after response
+          setTimeout(() => {
+            setPdfLoading(false);
+            setCurrentPage(currentPage === 1 ? 2 : 1); // Toggle between different mock pages
+            setIsLoading(false);
+          }, 600); // PDF loads 0.6s after response appears
         }, 1500); // 1.5s typing simulation
       }, 100); // Small delay to show message
     }
@@ -58,7 +68,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-8 items-start">
             {/* Chat Interface */}
-            <div className="bg-card border border-border rounded-lg p-6 min-h-96 flex flex-col">
+            <div className="bg-card border border-border rounded-lg p-6 h-[500px] flex flex-col">
               {/* Messages Area */}
               <div className="flex-1 space-y-6">
                 {/* Existing Message */}
@@ -132,10 +142,10 @@ export default function Home() {
               <div className="relative mt-6">
                 <Input
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  readOnly
                   onKeyPress={handleKeyPress}
                   placeholder="Ask anything"
-                  className="bg-input border-border text-foreground placeholder-muted-foreground pr-24"
+                  className="bg-input border-border text-foreground placeholder-muted-foreground pr-24 cursor-pointer"
                 />
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
                   <Button size="sm" variant="ghost" className="p-2">
@@ -159,7 +169,7 @@ export default function Home() {
             </div>
 
             {/* PDF Viewer */}
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
+            <div className="bg-card border border-border rounded-lg overflow-hidden h-[500px] flex flex-col">
               {/* PDF Header */}
               <div className="bg-secondary p-3 flex items-center justify-between border-b border-border">
                 <div className="flex items-center space-x-2">
@@ -187,7 +197,15 @@ export default function Home() {
               </div>
 
               {/* PDF Content */}
-              <div className="p-6 bg-card text-card-foreground min-h-96">
+              <div className="p-6 bg-card text-card-foreground flex-1 relative overflow-hidden">
+                {pdfLoading && (
+                  <div className="absolute inset-0 bg-card/90 flex items-center justify-center z-10">
+                    <div className="flex flex-col items-center space-y-3">
+                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm text-muted-foreground">Loading document...</span>
+                    </div>
+                  </div>
+                )}
                 {!showResponse ? (
                   // Initial PDF Content - Overall Description
                   <>
@@ -208,7 +226,7 @@ export default function Home() {
                         <p>
                           The Meridian Heights development represents a comprehensive mixed-use project incorporating
                           residential towers, commercial spaces, and underground parking facilities.
-                          <mark className="bg-primary/20 text-foreground">
+                          <mark className="bg-primary/30 text-primary-foreground px-1 py-0.5 rounded">
                             Smaller renovation projects are defined as projects up to $5 million in total costs
                           </mark>
                           , while major developments like Meridian Heights exceed $150 million in total project value.
@@ -249,7 +267,7 @@ export default function Home() {
                         <p>
                           All structural concrete for the Meridian Heights project must meet or exceed 
                           4000 PSI compressive strength requirements. 
-                          <mark className="bg-primary/20 text-foreground">
+                          <mark className="bg-primary/30 text-primary-foreground px-1 py-0.5 rounded">
                             Standard concrete curing time is 28 days for full strength development
                           </mark>
                           , with initial setting occurring within 24-48 hours depending on environmental conditions.
@@ -276,16 +294,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* CTA Buttons */}
-          <div className="flex justify-center space-x-4 mt-12">
-            <Link href="/upload">
-              <Button className="px-8 py-3 text-lg">
-                Upload Project
-              </Button>
-            </Link>
+          {/* CTA Button */}
+          <div className="flex justify-center mt-12">
             <Link href="/projects">
-              <Button variant="outline" className="px-8 py-3 text-lg">
-                Explore public projects
+              <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20">
+                Try search on a real project
               </Button>
             </Link>
           </div>
@@ -295,7 +308,7 @@ export default function Home() {
       {/* Bottom Section */}
       <div className="container mx-auto px-6 py-20">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">
+          <h2 className="text-5xl font-bold mb-4">
             From <span className="text-foreground">Piles of PDFs</span><br />
             <span className="text-primary">To Instant Answers</span>
           </h2>
@@ -351,36 +364,36 @@ export default function Home() {
                 3
               </div>
               <h3 className="text-xl font-semibold mb-4 text-card-foreground">Ask Critical Questions</h3>
-              <div className="bg-secondary border border-border rounded-lg p-4 mb-6 space-y-3">
+              <div className="bg-secondary border border-border rounded-lg p-4 mb-6 space-y-2">
                 {/* Chat-like interface */}
-                <div className="flex justify-end">
-                  <div className="bg-primary text-primary-foreground p-2 rounded-lg text-xs max-w-xs text-right">
+                <div>
+                  <div className="bg-primary text-primary-foreground p-2 rounded-lg text-xs max-w-md inline-block text-left">
                     What are the longest lead time items?
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
-                  <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                  <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                     <MessageSquare className="w-3 h-3 text-primary-foreground" />
                   </div>
-                  <div className="bg-muted p-2 rounded-lg text-xs text-muted-foreground">
+                  <div className="bg-card border border-border p-2 rounded-lg text-xs text-card-foreground max-w-md text-left">
                     Custom steel trusses (TR-1) require a 16 week lead time. [procurement.xlsx]
                   </div>
                 </div>
-                <div className="flex justify-end">
-                  <div className="bg-primary text-primary-foreground p-2 rounded-lg text-xs max-w-xs text-right">
+                <div>
+                  <div className="bg-primary text-primary-foreground p-2 rounded-lg text-xs max-w-md inline-block text-left">
                     Any conflicts between electrical and HVAC plans?
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
-                  <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                  <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                     <MessageSquare className="w-3 h-3 text-primary-foreground" />
                   </div>
-                  <div className="bg-muted p-2 rounded-lg text-xs text-muted-foreground">
+                  <div className="bg-card border border-border p-2 rounded-lg text-xs text-card-foreground max-w-md text-left">
                     Yes, a duct clashes with a cable tray on Floor 5. [coordination.pdf, p.9]
                   </div>
                 </div>
               </div>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs">
                 Query documents in plain English and get immediate, accurate answers with source citations.
               </p>
             </div>

@@ -73,12 +73,13 @@ export function ProjectCard({ project, className }: ProjectCardProps) {
     })
   }
 
-  // Generate project URL based on status and slug
-  const projectUrl = project.slug && project.status === 'wiki_generated' 
+  // Always generate project URL using slug if available
+  const projectUrl = project.slug 
     ? `/projects/${project.slug}` 
-    : `/dashboard/projects/${project.id}`
+    : `/projects/project-${project.id}`
 
-  const isClickable = project.status === 'wiki_generated' || project.documentCount > 0
+  // Make all projects with wikis clickable
+  const isClickable = project.status === 'wiki_generated'
 
   const CardWrapper = isClickable ? Link : 'div'
   const wrapperProps = isClickable ? { href: projectUrl } : {}
