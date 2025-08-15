@@ -101,7 +101,7 @@ async def get_project(
         raise AppError("Project not found", error_code=ErrorCode.NOT_FOUND)
     
     # Get the latest completed indexing run for this project from project_wikis table
-    db = get_supabase_client()
+    db = db_client  # Use authenticated client for RLS
     try:
         latest_run_query = (
             db.table("project_wikis")
@@ -171,3 +171,113 @@ async def delete_project(
 
         raise AppError("Project not found", error_code=ErrorCode.NOT_FOUND)
     return {"status": "deleted"}
+
+
+@router.get("/projects/{project_id}/runs/{indexing_run_id}", response_model=dict[str, Any])
+async def get_project_with_run(
+    project_id: UUID,
+    indexing_run_id: UUID,
+    current_user: dict[str, Any] = CURRENT_USER_DEP,
+    db_client=DB_CLIENT_DEP,
+):
+    """Get project info combined with specific indexing run data for authenticated users only.
+    
+    This endpoint is for private user projects accessed via dashboard routes.
+    Public projects should use the existing /api/indexing-runs/{run_id} endpoint.
+    """
+    svc = ProjectService(db_client)
+    proj = svc.get(project_id, user_id=current_user["id"])
+    if not proj:
+        from src.shared.errors import ErrorCode
+        from src.utils.exceptions import AppError
+        raise AppError("Project not found", error_code=ErrorCode.NOT_FOUND)
+    
+    # Get the specific indexing run data
+    db = db_client  # Use authenticated client for RLS
+    try:
+        run_query = (
+            db.table("project_wikis")
+            .select("indexing_run_id, upload_type, wiki_status, created_at, updated_at")
+            .eq("project_id", str(project_id))
+            .eq("indexing_run_id", str(indexing_run_id))
+            .eq("user_id", current_user["id"])
+            .single()
+        )
+        
+        run_res = run_query.execute()
+        
+        if not run_res.data:
+            from src.shared.errors import ErrorCode
+            from src.utils.exceptions import AppError
+            raise AppError("Indexing run not found for this project", error_code=ErrorCode.NOT_FOUND)
+        
+        run_data = run_res.data
+        
+        return {
+            "id": str(indexing_run_id),  # Frontend expects this as main ID
+            "project_id": str(proj.id),
+            "name": proj.name,
+            "description": proj.description,
+            "access_level": proj.access_level,
+            "upload_type": run_data.get("upload_type"),
+            "status": run_data.get("wiki_status"),
+            "created_at": run_data.get("created_at"),
+            "updated_at": run_data.get("updated_at")
+        }
+        
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to get indexing run {indexing_run_id} for project {project_id}: {e}")
+        from src.shared.errors import ErrorCode
+        from src.utils.exceptions import AppError
+        raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
+
+
+@router.get("/projects/{project_id}/runs", response_model=list[dict[str, Any]])
+async def list_project_runs(
+    project_id: UUID,
+    current_user: dict[str, Any] = CURRENT_USER_DEP,
+    db_client=DB_CLIENT_DEP,
+):
+    """List all indexing runs for a project (authenticated users only).
+    
+    This endpoint is for authenticated dashboard routes. 
+    Public projects should use the existing /api/indexing-runs endpoints.
+    """
+    from src.shared.errors import ErrorCode
+    from src.utils.exceptions import AppError
+    
+    # Verify project ownership first
+    svc = ProjectService(db_client)
+    proj = svc.get(project_id, user_id=current_user["id"])
+    if not proj:
+        raise AppError("Project not found", error_code=ErrorCode.NOT_FOUND)
+    
+    # Use authenticated client for RLS
+    db = db_client
+    try:
+        runs_query = (
+            db.table("project_wikis")
+            .select("indexing_run_id, upload_type, wiki_status, created_at, updated_at")
+            .eq("project_id", str(project_id))
+            .eq("user_id", current_user["id"])
+            .order("created_at", desc=True)
+        )
+        
+        runs_res = runs_query.execute()
+        runs_data = runs_res.data or []
+        
+        return [{
+            "id": run["indexing_run_id"],
+            "upload_type": run.get("upload_type"),
+            "status": run.get("wiki_status"),
+            "created_at": run.get("created_at"),
+            "updated_at": run.get("updated_at")
+        } for run in runs_data]
+        
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to list indexing runs for project {project_id}: {e}")
+        from src.shared.errors import ErrorCode
+        from src.utils.exceptions import AppError
+        raise AppError("Failed to retrieve project runs", error_code=ErrorCode.INTERNAL_ERROR)

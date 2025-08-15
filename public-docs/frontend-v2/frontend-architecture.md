@@ -36,8 +36,12 @@ class ApiClient {
     return this.request('/api/indexing-runs', { params });
   }
   
-  async getProjectWiki(projectId: string, runId: string) {
-    return this.request(`/api/wiki/runs/${runId}/pages`);
+  async getProjectWithRun(projectId: string, runId: string) {
+    return this.request(`/api/projects/${projectId}/runs/${runId}`);
+  }
+  
+  async getProjectRuns(projectId: string) {
+    return this.request(`/api/projects/${projectId}/runs`);
   }
   
   async queryProject(projectId: string, query: string) {
@@ -93,11 +97,12 @@ app/
 │   └── settings/page.tsx        # User settings
 ├── projects/                    # Public project browsing
 │   ├── page.tsx                # Public projects grid (/projects)
-│   └── [slug]/                 # Dynamic project routes
-│       ├── page.tsx            # Project wiki overview
-│       ├── query/page.tsx      # Project query interface
-│       ├── experts/page.tsx    # Project-specific experts
-│       └── layout.tsx          # Project-specific layout
+│   └── [projectSlug]/          # Dynamic project routes (nested structure)
+│       └── [runId]/            # Specific indexing run version
+│           ├── page.tsx        # Project wiki overview for specific run
+│           ├── query/page.tsx  # Project query interface for specific run
+│           ├── experts/page.tsx # Project-specific experts for specific run
+│           └── layout.tsx      # Project-specific layout
 ├── auth/                       # Authentication flows
 │   ├── signin/page.tsx
 │   ├── signup/page.tsx
@@ -205,19 +210,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ### Project Layout
 ```typescript
-// app/projects/[slug]/layout.tsx
+// app/projects/[projectSlug]/[runId]/layout.tsx
 export default function ProjectLayout({ 
   children, 
   params 
 }: { 
   children: React.ReactNode;
-  params: { slug: string };
+  params: { projectSlug: string; runId: string };
 }) {
-  const project = useProject(params.slug);
+  const { projectSlug, runId } = params;
+  const project = useProjectWithRun(extractProjectId(projectSlug), runId);
   
   return (
     <>
-      <ProjectHeader project={project} />
+      <ProjectHeader projectSlug={projectSlug} runId={runId} project={project} />
       <div className="container mx-auto px-4 py-6">
         {children}
       </div>
@@ -233,17 +239,20 @@ export default function ProjectLayout({
 **Static Generation with ISR (Incremental Static Regeneration)**
 
 ```typescript
-// app/projects/[slug]/page.tsx
+// app/projects/[projectSlug]/[runId]/page.tsx
 export async function generateStaticParams() {
   const projects = await getPublicProjects();
   
   return projects.map((project) => ({
-    slug: `${project.name.toLowerCase().replace(/\s+/g, '-')}-${project.id}`,
+    projectSlug: `${project.name.toLowerCase().replace(/\s+/g, '-')}-${project.id}`,
+    runId: project.indexing_run_id,
   }));
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const project = await getProjectFromSlug(params.slug);
+export async function generateMetadata({ params }: { params: { projectSlug: string; runId: string } }) {
+  const { projectSlug, runId } = params;
+  const projectId = extractProjectIdFromSlug(projectSlug);
+  const project = await apiClient.getProjectWithRun(projectId, runId);
   
   return {
     title: `${project.name} - ConstructionRAG`,
@@ -256,9 +265,11 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function ProjectPage({ params }: { params: { slug: string } }) {
-  const project = await getProjectFromSlug(params.slug);
-  const wikiPages = await getWikiPages(project.indexRunId);
+export default async function ProjectPage({ params }: { params: { projectSlug: string; runId: string } }) {
+  const { projectSlug, runId } = params;
+  const projectId = extractProjectIdFromSlug(projectSlug);
+  const project = await apiClient.getProjectWithRun(projectId, runId);
+  const wikiPages = await apiClient.getWikiPages(runId);
   
   return (
     <WikiLayout>
@@ -282,8 +293,8 @@ export async function POST(request: Request) {
   const { type, projectId, runId } = await request.json();
   
   if (type === 'wiki_generation_complete') {
-    // Revalidate specific project page
-    revalidatePath(`/projects/${projectId}`);
+    // Revalidate specific project page with nested structure
+    revalidatePath(`/projects/${projectSlug}/${runId}`);
     revalidateTag(`wiki-${runId}`);
     
     // Revalidate public projects grid

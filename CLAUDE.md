@@ -251,6 +251,21 @@ backend/tests/
 - Health checks and monitoring configured
 - SSL/TLS enabled for all endpoints
 
+## Project URL Structure
+
+ConstructionRAG uses a **nested URL structure** for projects to support multiple indexing run versions:
+
+**URL Format:** `/projects/{projectSlug}/{runId}`
+- `projectSlug`: `project-name-{project_id}` (e.g., `downtown-tower-abc123`)
+- `runId`: `{indexing_run_id}` (e.g., `def456`)
+- **Full URL**: `/projects/downtown-tower-abc123/def456`
+
+This enables:
+- **Multi-version support**: Different indexing runs per project
+- **Version navigation**: Users can switch between runs via dropdown
+- **Bookmarkable versions**: Each run has a unique URL
+- **Clean hierarchy**: Project → Run relationship is explicit
+
 ## API Endpoints
 
 ### Authentication (`/api/auth`)
@@ -283,6 +298,8 @@ backend/tests/
 - **GET** `/api/projects/{project_id}` - Get specific project
 - **PATCH** `/api/projects/{project_id}` - Update project
 - **DELETE** `/api/projects/{project_id}` - Delete project
+- **GET** `/api/projects/{project_id}/runs/{indexing_run_id}` - Get project with specific run (unified endpoint)
+- **GET** `/api/projects/{project_id}/runs` - List all indexing runs for a project
 
 ### Wiki Generation (`/api/wiki`)
 - **POST** `/api/wiki/runs` - Create wiki generation run

@@ -7,6 +7,11 @@ import { cn } from '@/lib/utils';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
+// Helper function to determine the base path based on current context
+function getBasePath(pathname: string): string {
+  return pathname.startsWith('/dashboard') ? '/dashboard/projects' : '/projects';
+}
+
 interface WikiNavigationProps {
   pages: WikiPage[];
   projectSlug: string;
@@ -21,11 +26,17 @@ interface NavigationItemProps {
   onToggle: () => void;
 }
 
-function NavigationItem({ page, projectSlug, isActive, isExpanded, onToggle, isFirstPage }: NavigationItemProps & { isFirstPage: boolean }) {
+function NavigationItem({ page, projectSlug, isActive, isExpanded, onToggle, isFirstPage, basePath }: NavigationItemProps & { isFirstPage: boolean; basePath: string }) {
   const hasSubsections = page.sections && page.sections.length > 0;
 
+  // Check if this is a single-slug public project (no nested structure)
+  const isPublicSingleSlug = basePath === '/projects' && !projectSlug.includes('/');
+  
   // First page routes to base project URL, others to specific page URLs
-  const pageUrl = isFirstPage ? `/projects/${projectSlug}` : `/projects/${projectSlug}/${page.name}`;
+  // For single-slug public projects, don't add extra nesting
+  const pageUrl = isFirstPage 
+    ? `${basePath}/${projectSlug}` 
+    : `${basePath}/${projectSlug}/${page.name}`;
 
   return (
     <div className="mb-1">
@@ -83,6 +94,9 @@ function NavigationItem({ page, projectSlug, isActive, isExpanded, onToggle, isF
 export default function WikiNavigation({ pages, projectSlug, currentPage }: WikiNavigationProps) {
   const pathname = usePathname();
   const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
+  
+  // Determine base path based on current context
+  const basePath = getBasePath(pathname);
 
   const handleToggle = (pageName: string) => {
     setExpandedPages(prev => {
@@ -102,7 +116,7 @@ export default function WikiNavigation({ pages, projectSlug, currentPage }: Wiki
 
   // Determine current active page from pathname or currentPage prop
   const activePageName = currentPage || (() => {
-    if (pathname === `/projects/${projectSlug}`) {
+    if (pathname === `${basePath}/${projectSlug}`) {
       return firstPage?.name; // First page is active when on base URL
     }
     const segments = pathname.split('/');
@@ -126,6 +140,7 @@ export default function WikiNavigation({ pages, projectSlug, currentPage }: Wiki
               isExpanded={expandedPages.has(page.name || '')}
               onToggle={() => handleToggle(page.name || '')}
               isFirstPage={index === 0}
+              basePath={basePath}
             />
           ))}
         </nav>

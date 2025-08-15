@@ -14,9 +14,11 @@ import { Plus } from 'lucide-react'
 function transformUserProject(backendProject: any) {
   const projectName = backendProject.project_name || 'Unnamed Project'
   const projectId = backendProject.id
+  const indexingRunId = backendProject.indexing_run_id
   
-  // Generate slug: project-name-{project_id}
-  const slug = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${projectId}`
+  // Generate nested slug: project-name-{project_id}/{indexing_run_id}
+  const projectSlug = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${projectId}`
+  const slug = `${projectSlug}/${indexingRunId}`
   
   // Map backend status to frontend status
   let status: 'processing' | 'wiki_generated' | 'failed' | 'no_documents' = 'no_documents'
@@ -44,7 +46,7 @@ const mockProjects = [
   {
     id: 'downtown-tower',
     name: 'Downtown Tower',
-    slug: 'downtown-tower-abc123-def4-5678-9abc-def123456789',
+    slug: 'downtown-tower-abc123-def4-5678-9abc-def123456789/run-ghi789',
     status: 'wiki_generated' as const,
     documentCount: 3,
     createdAt: '2024-01-15T10:00:00Z',
@@ -53,7 +55,7 @@ const mockProjects = [
   {
     id: 'suburban-mall',
     name: 'Suburban Mall Extension',
-    slug: 'suburban-mall-def456-abc7-8901-2def-abc456789012',
+    slug: 'suburban-mall-def456-abc7-8901-2def-abc456789012/run-jkl012',
     status: 'wiki_generated' as const,
     documentCount: 1,
     createdAt: '2024-01-10T09:00:00Z',
@@ -69,7 +71,7 @@ const mockProjects = [
   {
     id: 'meridian-heights',
     name: 'Meridian Heights Development',
-    slug: 'meridian-heights-ghi789-def0-1234-5ghi-def789012345',
+    slug: 'meridian-heights-ghi789-def0-1234-5ghi-def789012345/run-mno345',
     status: 'wiki_generated' as const,
     documentCount: 3,
     createdAt: '2024-01-05T08:00:00Z',
@@ -78,7 +80,7 @@ const mockProjects = [
   {
     id: 'heerup-skole',
     name: 'Heerup Skole',
-    slug: 'heerup-skole-jkl012-ghi3-4567-8jkl-ghi012345678',
+    slug: 'heerup-skole-jkl012-ghi3-4567-8jkl-ghi012345678/run-pqr678',
     status: 'wiki_generated' as const,
     documentCount: 3,
     createdAt: '2024-01-01T07:00:00Z',

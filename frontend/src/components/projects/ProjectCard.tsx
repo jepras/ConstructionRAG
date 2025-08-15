@@ -73,10 +73,10 @@ export function ProjectCard({ project, className }: ProjectCardProps) {
     })
   }
 
-  // Always generate project URL using slug if available
+  // Generate project URL using dashboard routes: /dashboard/projects/{projectSlug}/{runId}
   const projectUrl = project.slug 
-    ? `/projects/${project.slug}` 
-    : `/projects/project-${project.id}`
+    ? `/dashboard/projects/${project.slug}` 
+    : `/dashboard/projects/project-${project.id}`
 
   // Make all projects with wikis clickable
   const isClickable = project.status === 'wiki_generated'

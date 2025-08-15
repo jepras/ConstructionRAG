@@ -5,84 +5,28 @@ import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
 import ProjectWikiClient from '@/components/features/wiki/ProjectWikiClient';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface ProjectPageProps {
-  params: Promise<{
-    slug: string;
-  }>;
+interface PublicProjectPageProps {
+  params: Promise<{ indexingRunId: string }>;
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-// Generate static params for ISR
-export async function generateStaticParams() {
-  try {
-    // Use direct fetch to avoid circular dependency and ensure proper caching
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/indexing-runs-with-wikis?limit=10`, {
-      next: {
-        revalidate: 1800, // 30 minutes cache
-        tags: ['static-params']
-      }
-    });
-    
-    if (!response.ok) {
-      console.warn('Failed to fetch projects for static generation:', response.status);
-      return [];
-    }
-    
-    const projects = await response.json();
-    
-    return projects.map((project: any) => {
-      // Create slug format: wiki-for-[name]-[indexing_run_id]
-      // Use indexing_run_id since that's what the frontend expects
-      const projectName = project.wiki_structure?.title ? 
-        project.wiki_structure.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 
-        'project';
-      return {
-        slug: `wiki-for-${projectName}-${project.indexing_run_id}`,
-      };
-    });
-  } catch (error) {
-    console.error('Error generating static params:', error);
-    // Return empty array to allow on-demand generation
-    return [];
+// Extract UUID from slug format: "project-name-{uuid}"
+function extractUUIDFromSlug(slug: string): string {
+  const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const match = slug.match(uuidRegex);
+  if (!match) {
+    throw new Error(`Invalid slug format, no UUID found: ${slug}`);
   }
+  return match[0];
 }
 
-// Allow dynamic params for projects not pre-built
-export const dynamicParams = true;
-
-// Generate metadata for SEO
-export async function generateMetadata({ params }: ProjectPageProps) {
+async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: string }) {
   try {
-    const { slug } = await params;
-    
-    // Extract project name from slug since indexing runs don't have names
-    const projectName = slug.replace(/-[a-f0-9-]{36}$/, '').replace(/-/g, ' ');
-    const displayName = projectName.charAt(0).toUpperCase() + projectName.slice(1);
-    
-    return {
-      title: `${displayName} - Wiki | ConstructionRAG`,
-      description: `Explore the comprehensive wiki documentation for ${displayName}. Get insights into project requirements, specifications, and more.`,
-      openGraph: {
-        title: displayName,
-        description: 'Project documentation and wiki',
-        type: 'website',
-      },
-    };
-  } catch (error) {
-    return {
-      title: 'Project Not Found',
-      description: 'The requested project could not be found.',
-    };
-  }
-}
-
-async function ProjectWikiContent({ slug }: { slug: string }) {
-  try {
-    // Get project details (indexing run)
-    const project = await apiClient.getProjectFromSlug(slug);
+    // Extract the actual UUID from the slug
+    const actualRunId = extractUUIDFromSlug(indexingRunId);
     
     // Get wiki runs for this indexing run
-    const wikiRuns = await apiClient.getWikiRunsByIndexingRun(project.id);
+    const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
     
     // Find the first completed wiki run
     const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
@@ -127,10 +71,13 @@ async function ProjectWikiContent({ slug }: { slug: string }) {
     // Get content for the first page (serves as overview)
     const firstPageContent = await apiClient.getWikiPageContent(completedWikiRun.id, firstPage.name);
 
+    // For single-slug public projects, use the indexing run ID as both slug and runId
+    const navigationSlug = indexingRunId;
+
     return (
       <WikiLayout 
         pages={sortedPages}
-        projectSlug={slug}
+        projectSlug={navigationSlug}
         content={firstPageContent.content}
         currentPage={firstPage.name}
       >
@@ -138,9 +85,8 @@ async function ProjectWikiContent({ slug }: { slug: string }) {
       </WikiLayout>
     );
   } catch (error) {
-    console.error('Error loading project wiki:', error);
+    console.error('Error loading public project wiki:', error);
     
-    // Return error component instead of notFound() to avoid DYNAMIC_SERVER_USAGE during static generation
     return (
       <div className="text-center py-12">
         <h2 className="text-2xl font-semibold text-foreground mb-4">Project Not Found</h2>
@@ -195,21 +141,13 @@ function WikiLoadingSkeleton() {
   );
 }
 
-export default async function ProjectPage({ params, searchParams }: ProjectPageProps) {
-  const { slug } = await params;
-  // Safe searchParams access - handle case where they're not available during static generation
-  const search = searchParams ? await searchParams : {};
-  const isClientNavigation = search?.client === 'true';
+export default async function PublicProjectPage({ params }: PublicProjectPageProps) {
+  const { indexingRunId } = await params;
   
-  // Use client-side progressive loading for in-app navigation
-  if (isClientNavigation) {
-    return <ProjectWikiClient slug={slug} />;
-  }
-  
-  // Use server-side rendering for SEO/direct visits
+  // Always use server-side rendering for public projects (better SEO)
   return (
     <Suspense fallback={<WikiLoadingSkeleton />}>
-      <ProjectWikiContent slug={slug} />
+      <PublicProjectWikiContent indexingRunId={indexingRunId} />
     </Suspense>
   );
 }

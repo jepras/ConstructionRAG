@@ -5,34 +5,39 @@ import { Header } from '@/components/layout/Header';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import { useAuth } from '@/components/providers/AuthProvider';
 
-interface ProjectLayoutProps {
+interface PublicProjectLayoutProps {
   children: ReactNode;
-  params: Promise<{
-    slug: string;
-  }>;
+  params: Promise<{ indexingRunId: string }>;
 }
 
-export default function ProjectLayout({ children, params }: ProjectLayoutProps) {
+export default function PublicProjectLayout({ children, params }: PublicProjectLayoutProps) {
   const { isAuthenticated } = useAuth();
 
   // Handle params properly in client component
-  const [slug, setSlug] = React.useState<string>('');
+  const [indexingRunId, setIndexingRunId] = React.useState<string>('');
 
   React.useEffect(() => {
-    params.then(({ slug }) => setSlug(slug));
+    params.then(({ indexingRunId }) => {
+      setIndexingRunId(indexingRunId);
+    });
   }, [params]);
 
-  // Extract project name from slug (everything before the UUID)
-  const uuidRegex = /-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const projectName = slug.replace(uuidRegex, '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  // Extract a display name from the indexing run ID (first 8 chars for readability)
+  const displayName = indexingRunId ? `Project ${indexingRunId.slice(0, 8)}` : "Project";
+
+  // For public projects, use the indexing run ID as the project slug
+  const projectSlug = indexingRunId;
 
   return (
     <div className="min-h-screen bg-background">
       <Header variant={isAuthenticated ? "app" : "marketing"} />
-      <ProjectHeader
-        projectSlug={slug}
-        projectName={projectName || "Project"}
-      />
+      {indexingRunId && (
+        <ProjectHeader
+          projectSlug={projectSlug}
+          projectName={displayName}
+          runId={indexingRunId}
+        />
+      )}
       <main className="flex-1">
         <div className="container mx-auto px-4 py-6">
           <div className="bg-card border border-border rounded-lg shadow-sm min-h-[calc(100vh-200px)]">

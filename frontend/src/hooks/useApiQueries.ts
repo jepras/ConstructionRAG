@@ -114,14 +114,24 @@ export function useResetPassword() {
   })
 }
 
-// Progressive project loading hooks for client-side navigation
-export function useProjectBasic(slug: string | null, enabled = true) {
+// Progressive project loading hooks for client-side navigation with nested structure
+export function useProjectWithRun(projectId: string | null, runId: string | null, enabled = true) {
   return useQuery({
-    queryKey: ['project-basic', slug],
-    queryFn: () => slug ? apiClient.getProjectFromSlug(slug) : null,
-    enabled: enabled && !!slug,
+    queryKey: ['project-with-run', projectId, runId],
+    queryFn: () => (projectId && runId) ? apiClient.getProjectWithRun(projectId, runId) : null,
+    enabled: enabled && !!projectId && !!runId,
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
+  })
+}
+
+export function useProjectRuns(projectId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['project-runs', projectId],
+    queryFn: () => projectId ? apiClient.getProjectRuns(projectId) : null,
+    enabled: enabled && !!projectId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
   })
 }
 
@@ -155,17 +165,28 @@ export function useProjectWikiContent(wikiRunId: string | null, pageName: string
   })
 }
 
-// Prefetching hook for project cards hover
+// Prefetching hook for project cards hover with nested structure
 export function usePrefetchProject() {
   const queryClient = useQueryClient()
   
   return (slug: string) => {
-    // Prefetch basic project data
-    queryClient.prefetchQuery({
-      queryKey: ['project-basic', slug],
-      queryFn: () => apiClient.getProjectFromSlug(slug),
-      staleTime: 10 * 60 * 1000, // 10 minutes
-    })
+    // Extract projectId and runId from nested slug format
+    const [projectSlug, runId] = slug.includes('/') ? slug.split('/') : [slug, null];
+    if (!runId) return; // Skip if not nested format
+    
+    // Extract project ID from projectSlug
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const match = projectSlug.match(uuidRegex);
+    const projectId = match ? match[0] : null;
+    
+    if (projectId && runId) {
+      // Prefetch project with run data
+      queryClient.prefetchQuery({
+        queryKey: ['project-with-run', projectId, runId],
+        queryFn: () => apiClient.getProjectWithRun(projectId, runId),
+        staleTime: 10 * 60 * 1000, // 10 minutes
+      })
+    }
   }
 }
 

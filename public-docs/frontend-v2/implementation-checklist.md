@@ -271,3 +271,8 @@
 
 - Create indexing page
 - Make configs actually overwrite configs
+- Add toasts for loading stages
+
+## Before production
+- Add Sentry
+- Add other analytics (posthog or something)

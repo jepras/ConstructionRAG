@@ -415,7 +415,9 @@ export class ApiClient {
 
   // Wiki-related methods
   async getWikiPages(wikiRunId: string): Promise<{pages: WikiPage[], total_pages: number}> {
+    const headers = await this.getAuthHeaders()
     return this.request<{pages: WikiPage[], total_pages: number}>(`/api/wiki/runs/${wikiRunId}/pages`, {
+      headers,
       next: {
         revalidate: 3600, // 1 hour cache for wiki pages list
         tags: [`wiki-pages-${wikiRunId}`, 'wiki-pages']
@@ -424,7 +426,9 @@ export class ApiClient {
   }
 
   async getWikiPageContent(wikiRunId: string, pageName: string): Promise<WikiPageContent> {
+    const headers = await this.getAuthHeaders()
     return this.request<WikiPageContent>(`/api/wiki/runs/${wikiRunId}/pages/${pageName}`, {
+      headers,
       next: {
         revalidate: 3600, // 1 hour cache for wiki page content
         tags: [`wiki-content-${wikiRunId}-${pageName}`, 'wiki-content']
@@ -433,15 +437,23 @@ export class ApiClient {
   }
 
   async getWikiMetadata(wikiRunId: string): Promise<WikiMetadata> {
-    return this.request<WikiMetadata>(`/api/wiki/runs/${wikiRunId}/metadata`)
+    const headers = await this.getAuthHeaders()
+    return this.request<WikiMetadata>(`/api/wiki/runs/${wikiRunId}/metadata`, {
+      headers
+    })
   }
 
   async getWikiRunStatus(wikiRunId: string): Promise<WikiRunStatus> {
-    return this.request<WikiRunStatus>(`/api/wiki/runs/${wikiRunId}/status`)
+    const headers = await this.getAuthHeaders()
+    return this.request<WikiRunStatus>(`/api/wiki/runs/${wikiRunId}/status`, {
+      headers
+    })
   }
 
   async getWikiRunsByIndexingRun(indexingRunId: string): Promise<WikiRun[]> {
+    const headers = await this.getAuthHeaders()
     return this.request<WikiRun[]>(`/api/wiki/runs/${indexingRunId}`, {
+      headers,
       next: {
         revalidate: 3600, // 1 hour cache for wiki runs
         tags: [`wiki-runs-${indexingRunId}`, 'wiki-runs']
@@ -450,63 +462,7 @@ export class ApiClient {
   }
 
   // Project-related methods
-  async getProjectFromSlug(slug: string): Promise<ProjectDetails> {
-    // Extract UUID from slug (format: "project-name-uuid")
-    // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (8-4-4-4-12 = 36 chars with dashes)
-    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const match = slug.match(uuidRegex);
-    
-    if (!match) {
-      throw new Error(`Invalid project slug format: ${slug}`);
-    }
-    
-    const id = match[0];
-    
-    // Try to determine if this is a project ID or indexing run ID by checking data source
-    // First attempt: Try as indexing run (for public projects)
-    try {
-      const result = await this.request<ProjectDetails>(`/api/indexing-runs/${id}`, {
-        next: {
-          revalidate: 3600, // 1 hour cache for project details
-          tags: [`indexing-run-${id}`, 'indexing-runs']
-        }
-      });
-      return result;
-    } catch (error) {
-      // If indexing run lookup fails, try as project ID (for private user projects)
-      console.log(`Indexing run lookup failed for ${id}, trying as project ID`);
-      
-      try {
-        const result = await this.request<ProjectDetails>(`/api/projects/${id}`, {
-          next: {
-            revalidate: 3600, // 1 hour cache for project details  
-            tags: [`project-${id}`, 'projects']
-          }
-        });
-        return result;
-      } catch (projectError) {
-        throw new Error(`Project not found for slug: ${slug}`);
-      }
-    }
-  }
-
-  async getIndexingRunWithConfig(slug: string): Promise<IndexingRunWithConfig> {
-    // Extract UUID from slug (format: "project-name-uuid")
-    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const match = slug.match(uuidRegex);
-    
-    if (!match) {
-      throw new Error(`Invalid project slug format: ${slug}`);
-    }
-    
-    const projectId = match[0];
-    return this.request<IndexingRunWithConfig>(`/api/indexing-runs/${projectId}`, {
-      next: {
-        revalidate: 3600, // 1 hour cache for indexing run details
-        tags: [`indexing-run-config-${projectId}`, 'indexing-runs']
-      }
-    })
-  }
+  // Legacy methods removed - use getProjectWithRun() and getProjectRuns() instead
 
   async deleteIndexingRun(indexingRunId: string): Promise<{ success: boolean; message: string }> {
     const headers = await this.getAuthHeaders()
@@ -649,6 +605,29 @@ export class ApiClient {
     return this.request<{ success: boolean; message: string }>(`/api/projects/${projectId}`, {
       method: 'DELETE',
       headers,
+    })
+  }
+
+  // New unified endpoints for nested route structure
+  async getProjectWithRun(projectId: string, runId: string): Promise<any> {
+    const headers = await this.getAuthHeaders()
+    return this.request<any>(`/api/projects/${projectId}/runs/${runId}`, {
+      headers,
+      next: {
+        revalidate: 3600, // 1 hour cache for project with run data
+        tags: [`project-${projectId}`, `run-${runId}`, 'projects', 'runs']
+      }
+    })
+  }
+
+  async getProjectRuns(projectId: string): Promise<any[]> {
+    const headers = await this.getAuthHeaders()
+    return this.request<any[]>(`/api/projects/${projectId}/runs`, {
+      headers,
+      next: {
+        revalidate: 300, // 5 minutes cache for project runs
+        tags: [`project-runs-${projectId}`, 'projects', 'runs']
+      }
     })
   }
 }

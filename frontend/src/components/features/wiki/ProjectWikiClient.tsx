@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { notFound } from 'next/navigation';
 import { WikiPage } from '@/lib/api-client';
 import {
-  useProjectBasic,
+  useProjectWithRun,
   useProjectWikiRuns,
   useProjectWikiPages,
   useProjectWikiContent,
@@ -96,21 +96,32 @@ function ProgressiveWikiLoadingSkeleton({
   );
 }
 
+// Extract project ID from projectSlug format: "project-name-{project_id}"
+function extractProjectIdFromSlug(projectSlug: string): string | null {
+  const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const match = projectSlug.match(uuidRegex);
+  return match ? match[0] : null;
+}
+
 export default function ProjectWikiClient({ slug, optimisticData }: ProjectWikiClientProps) {
   const [loadingStage, setLoadingStage] = useState<'project' | 'wiki-runs' | 'pages' | 'content' | 'complete'>('project');
+
+  // Parse nested slug format: projectSlug/runId
+  const [projectSlug, runId] = slug.includes('/') ? slug.split('/') : [slug, null];
+  const projectId = extractProjectIdFromSlug(projectSlug);
 
   // Progressive data loading
   const {
     data: project,
     isLoading: isLoadingProject,
     error: projectError,
-  } = useProjectBasic(slug);
+  } = useProjectWithRun(projectId, runId);
 
   const {
     data: wikiRuns,
     isLoading: isLoadingWikiRuns,
     error: wikiRunsError,
-  } = useProjectWikiRuns(project?.id || null, !!project);
+  } = useProjectWikiRuns(runId, !!runId);
 
   // Find completed wiki run
   const completedWikiRun = wikiRuns?.find((run: any) => run.status === 'completed');
