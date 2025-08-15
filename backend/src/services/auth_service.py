@@ -140,7 +140,7 @@ class AuthService:
                 return None
 
             profile = await self._get_user_profile(user_id)
-            logger.info("Successfully authenticated user", user_id=user_id)
+            logger.debug("Successfully authenticated user", user_id=user_id)
             
             return {
                 "id": user_id,

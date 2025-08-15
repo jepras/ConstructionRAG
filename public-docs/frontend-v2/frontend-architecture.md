@@ -298,6 +298,72 @@ export async function POST(request: Request) {
 
 ## Authentication & User Flow Management
 
+### Core Authentication Principles
+
+**CRITICAL: Follow these patterns to prevent infinite loops and auth conflicts**
+
+#### Single Source of Truth
+- **Always use the `AuthProvider`** from `components/providers/AuthProvider.tsx` - never create custom auth state
+- **Never call `supabase.auth` directly** in components - use the `useAuth()` hook instead
+- **Single auth state manager** - consolidate all auth checks into one useEffect with proper cleanup
+
+#### API Client Authentication
+- **Use the centralized `apiClient`** from `lib/api-client.ts` for all authenticated requests
+- **Token caching is built-in** - the API client handles token refresh and caching automatically
+- **Never manually fetch auth headers** - let the API client handle this internally
+- **Clear auth cache on sign out** - call `apiClient.clearAuthCache()` when auth state changes
+
+#### Component Auth Patterns
+```typescript
+// ✅ CORRECT: Use the auth hook
+function MyComponent() {
+  const { user, isLoading, isAuthenticated } = useAuth()
+  
+  if (isLoading) return <LoadingSpinner />
+  if (!isAuthenticated) return <SignInPrompt />
+  
+  return <AuthenticatedContent user={user} />
+}
+
+// ❌ WRONG: Never do this
+function MyComponent() {
+  const [user, setUser] = useState(null)
+  const supabase = createClient()
+  
+  useEffect(() => {
+    // This creates auth loops and conflicts!
+    supabase.auth.getSession().then(...)
+  }, [])
+}
+```
+
+#### Query Hook Authentication
+```typescript
+// ✅ CORRECT: Conditional queries based on auth state
+function useUserData() {
+  const { isAuthenticated } = useAuth()
+  
+  return useQuery({
+    queryKey: ['user-data'],
+    queryFn: () => apiClient.getUserData(),
+    enabled: isAuthenticated, // Only run when authenticated
+  })
+}
+
+// ❌ WRONG: Queries that run regardless of auth state
+function useUserData() {
+  return useQuery({
+    queryKey: ['user-data'],
+    queryFn: () => apiClient.getUserData(), // This will fail and retry infinitely
+  })
+}
+```
+
+#### Error Boundaries for Auth
+- **Wrap authenticated routes** with `ErrorBoundary` to handle auth failures gracefully
+- **Provide fallback UI** for auth errors with sign-in prompts
+- **Never let auth errors crash the app** - always provide recovery options
+
 ### Anonymous to Authenticated Transition
 
 ```typescript

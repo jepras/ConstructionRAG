@@ -161,8 +161,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       console.log('Successfully signed out from Supabase')
       
-      // Clear user state
+      // Clear user state and auth cache
       setUser(null)
+      apiClient.clearAuthCache()
       
       // Reinitialize anonymous session
       setAnonymousSession({
@@ -194,55 +195,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Listen for auth state changes
+  // Single auth state manager - consolidate both auth checks
   useEffect(() => {
+    let mounted = true
+    
+    const initializeAuth = async () => {
+      try {
+        // First check current session
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.user && mounted) {
+          try {
+            const userProfile = await apiClient.getCurrentUser()
+            if (mounted) {
+              setUser(userProfile)
+            }
+          } catch (error) {
+            console.error('Failed to get user profile on mount:', error)
+            apiClient.clearAuthCache()
+            if (mounted) {
+              setUser(null)
+            }
+          }
+        } else if (mounted) {
+          apiClient.clearAuthCache()
+          setUser(null)
+        }
+      } catch (error) {
+        console.error('Error checking initial auth state:', error)
+        apiClient.clearAuthCache()
+        if (mounted) {
+          setUser(null)
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    // Set up auth state listener
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setIsLoading(true)
+      if (!mounted) return
       
-      if (session?.user) {
-        try {
-          // Get user profile from our backend
-          const userProfile = await apiClient.getCurrentUser()
-          setUser(userProfile)
-        } catch (error) {
-          console.error('Failed to get user profile on auth change:', error)
-          setUser(null)
-        }
-      } else {
-        setUser(null)
-      }
-      
-      setIsLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase.auth])
-
-  // Check if user is already signed in on mount
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
+      // Only process auth changes after initial load
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        setIsLoading(true)
         
         if (session?.user) {
           try {
             const userProfile = await apiClient.getCurrentUser()
-            setUser(userProfile)
+            if (mounted) {
+              setUser(userProfile)
+            }
           } catch (error) {
-            console.error('Failed to get user profile on mount:', error)
+            console.error('Failed to get user profile on auth change:', error)
+            apiClient.clearAuthCache()
+            if (mounted) {
+              setUser(null)
+            }
+          }
+        } else {
+          apiClient.clearAuthCache()
+          if (mounted) {
             setUser(null)
           }
         }
-      } catch (error) {
-        console.error('Error checking auth state:', error)
-      } finally {
-        setIsLoading(false)
+        
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
-    }
+    })
 
-    checkUser()
+    // Initialize auth state
+    initializeAuth()
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [supabase.auth])
 
   const value: AuthState = {

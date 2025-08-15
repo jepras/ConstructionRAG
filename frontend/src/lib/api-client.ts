@@ -190,18 +190,58 @@ export interface ProjectDetails {
 
 export class ApiClient {
   private baseURL: string
+  private authCache: {
+    token: string | null
+    expiresAt: number
+  } = {
+    token: null,
+    expiresAt: 0
+  }
 
   constructor() {
     this.baseURL = process.env.NEXT_PUBLIC_API_URL!
   }
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const now = Date.now()
     
-    return session?.access_token 
-      ? { Authorization: `Bearer ${session.access_token}` }
-      : {}
+    // Use cached token if it's still valid (with 5-minute buffer)
+    if (this.authCache.token && this.authCache.expiresAt > now + 5 * 60 * 1000) {
+      return { Authorization: `Bearer ${this.authCache.token}` }
+    }
+
+    try {
+      const supabase = createClient()
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('Error getting auth session:', error)
+        this.authCache = { token: null, expiresAt: 0 }
+        return {}
+      }
+
+      if (session?.access_token) {
+        // Cache the token with its expiration time
+        this.authCache = {
+          token: session.access_token,
+          expiresAt: (session.expires_at || 0) * 1000 // Convert to milliseconds
+        }
+        return { Authorization: `Bearer ${session.access_token}` }
+      }
+
+      // No session, clear cache
+      this.authCache = { token: null, expiresAt: 0 }
+      return {}
+    } catch (error) {
+      console.error('Error in getAuthHeaders:', error)
+      this.authCache = { token: null, expiresAt: 0 }
+      return {}
+    }
+  }
+
+  // Method to clear auth cache when auth state changes
+  public clearAuthCache(): void {
+    this.authCache = { token: null, expiresAt: 0 }
   }
 
   private async request<T>(

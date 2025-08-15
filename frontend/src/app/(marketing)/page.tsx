@@ -8,15 +8,30 @@ import { Search, Upload, MessageSquare, Download, Info, Eye, ArrowUp, Mic } from
 import Link from "next/link";
 
 export default function Home() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState("What are the key requirements for concrete curing?");
   const [showResponse, setShowResponse] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showTyping, setShowTyping] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const handleQuerySubmit = () => {
-    if (query.trim()) {
-      setShowResponse(true);
-      setCurrentPage(currentPage === 1 ? 2 : 1); // Toggle between different mock pages
-      setQuery(""); // Clear input after sending
+    if (query.trim() && !isLoading) {
+      const submittedQuery = query;
+      setQuery(""); // Clear input immediately
+      setIsLoading(true);
+      
+      // Show user message immediately
+      setTimeout(() => {
+        setShowTyping(true);
+        
+        // Show AI response after typing simulation
+        setTimeout(() => {
+          setShowTyping(false);
+          setShowResponse(true);
+          setIsLoading(false);
+          setCurrentPage(currentPage === 1 ? 2 : 1); // Toggle between different mock pages
+        }, 1500); // 1.5s typing simulation
+      }, 100); // Small delay to show message
     }
   };
 
@@ -43,46 +58,78 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-8 items-start">
             {/* Chat Interface */}
-            <div className="bg-card border border-border rounded-lg p-6">
-              {/* Existing Message */}
-              <div className="mb-6">
-                <div className="bg-primary text-primary-foreground p-3 rounded-lg inline-block max-w-sm">
-                  Hvad er definitionerne på en 'mindre byfornyelsessag' ifølge dokumentet?
-                </div>
-              </div>
-
-              {/* Response */}
-              <div className="mb-6">
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-                    <MessageSquare className="w-4 h-4 text-primary-foreground" />
-                  </div>
-                  <div className="bg-secondary p-4 rounded-lg max-w-md">
-                    <p className="text-sm text-secondary-foreground">
-                      En 'mindre byfornyelsessag' defineres som en sag på op til 5 mio. kr. i samlede omkostninger.
-                    </p>
+            <div className="bg-card border border-border rounded-lg p-6 min-h-96 flex flex-col">
+              {/* Messages Area */}
+              <div className="flex-1 space-y-6">
+                {/* Existing Message */}
+                <div>
+                  <div className="bg-primary text-primary-foreground p-3 rounded-lg inline-block max-w-sm">
+                    What are the requirements for smaller construction renovation projects?
                   </div>
                 </div>
-              </div>
 
-              {/* New response if query was submitted */}
-              {showResponse && (
-                <div className="mb-6">
+                {/* Response */}
+                <div>
                   <div className="flex items-start space-x-3">
                     <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
                       <MessageSquare className="w-4 h-4 text-primary-foreground" />
                     </div>
                     <div className="bg-secondary p-4 rounded-lg max-w-md">
                       <p className="text-sm text-secondary-foreground">
-                        Based on the construction specifications, standard concrete curing time is 28 days for full strength development, though initial setting occurs within 24-48 hours depending on environmental conditions.
+                        Smaller renovation projects are defined as projects up to $5 million in total costs.
                       </p>
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* Input */}
-              <div className="relative">
+                {/* New Q&A if query was submitted */}
+                {(isLoading || showResponse) && (
+                  <>
+                    <div>
+                      <div className="bg-primary text-primary-foreground p-3 rounded-lg inline-block max-w-sm">
+                        What are the key requirements for concrete curing?
+                      </div>
+                    </div>
+                    
+                    {/* Typing indicator */}
+                    {showTyping && (
+                      <div>
+                        <div className="flex items-start space-x-3">
+                          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                            <MessageSquare className="w-4 h-4 text-primary-foreground" />
+                          </div>
+                          <div className="bg-secondary p-4 rounded-lg max-w-md">
+                            <div className="flex space-x-1">
+                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* AI Response */}
+                    {showResponse && (
+                      <div>
+                        <div className="flex items-start space-x-3">
+                          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                            <MessageSquare className="w-4 h-4 text-primary-foreground" />
+                          </div>
+                          <div className="bg-secondary p-4 rounded-lg max-w-md">
+                            <p className="text-sm text-secondary-foreground">
+                              Based on the construction specifications, standard concrete curing time is 28 days for full strength development, though initial setting occurs within 24-48 hours depending on environmental conditions.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Input Area */}
+              <div className="relative mt-6">
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -98,7 +145,12 @@ export default function Home() {
                     onClick={handleQuerySubmit}
                     size="sm"
                     variant="ghost"
-                    className="p-2"
+                    disabled={isLoading}
+                    className={`p-2 transition-all duration-300 ${
+                      !showResponse && !isLoading 
+                        ? 'border-2 border-primary animate-pulse bg-primary/10 hover:bg-primary/20' 
+                        : 'border border-transparent'
+                    }`}
                   >
                     <ArrowUp className="w-4 h-4" />
                   </Button>
@@ -111,8 +163,12 @@ export default function Home() {
               {/* PDF Header */}
               <div className="bg-secondary p-3 flex items-center justify-between border-b border-border">
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm font-medium text-secondary-foreground">small-pdf.pdf</span>
-                  <span className="text-xs text-muted-foreground">Page {currentPage} of 4</span>
+                  <span className="text-sm font-medium text-secondary-foreground">
+                    {showResponse ? "meridian-heights-concrete.pdf" : "meridian-heights-overall-description.pdf"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Page {showResponse ? "89 of 156" : "137 of 241"}
+                  </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button variant="ghost" size="sm">
@@ -131,44 +187,91 @@ export default function Home() {
               </div>
 
               {/* PDF Content */}
-              <div className="p-6 bg-white text-black min-h-96">
-                <div className="mb-4">
-                  <h2 className="text-lg font-bold text-primary mb-4">BEDRE BYGGETIK</h2>
-                  <span className="text-xs text-gray-500 mb-2 block">Minimeret udbudsmateriale</span>
-                </div>
+              <div className="p-6 bg-card text-card-foreground min-h-96">
+                {!showResponse ? (
+                  // Initial PDF Content - Overall Description
+                  <>
+                    <div className="mb-4">
+                      <h2 className="text-lg font-bold text-primary mb-4">MERIDIAN HEIGHTS</h2>
+                      <span className="text-xs text-muted-foreground mb-2 block">Mixed-Use Development Project</span>
+                    </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2 flex items-center">
-                      <span className="bg-gray-200 rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2">0</span>
-                      Indledning
-                    </h3>
-                  </div>
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-semibold mb-2 flex items-center">
+                          <span className="bg-muted rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2">8</span>
+                          Project Classification & Budget Requirements
+                        </h3>
+                      </div>
 
-                  <div className="text-sm leading-relaxed space-y-3">
-                    <p>
-                      Dette projekt præsenterer et eksempel på et forenklet udbudsmateriale til
-                      mindre omfattende byfornyelsessager.
-                      <mark className="bg-orange-200">
-                        Mindre byfornyelsessager defineres som sager på op til 5 mio. kr. i samlede omkostninger
-                      </mark>
-                      (ca. 3 mio. kr. i håndværkerudgifter).
-                    </p>
+                      <div className="text-sm leading-relaxed space-y-3">
+                        <p>
+                          The Meridian Heights development represents a comprehensive mixed-use project incorporating
+                          residential towers, commercial spaces, and underground parking facilities.
+                          <mark className="bg-primary/20 text-foreground">
+                            Smaller renovation projects are defined as projects up to $5 million in total costs
+                          </mark>
+                          , while major developments like Meridian Heights exceed $150 million in total project value.
+                        </p>
 
-                    <p>
-                      Abildhauge A/S har i samarbejde med entreprenørerne CoG A/S og B.
-                      Nygaard Sørensen A/S udarbejdet et forenklet udbudsmateriale og giver bud
-                      på, hvordan det minimerede udbud berører rådgiver, entreprenør og
-                      bygherreomkostninger – herunder overvejelser om, hvordan dette påvirker
-                      udbudsformen.
-                    </p>
+                        <p>
+                          Phase 1 construction includes the 32-story residential tower with 280 units, 
+                          ground-level retail spaces, and a 4-level underground parking structure. 
+                          The project requires specialized construction techniques due to the proximity 
+                          to existing infrastructure and the challenging urban site conditions.
+                        </p>
 
-                    <p>
-                      Projektet viser, at det er muligt at skære væsentligt i papirmængden ved
-                      udbud af mindre sager og samtidig bevare kvaliteten i udbudsmaterialet.
-                    </p>
-                  </div>
-                </div>
+                        <p>
+                          All construction activities must comply with municipal building codes, 
+                          environmental regulations, and the established project timeline spanning 
+                          36 months from groundbreaking to occupancy permits.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  // New PDF Content - Concrete Specifications
+                  <>
+                    <div className="mb-4">
+                      <h2 className="text-lg font-bold text-primary mb-4">MERIDIAN HEIGHTS</h2>
+                      <span className="text-xs text-muted-foreground mb-2 block">Concrete & Materials Specifications</span>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-semibold mb-2 flex items-center">
+                          <span className="bg-muted rounded-full w-5 h-5 flex items-center justify-center text-xs mr-2">3</span>
+                          Concrete Curing & Quality Standards
+                        </h3>
+                      </div>
+
+                      <div className="text-sm leading-relaxed space-y-3">
+                        <p>
+                          All structural concrete for the Meridian Heights project must meet or exceed 
+                          4000 PSI compressive strength requirements. 
+                          <mark className="bg-primary/20 text-foreground">
+                            Standard concrete curing time is 28 days for full strength development
+                          </mark>
+                          , with initial setting occurring within 24-48 hours depending on environmental conditions.
+                        </p>
+
+                        <p>
+                          Temperature control during curing is critical, maintaining concrete between 
+                          50°F and 90°F throughout the initial 7-day period. Hot weather concreting 
+                          procedures must be implemented when ambient temperatures exceed 85°F, 
+                          including pre-cooling aggregates and limiting pour times to early morning hours.
+                        </p>
+
+                        <p>
+                          Quality control testing includes slump tests every 100 cubic yards, 
+                          compression testing at 7, 14, and 28 days, and continuous monitoring 
+                          of aggregate moisture content and cement-to-water ratios throughout 
+                          the pouring process.
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

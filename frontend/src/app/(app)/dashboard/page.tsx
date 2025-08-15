@@ -7,6 +7,7 @@ import { useUserProjects } from '@/hooks/useApiQueries'
 import { Button } from '@/components/ui/button'
 import { ProjectCard } from '@/components/projects/ProjectCard'
 import { EmptyProjectsState } from '@/components/projects/EmptyProjectsState'
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Plus } from 'lucide-react'
 
 // Mock data - replace with real API call later
@@ -56,18 +57,19 @@ const mockProjects = [
   }
 ]
 
-export default function DashboardPage() {
-  const { user, isLoading: authLoading } = useAuth()
+function DashboardContent() {
+  const { isLoading: authLoading } = useAuth()
   const [showMockData, setShowMockData] = useState(false) // Toggle for demo
   
-  // Fetch user projects from API
+  // Fetch user projects from API - only when authenticated
   const { 
     data: userProjects = [], 
     isLoading: projectsLoading,
     error: projectsError 
-  } = useUserProjects()
+  } = useUserProjects(50, 0)
 
-  if (authLoading || projectsLoading) {
+  // Show loading only during initial auth check
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -105,6 +107,12 @@ export default function DashboardPage() {
           >
             {showMockData ? 'Hide Demo Projects' : 'Show Demo Projects'}
           </Button>
+          {projectsLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              Loading projects...
+            </div>
+          )}
           {projectsError && (
             <p className="text-sm text-destructive">
               Failed to load projects: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
@@ -112,7 +120,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {projects.length === 0 ? (
+        {projects.length === 0 && !projectsLoading ? (
           <EmptyProjectsState />
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -123,5 +131,13 @@ export default function DashboardPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <ErrorBoundary>
+      <DashboardContent />
+    </ErrorBoundary>
   )
 }
