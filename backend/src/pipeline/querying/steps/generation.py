@@ -29,7 +29,7 @@ class GenerationConfig(BaseModel):
         "anthropic/claude-3.5-haiku",
         "meta-llama/llama-3.1-8b-instruct",
     ]
-    timeout_seconds: float = 5.0
+    timeout_seconds: float = 30.0
     max_tokens: int = 1000
     temperature: float = 0.1
     response_format: Dict[str, Any] = {

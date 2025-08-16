@@ -67,8 +67,8 @@ ConstructionRAG is a production-ready AI-powered construction document processin
 
 ### Key Technologies
 - **Backend**: FastAPI (Python) - deployed on Railway
-- **Production React Frontend**: Not developed yet - also to be deployed on Railway
-- **Development Frontend**: Streamlit - deployed on Streamlit Cloud
+- **Production React Frontend**: Next.js 15.3 with App Router - deployed on Railway
+- **Development Frontend**: Streamlit - deployed on Streamlit Cloud (legacy)
 - **Database**: Supabase (PostgreSQL with pgvector)
 - **AI Services**: Voyage AI (embeddings), OpenRouter (generation & VLM)
 - **Language**: Optimized for Danish construction documents currently. To be made multilingual. 
@@ -108,7 +108,7 @@ Streamlit updates automatically on git pushes.
 Backend to Railway
 Indexing run on Beam
 Development Frontend on Streamlit
-Production React Frontend on Railway (future) 
+Production React Frontend on Railway 
 
 ### URLs
 - Frontend: http://localhost:3000
@@ -140,8 +140,15 @@ frontend/
 │   ├── app/                 # Next.js App Router
 │   │   ├── layout.tsx       # Root layout
 │   │   ├── page.tsx         # Home page
+│   │   ├── projects/        # Public projects (anonymous access)
+│   │   │   └── [indexingRunId]/  # Single-slug format
+│   │   ├── (app)/          # Authenticated app routes
+│   │   │   └── dashboard/   # Private projects and user management
+│   │   │       └── projects/[projectSlug]/[runId]/  # Nested format
 │   │   └── api/             # API routes
 │   ├── components/          # Reusable UI components
+│   │   └── features/
+│   │       └── project-pages/  # Shared components for public/private
 │   └── lib/                 # Utilities and helpers
 ├── package.json             # Node.js dependencies
 ├── Dockerfile               # Production build
@@ -253,18 +260,29 @@ backend/tests/
 
 ## Project URL Structure
 
-ConstructionRAG uses a **nested URL structure** for projects to support multiple indexing run versions:
+ConstructionRAG uses **dual URL patterns** to support both public and private project access:
 
-**URL Format:** `/projects/{projectSlug}/{runId}`
+### Public Projects (Anonymous Access)
+**URL Format:** `/projects/{indexingRunId}` (single-slug)
+- `indexingRunId`: `project-name-{uuid}` (e.g., `downtown-tower-def456`)
+- **Full URL**: `/projects/downtown-tower-def456`
+- **Access**: Server-side rendered, no authentication required
+- **Features**: Basic wiki, query, and indexing progress viewing
+
+### Private Projects (Authenticated Access)
+**URL Format:** `/dashboard/projects/{projectSlug}/{runId}` (nested)
 - `projectSlug`: `project-name-{project_id}` (e.g., `downtown-tower-abc123`)
 - `runId`: `{indexing_run_id}` (e.g., `def456`)
-- **Full URL**: `/projects/downtown-tower-abc123/def456`
+- **Full URL**: `/dashboard/projects/downtown-tower-abc123/def456`
+- **Access**: Authentication required, full feature access
+- **Features**: Advanced project management, settings, collaboration
 
-This enables:
-- **Multi-version support**: Different indexing runs per project
-- **Version navigation**: Users can switch between runs via dropdown
-- **Bookmarkable versions**: Each run has a unique URL
-- **Clean hierarchy**: Project → Run relationship is explicit
+This dual structure enables:
+- **Public sharing**: Anonymous users can view projects without accounts
+- **Authentication separation**: Clear boundaries between public and private access
+- **Feature differentiation**: Public users see read-only content, authenticated users get full control
+- **Backward compatibility**: Existing public URLs continue to work
+- **Multi-version support**: Private projects support multiple indexing runs per project
 
 ## API Endpoints
 
@@ -298,8 +316,8 @@ This enables:
 - **GET** `/api/projects/{project_id}` - Get specific project
 - **PATCH** `/api/projects/{project_id}` - Update project
 - **DELETE** `/api/projects/{project_id}` - Delete project
-- **GET** `/api/projects/{project_id}/runs/{indexing_run_id}` - Get project with specific run (unified endpoint)
-- **GET** `/api/projects/{project_id}/runs` - List all indexing runs for a project
+- **GET** `/api/projects/{project_id}/runs/{indexing_run_id}` - Get project with specific run (unified endpoint for private projects)
+- **GET** `/api/projects/{project_id}/runs` - List all indexing runs for a project (requires authentication)
 
 ### Wiki Generation (`/api/wiki`)
 - **POST** `/api/wiki/runs` - Create wiki generation run

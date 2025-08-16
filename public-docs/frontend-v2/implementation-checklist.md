@@ -146,9 +146,9 @@
 - [x] Show settings. 
 
 ## Phase 7.5 Authenticated flow working 
-- [ ] Frontpage for the app with documents & create new project button
-- [ ] Ability to create projects
-- [ ] Dropdown menu with settings, marketplace (for later), support & logout
+- [x] Frontpage for the app with documents & create new project button
+- [x] Ability to create projects
+- [x] Dropdown menu with settings, marketplace (for later), support & logout
 
 ## Phase 8: Advanced Query Features
 

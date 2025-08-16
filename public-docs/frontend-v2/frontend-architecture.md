@@ -7,10 +7,12 @@ This document outlines the complete frontend architecture for ConstructionRAG's 
 ## Key Design Principles
 
 - **Single-root architecture** where marketing and authenticated app sections coexist
+- **Dual project routing** supporting public (anonymous) and private (authenticated) access patterns
 - **Multi-layout system** supporting marketing, app, and project-specific layouts
 - **Performance-first** with route-based code splitting and ISR for dynamic content
 - **State management** optimized for complex server-client interactions
-- **Component reusability** across different user flows and authentication states
+- **Component reusability** with shared components handling both public and private contexts
+- **Authentication-aware design** preventing conflicts between anonymous and authenticated flows
 
 ## Technical Stack
 
@@ -88,21 +90,32 @@ app/
 │   ├── about/page.tsx           # About page
 │   ├── pricing/page.tsx         # Pricing page
 │   └── loading.tsx              # Marketing loading states
-├── (app)/                       # Route group for authenticated app
-│   ├── layout.tsx               # Clean app layout without marketing footer
-│   ├── dashboard/page.tsx       # User project dashboard
-│   ├── experts/                 # Expert marketplace
+├── (app)/                      # Route group for authenticated app
+│   ├── layout.tsx              # Clean app layout without marketing footer
+│   ├── dashboard/
+│   │   ├── page.tsx            # User project dashboard
+│   │   └── projects/           # Private authenticated projects
+│   │       └── [projectSlug]/  # Nested format for private projects
+│   │           └── [runId]/    # Specific indexing run version
+│   │               ├── page.tsx        # Private project wiki with full features
+│   │               ├── query/page.tsx  # Advanced query interface
+│   │               ├── indexing/page.tsx # Detailed indexing controls
+│   │               ├── settings/page.tsx # Full project settings
+│   │               ├── [pageName]/page.tsx # Private wiki pages
+│   │               └── layout.tsx      # Private project layout
+│   ├── experts/                # Expert marketplace
 │   │   ├── page.tsx            # Expert marketplace grid
 │   │   └── [expertId]/page.tsx # Individual expert details
-│   └── settings/page.tsx        # User settings
-├── projects/                    # Public project browsing
+│   └── settings/page.tsx       # User settings
+├── projects/                    # Public project browsing (anonymous access)
 │   ├── page.tsx                # Public projects grid (/projects)
-│   └── [projectSlug]/          # Dynamic project routes (nested structure)
-│       └── [runId]/            # Specific indexing run version
-│           ├── page.tsx        # Project wiki overview for specific run
-│           ├── query/page.tsx  # Project query interface for specific run
-│           ├── experts/page.tsx # Project-specific experts for specific run
-│           └── layout.tsx      # Project-specific layout
+│   └── [indexingRunId]/        # Single-slug format for public projects
+│       ├── page.tsx            # Project wiki overview (server-side rendered)
+│       ├── query/page.tsx      # Public Q&A interface 
+│       ├── indexing/page.tsx   # Indexing progress display
+│       ├── settings/page.tsx   # Basic project settings view
+│       ├── [pageName]/page.tsx # Individual wiki pages
+│       └── layout.tsx          # Public project layout
 ├── auth/                       # Authentication flows
 │   ├── signin/page.tsx
 │   ├── signup/page.tsx
@@ -140,6 +153,10 @@ components/
 │   │   ├── ProjectStats.tsx    # Document/page/size statistics
 │   │   ├── ProjectSearch.tsx   # Search and filter functionality
 │   │   └── AddProjectCard.tsx  # Login prompt for authenticated features
+│   ├── project-pages/          # Shared components for public/private projects
+│   │   ├── ProjectSettingsContent.tsx  # Unified settings with auth context
+│   │   ├── ProjectQueryContent.tsx     # Shared Q&A interface 
+│   │   └── ProjectIndexingContent.tsx  # Common indexing progress display
 │   ├── wiki/
 │   │   ├── WikiLayout.tsx      # Three-column layout wrapper
 │   │   ├── WikiNavigation.tsx  # Left sidebar with expandable sections
@@ -208,10 +225,38 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 ```
 
 
-### Project Layout
+### Project Layouts
+
+**Public Project Layout** (Anonymous Access)
 ```typescript
-// app/projects/[projectSlug]/[runId]/layout.tsx
-export default function ProjectLayout({ 
+// app/projects/[indexingRunId]/layout.tsx
+export default function PublicProjectLayout({ 
+  children, 
+  params 
+}: { 
+  children: React.ReactNode;
+  params: { indexingRunId: string };
+}) {
+  const { indexingRunId } = params;
+  
+  return (
+    <>
+      <ProjectHeader 
+        projectSlug={indexingRunId} 
+        isPublic={true} 
+      />
+      <div className="container mx-auto px-4 py-6">
+        {children}
+      </div>
+    </>
+  );
+}
+```
+
+**Private Project Layout** (Authenticated Access)
+```typescript
+// app/(app)/dashboard/projects/[projectSlug]/[runId]/layout.tsx
+export default function PrivateProjectLayout({ 
   children, 
   params 
 }: { 
@@ -223,7 +268,12 @@ export default function ProjectLayout({
   
   return (
     <>
-      <ProjectHeader projectSlug={projectSlug} runId={runId} project={project} />
+      <ProjectHeader 
+        projectSlug={projectSlug} 
+        runId={runId} 
+        project={project}
+        isPublic={false}
+      />
       <div className="container mx-auto px-4 py-6">
         {children}
       </div>
@@ -238,49 +288,80 @@ export default function ProjectLayout({
 
 **Static Generation with ISR (Incremental Static Regeneration)**
 
+**Public Project Pages** (Single-Slug Format)
 ```typescript
-// app/projects/[projectSlug]/[runId]/page.tsx
+// app/projects/[indexingRunId]/page.tsx
 export async function generateStaticParams() {
-  const projects = await getPublicProjects();
+  const wikiRuns = await getPublicProjectsWithWikis();
   
-  return projects.map((project) => ({
-    projectSlug: `${project.name.toLowerCase().replace(/\s+/g, '-')}-${project.id}`,
-    runId: project.indexing_run_id,
+  return wikiRuns.map((wikiRun) => ({
+    indexingRunId: `${wikiRun.title.toLowerCase().replace(/\s+/g, '-')}-${wikiRun.indexing_run_id}`,
   }));
 }
 
-export async function generateMetadata({ params }: { params: { projectSlug: string; runId: string } }) {
-  const { projectSlug, runId } = params;
-  const projectId = extractProjectIdFromSlug(projectSlug);
-  const project = await apiClient.getProjectWithRun(projectId, runId);
+export async function generateMetadata({ params }: { params: { indexingRunId: string } }) {
+  const { indexingRunId } = params;
+  const actualRunId = extractUUIDFromSlug(indexingRunId);
+  const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
+  const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
   
   return {
-    title: `${project.name} - ConstructionRAG`,
-    description: project.description,
+    title: `${completedWikiRun?.wiki_structure?.title || 'Project'} - ConstructionRAG`,
+    description: completedWikiRun?.wiki_structure?.description || 'Construction project documentation',
     openGraph: {
-      title: project.name,
-      description: project.description,
-      images: [`/api/og?project=${project.id}`],
+      title: completedWikiRun?.wiki_structure?.title,
+      description: completedWikiRun?.wiki_structure?.description,
+      images: [`/api/og?project=${actualRunId}`],
     },
   };
 }
 
-export default async function ProjectPage({ params }: { params: { projectSlug: string; runId: string } }) {
-  const { projectSlug, runId } = params;
-  const projectId = extractProjectIdFromSlug(projectSlug);
-  const project = await apiClient.getProjectWithRun(projectId, runId);
-  const wikiPages = await apiClient.getWikiPages(runId);
+export default async function PublicProjectPage({ params }: { params: { indexingRunId: string } }) {
+  const { indexingRunId } = params;
+  const actualRunId = extractUUIDFromSlug(indexingRunId);
+  const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
+  const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
+  
+  if (!completedWikiRun) {
+    return <div>Wiki not available</div>;
+  }
+  
+  const wikiPages = await apiClient.getWikiPages(completedWikiRun.id);
   
   return (
-    <WikiLayout>
-      <WikiNavigation pages={wikiPages} />
-      <WikiContent content={wikiPages.overview} />
-      <WikiTOC sections={wikiPages.overview.sections} />
+    <WikiLayout 
+      pages={wikiPages.pages}
+      projectSlug={indexingRunId}
+      currentPage={wikiPages.pages[0]?.name}
+    >
+      <LazyWikiContent content={wikiPages.pages[0]} />
     </WikiLayout>
   );
 }
 
 export const revalidate = 3600; // Revalidate every hour
+```
+
+**Private Project Pages** (Nested Format)
+```typescript
+// app/(app)/dashboard/projects/[projectSlug]/[runId]/page.tsx
+export default async function PrivateProjectPage({ 
+  params 
+}: { 
+  params: { projectSlug: string; runId: string } 
+}) {
+  const { projectSlug, runId } = params;
+  const projectId = extractProjectIdFromSlug(projectSlug);
+  const project = await apiClient.getProjectWithRun(projectId, runId);
+  
+  return (
+    <ProjectWikiContent 
+      projectSlug={projectSlug}
+      runId={runId}
+      isAuthenticated={true}
+    />
+  );
+}
 ```
 
 ### Webhook-Triggered Revalidation
@@ -293,8 +374,9 @@ export async function POST(request: Request) {
   const { type, projectId, runId } = await request.json();
   
   if (type === 'wiki_generation_complete') {
-    // Revalidate specific project page with nested structure
-    revalidatePath(`/projects/${projectSlug}/${runId}`);
+    // Revalidate both public and private project pages
+    revalidatePath(`/projects/${projectSlug}`);
+    revalidatePath(`/dashboard/projects/${projectSlug}/${runId}`);
     revalidateTag(`wiki-${runId}`);
     
     // Revalidate public projects grid
@@ -572,9 +654,11 @@ const buttonVariants = cva(
 ### Dynamic Meta Tags
 
 ```typescript
-// app/projects/[slug]/page.tsx
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const project = await getProjectFromSlug(params.slug);
+// app/projects/[indexingRunId]/page.tsx
+export async function generateMetadata({ params }: { params: { indexingRunId: string } }) {
+  const actualRunId = extractUUIDFromSlug(params.indexingRunId);
+  const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
+  const project = wikiRuns.find(run => run.status === 'completed')?.wiki_structure;
   
   return {
     title: `${project.name} - Project Documentation | ConstructionRAG`,
@@ -583,7 +667,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     openGraph: {
       title: project.name,
       description: project.description,
-      url: `https://specfinder.com/projects/${params.slug}`,
+      url: `https://specfinder.com/projects/${params.indexingRunId}`,
       siteName: 'ConstructionRAG',
       images: [
         {

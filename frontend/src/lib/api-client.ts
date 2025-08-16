@@ -188,6 +188,53 @@ export interface ProjectDetails {
   wiki_run_id?: string
 }
 
+// Query-related interfaces
+export interface CreateQueryRequest {
+  query: string
+  indexing_run_id?: string
+}
+
+export interface SearchResult {
+  content: string
+  metadata: {
+    document_id: string
+    filename: string
+    page_number?: number
+    section_title?: string
+    [key: string]: any
+  }
+  similarity_score: number
+  source_filename: string
+  page_number?: number
+  chunk_id: string
+}
+
+export interface QueryResponse {
+  id?: string
+  query: string
+  response: string
+  search_results: SearchResult[]
+  performance_metrics?: {
+    total_time: number
+    steps: Record<string, number>
+    model_used?: string
+  }
+  quality_metrics?: {
+    relevance_score?: number
+    confidence?: number
+  }
+  step_timings?: Record<string, number>
+  created_at?: string
+}
+
+export interface QueryHistoryItem {
+  id: string
+  query: string
+  response: string
+  indexing_run_id: string
+  created_at: string
+}
+
 export class ApiClient {
   private baseURL: string
   private authCache: {
@@ -627,6 +674,63 @@ export class ApiClient {
       next: {
         revalidate: 300, // 5 minutes cache for project runs
         tags: [`project-runs-${projectId}`, 'projects', 'runs']
+      }
+    })
+  }
+
+  // Query methods
+  async createQuery(request: CreateQueryRequest): Promise<QueryResponse> {
+    // Try to get auth headers, but don't fail if not authenticated (public projects)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+    
+    return this.request<QueryResponse>('/api/queries', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    })
+  }
+
+  async getQueries(limit: number = 50, offset: number = 0): Promise<QueryHistoryItem[]> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<QueryHistoryItem[]>('/api/queries', {
+      headers,
+      params: {
+        limit,
+        offset,
+      },
+      next: {
+        revalidate: 60, // 1 minute cache for query history
+        tags: ['queries']
+      }
+    })
+  }
+
+  async getQuery(queryId: string): Promise<QueryResponse> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<QueryResponse>(`/api/queries/${queryId}`, {
+      headers,
+      next: {
+        revalidate: 3600, // 1 hour cache for individual queries
+        tags: [`query-${queryId}`, 'queries']
       }
     })
   }
