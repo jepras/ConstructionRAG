@@ -6,6 +6,12 @@ from .progress_tracker import ProgressTracker
 from .config_manager import ConfigManager
 from .models import DocumentInput, PipelineError
 
+# Shared retrieval components
+from .retrieval_config import SharedRetrievalConfig, RetrievalThresholds, DanishThresholds
+from .embedding_service import VoyageEmbeddingService
+from .similarity_service import SimilarityService
+from .retrieval_core import RetrievalCore
+
 __all__ = [
     "PipelineStep",
     "StepResult",
@@ -13,4 +19,11 @@ __all__ = [
     "ConfigManager",
     "DocumentInput",
     "PipelineError",
+    # Shared retrieval components
+    "SharedRetrievalConfig",
+    "RetrievalThresholds", 
+    "DanishThresholds",
+    "VoyageEmbeddingService",
+    "SimilarityService",
+    "RetrievalCore",
 ]
