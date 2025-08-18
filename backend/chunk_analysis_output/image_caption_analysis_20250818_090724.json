@@ -1,0 +1,1083 @@
+{
+  "indexing_run_id": "1ed7dc55-25ea-4b37-8f03-33d9f7aeeff8",
+  "total_visual_chunks": 74,
+  "analysis_timestamp": "2025-08-18T09:07:24.703747",
+  "chunks": [
+    {
+      "chunk_id": "6491eb04-e36c-4e60-a608-18b400354edc",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 587,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Desværre kan jeg ikke beskrive en tabel baseret på det medfølgende billede. Billedet viser en sort linje, der strækker sig fra højre side af en cirkel. Inde i cirk",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "a58f0cfe-b57a-496f-9512-b6432e663c1a",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 3674,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Dette er en billedanalyse af et fragment fra et teknisk dokument, potentielt fra en bygge-/ingeniørkontekst. Billedet viser ikke en tabel i traditionel forstand me",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "3cf453e7-7e59-4820-a558-6d66a04e0036",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 6869,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet af bygningstegningen på dansk:\n\n**Forståelse af billedet:**\nBilledet viser en plantegning af en bygning, sandsynligvis",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "d911b8fd-b438-4fd4-acfd-4d4ea694e4ee",
+      "page_number": 5,
+      "element_category": "Table",
+      "content_length": 8092,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet på dansk:\n\n**1. Al Synlig Tekst:**\n\nØverst på siden står en generel anmærkning:\n\"Alle mål skal kontrolleres på pladsen",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "c361d337-91a7-4249-bf4e-0c43a4f9705a",
+      "page_number": 2,
+      "element_category": "NarrativeText",
+      "content_length": 174,
+      "content_preview": "Section: None\n\nDer etableres forbrugsmålere for EL på hovedmålerniveau. Målere skal være synlige på stedet og kunne aflæses manuelt. Målere skal være godkendte for afregning.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "cda34e25-86a9-466c-af5b-12b4c94c385a",
+      "page_number": 3,
+      "element_category": "NarrativeText",
+      "content_length": 77,
+      "content_preview": "Section: None\n\nDer etableres sikkerhedsbelysning iht. gældende brandstrategi.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "0f2eefa3-4106-4bb4-9b7f-e891a33e5efb",
+      "page_number": 4,
+      "element_category": "NarrativeText",
+      "content_length": 71,
+      "content_preview": "Section: None\n\nSom udgangspunkt etableres der frivillig antenneordning.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "0dd0af6a-ba1d-434d-b302-49a3b11d6745",
+      "page_number": 4,
+      "element_category": "NarrativeText",
+      "content_length": 137,
+      "content_preview": "Section: None\n\nByggeplads  Der skal etableres vand, varme og byggestrømmålere ved igangsættelse af nye projekter - nybyg og renoveringer.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "b900c37c-93a9-464a-9be6-06bf9fcadcd3",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 8113,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af den leverede tabel på dansk:\n\n**1. Al Synlig Tekst:**\n\nØverst på siden, før tabellen, ses tre generelle anvisninger:\n*   \"Alle ",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "da0db73f-3578-427a-bc14-6c61af10be16",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 5308,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Dette er en detaljeret beskrivelse af et plantegningsudsnit, sandsynligvis fra et byggedokument, der viser indretning og tekniske installationer for et givent nive",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "5e030412-7655-4785-941d-e2ca2d3ec511",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 3072,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet på dansk:\n\n**1. Tekstindhold:**\n\nDen synlige tekst i billedet består af to linjer:\n* Første linje: \"Ubenævnte mål er i",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "e61c6c72-93c3-403a-ba38-af1a7b470d36",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 4691,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det foreliggende billede viser en del af en teknisk tegning, sandsynligvis fra en konstruktions- eller ingeniørkontekst. Det ser ud til at være en linjeførings- el",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "adab9fd8-cfd7-4646-8698-9d0c5b15ef02",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 2428,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det billede, du har sendt, viser ikke en tabel. Det er et enkelt grafisk element, der typisk findes i tekniske tegninger eller diagrammer.\n\nHer er en detaljeret be",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "1f6d06cb-27c3-4b4d-9f5e-f12a6a15c97a",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 2641,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det leverede billede viser ikke en tabel. Det er et simpelt grafisk element, der sandsynligvis er en del af et større diagram eller skematisk tegning.\n\nHer er en d",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "36b312d2-4ecf-4c53-b264-513f07dc244a",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 6174,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det anmodede billede er hovedsageligt blankt med svage, diagonale, stiplede linjer, der strækker sig fra øverste venstre mod nederste højre hjørne. Der er ingen sy",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "eaf00dca-7f51-45da-939c-02e07e611547",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 558,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Desværre kan jeg ikke analysere og beskrive en tabel ud fra det billede, du har sendt. Billedet viser kun en lille grafisk tegning med bogstavet \"C\" inde i en buet",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "ff356b8c-63ca-4698-809c-1431bacfbafe",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 3588,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet på dansk:\n\n**Komplet Beskrivelse af Billedet**\n\nBilledet viser en del af et diagram eller en teknisk tegning, sandsynl",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "762c184f-3f92-4ea8-aa32-7a8af3f8e6a2",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 9752,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet i dansk, som anmodet:\n\n**1. Al Synlig Tekst:**\n\nØverst på siden, over en vandret linje, findes en ansvarsfraskrivelse ",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "66605d91-762b-446d-a99a-06e8d8f349b6",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 4212,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af tabellen på dansk:\n\n**1. Tekstindhold (Alle synlige tekster):**\n\n*   **Tabeloverskrifter (celle (1,2) og (1,3)):**\n    *   \"Bes",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "8e889428-09b4-4d9b-8296-70116f0d5843",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 7200,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet leveret på dansk:\n\n**Kompleks Beskrivelse af Bygningstegning fra Side 3**\n\nDette billede viser en bygningstegning, san",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "614a6aed-7617-42f3-a165-872cffd91ada",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 1847,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Desværre, jeg kan ikke analysere den angivne tabel, da billedet kun viser et delvist og ufuldstændigt element. Billedet viser kun en hvid cirkel med et sort \"D\" in",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "0d88f9ca-b8a1-4407-b3a3-b224bd8f220c",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 4384,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af det leverede tabeludsnit på dansk:\n\n**1. Al Synlig Tekst:**\n*   **Top venstre:** \"2\"\n*   **Under \"2\":** \"Ungeværk\"\n*   **Midter",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "e0e2e354-af40-436b-bca6-db002c8ed777",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 2139,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det billede, du har vedhæftet, viser ikke en tabel, men en del af et diagram eller en illustration.\n\nHer er en detaljeret beskrivelse af billedet:\n\n**1. Al Synlig ",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "d5eb8cd4-0d81-442c-b38f-3ef1b399db5e",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 2683,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det givne billede viser ikke en tabel, men et grafisk symbol eller en del af et diagram. Der er en vandret linje, der ender i et punkt, hvorfra en buet linje (en d",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "a326f61f-84dd-4b8f-93eb-66a9ced1357f",
+      "page_number": 4,
+      "element_category": "Table",
+      "content_length": 7786,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet i dansk:\n\n**1. Alle synlig tekst:**\n\nØverst på billedet, i en boks med sort ramme, står der:\n*   \"Alle mål skal kontro",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "26202a3e-07a0-4044-a54b-36415a1118e0",
+      "page_number": 4,
+      "element_category": "Table",
+      "content_length": 6008,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet på dansk:\n\n**1. Al Synlig Tekst:**\n\n*   **Øverste venstre hjørne:** Cirkel med tallet \"1\" inde i.\n*   **Øverst midt:**",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "cc42d27d-de32-442c-9b2f-df8b96345ba9",
+      "page_number": 4,
+      "element_category": "Table",
+      "content_length": 3804,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det fremsendte billede indeholder ikke en tabel, men derimod et grafisk element. Her er en detaljeret beskrivelse af det synlige indhold:\n\n**Al Synlig Tekst:**\n* D",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "af33011d-3ed0-4f05-ba3e-0a270e2c90a9",
+      "page_number": 5,
+      "element_category": "Table",
+      "content_length": 2066,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Dette er ikke en tabel, men et grafisk symbol.\n\n**1. Al synlig tekst:**\nDen eneste synlige tekst er bogstavet \"D\" placeret inden i en cirkel.\n\n**2. Tabelstruktur:*",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "8e491f51-f1d2-46f2-94cd-0ddb3b8dbf7f",
+      "page_number": 5,
+      "element_category": "Table",
+      "content_length": 3073,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Dette billede viser ikke en tabel, men et simpelt grafisk element eller en tegning, der ofte bruges i tekniske eller byggerelaterede diagrammer, plancher eller ops",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "77534e9d-f522-4f68-9d87-9cce7fb9d3d9",
+      "page_number": 1,
+      "element_category": "ExtractedPage",
+      "content_length": 11597,
+      "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en omfattende, detaljeret beskrivelse af det tekniske dokument, baseret på det leverede billede:\n\n**Generel Oversigt:**\nDokumentet er en teknisk tegning for",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "559f2654-b698-41cd-90bc-8d17d631e3f9",
+      "page_number": 2,
+      "element_category": "ExtractedPage",
+      "content_length": 14034,
+      "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på tmpzui7vj9r_page02_complex_2079a878.png, fulgt af en opdeling i de anmodede kategorier.\n\n**OVERORDNET BES",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "d429574d-2cd7-4ceb-ba89-e32f4f16cdfd",
+      "page_number": 3,
+      "element_category": "ExtractedPage",
+      "content_length": 9899,
+      "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af det leverede dokument, der dækker alle anmodede punkter:\n\n**1. ALL VISIBLE TEXT:**\n\n**Top Venstre (BeSafe logo og teks",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "c30dde80-5e74-4913-9993-92d0d7dbdade",
+      "page_number": 4,
+      "element_category": "ExtractedPage",
+      "content_length": 11606,
+      "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på siden 4 af dokumentet, på dansk:\n\n**Sidebeskrivelse - tmzui7vj9r_page04_complex_bb4c13d3.png**\n\nDenne sid",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "d4d78054-5808-4600-8b2f-f5b0dce4b7be",
+      "page_number": 5,
+      "element_category": "ExtractedPage",
+      "content_length": 10258,
+      "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af det tekniske dokument på side 5, oversat til dansk:\n\n**1. Al Synlig Tekst:**\n\n*   **Titel/Branding (øverst venstre):**",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "fdfd4405-746b-4e9d-944e-ec8ee187a0a4",
+      "page_number": 12,
+      "element_category": "ExtractedPage",
+      "content_length": 9155,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på side 12 fra dokumentet:\n\n**Generel Beskrivelse:**\nSiden indeholder en teknisk tegning, sandsyn",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "ab049e93-254e-4fff-a2a5-07bb19c33c21",
+      "page_number": 13,
+      "element_category": "ExtractedPage",
+      "content_length": 9644,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af billedet fra side 13 i det tekniske dokument, formuleret på dansk:\n\n**Overordnet Beskrivelse:**\nSiden indeh",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "0a25efd2-4c0f-4c1c-aaa4-cf03bb88c0a6",
+      "page_number": 14,
+      "element_category": "ExtractedPage",
+      "content_length": 7671,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en detaljeret beskrivelse af billedet fra side 14 af dokumentet:\n\n**1. ALL VISIBLE TEXT (Al tekst):**\n\n*   **Titel øverst på siden:** \"Klub Guldb",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "4335a4a1-9de1-4d38-b1bb-c1a1d4c0fc70",
+      "page_number": 15,
+      "element_category": "ExtractedPage",
+      "content_length": 6438,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på side 15 fra dokumentet \"tmphp5qgsdj_page15_simple_4a07ec76.png\", beskrevet på dansk:\n\n**1. Tek",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "a3b5e631-f182-400d-b62a-425f15a522d0",
+      "page_number": 5,
+      "element_category": "Table",
+      "content_length": 5478,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet på dansk:\n\n**1. Al Synlig Tekst:**\n\n*   **Overskrifter/Betegnelser:**\n    *   Øverst midt over tegningen ses tre cirkl",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "90d13fed-8e58-46df-b7c6-fbe802f4c4ea",
+      "page_number": 3,
+      "element_category": "List",
+      "content_length": 1628,
+      "content_preview": "Section: 0.01 Beskrivelse - Elinstallationer\n\nGenerelt  De el-tekniske installationer udføres iht. HD 60364, gældende lovgivningskrav, branchevejledninger, samt  krav fra Københavns Kommune iht. neden",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "29a74f69-d516-4c63-a17c-af35e174b5c6",
+      "page_number": 3,
+      "element_category": "NarrativeText",
+      "content_length": 2137,
+      "content_preview": "Section: 0.01 Beskrivelse - Elinstallationer\n\nTerræn belysning  Der etableres belysning på facader rundt om bygningen generelt ved døre, samt en kombination af pullerter og master i samspil med Guldbe",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "411f03c4-cd99-4159-ac28-34941f0ae79c",
+      "page_number": 4,
+      "element_category": "NarrativeText",
+      "content_length": 913,
+      "content_preview": "Section: 0.01 Beskrivelse - Elinstallationer\n\nABA og AVA-anlæg Der udføres fulddækkende ABA-anlæg og varslingsanlæg efter brandplaner, Brandstrategiplan og myndighedskrav. ABA udføres som funktionsudb",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "6015dde1-084f-4f25-85a0-f3c0d9815acf",
+      "page_number": 4,
+      "element_category": "List",
+      "content_length": 751,
+      "content_preview": "Section: 0.01 Beskrivelse - Elinstallationer\n\nSolafskærmning Det undersøges i næste fase om der etableres mekanisk solafskærmning.   Elevator Der etableres elevator iht. BTD´s punkt 5.12 som funktions",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "244350a6-2658-497b-980a-2dbb7250b5b3",
+      "page_number": 5,
+      "element_category": "List",
+      "content_length": 2782,
+      "content_preview": "Section: 0.02 Beskrivelse – CTS-installationer\n\nGenerelt Der skal udføres bygningsautomatik på tekniske anlæg iht. KEID Bygherrestandarder for: • Bygningsautomation (B460) • Bygningsinstallationer (B4",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "48b10604-92c6-4398-8888-6733526801a9",
+      "page_number": 7,
+      "element_category": "List",
+      "content_length": 386,
+      "content_preview": "Section: 0.04 Hovedtegninger\n\n0.04 Hovedtegninger\n\n• I12727_01_K07_H1_EK_61.101 Føringsveje - Kld. • I12727_01_K07_H1_E0_61.102 Føringsveje - St.\n• I12727_01_K07_H1_E1_61.103 Føringsveje - 1. sal • I1",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "56ceddab-b927-46aa-90f7-03a0a4675063",
+      "page_number": 1,
+      "element_category": "ExtractedPage",
+      "content_length": 5622,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af det fulde sidebillede, der fanger alle synlige tekster, tekniske detaljer og rumlige relationer på dansk:\n\n",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "1d2b66ff-2fa1-4055-8f49-63b966224a68",
+      "page_number": 2,
+      "element_category": "ExtractedPage",
+      "content_length": 7994,
+      "content_preview": "Context: 0.05 Bilag ............................................................................................................................................... 15\n\nType: Image\n\nSummary: Her er en ",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "f8c7fe72-6d25-4f73-a57a-236161f09220",
+      "page_number": 3,
+      "element_category": "ExtractedPage",
+      "content_length": 13354,
+      "content_preview": "Context: 0.01 Beskrivelse - Elinstallationer\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på side 3 fra dokumentet:\n\n**Generel Oversigt:**\nSiden indeholder en omfatten",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "07f4eb11-f767-4116-8ed8-211fd66f5780",
+      "page_number": 4,
+      "element_category": "ExtractedPage",
+      "content_length": 6155,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af det leverede billede fra side 4 af dokumentet:\n\n**1. ALL VISIBLE TEXT (Al Synlig Tekst):**\n\n*   **Top højre",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "4c6c378f-137c-4e79-b543-023ce3bdde4d",
+      "page_number": 5,
+      "element_category": "ExtractedPage",
+      "content_length": 12339,
+      "content_preview": "Context: 0.02 Beskrivelse – CTS-installationer\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på side 5 af dokumentet, baseret på den danske tekst og visuelle elementer.",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "17378ee5-ece6-48d6-812f-ad005f807af3",
+      "page_number": 6,
+      "element_category": "ExtractedPage",
+      "content_length": 11140,
+      "content_preview": "Context: 0.03 Tegningsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af det leverede billede fra side 6 af det tekniske dokument:\n\n**Generel Beskrivelse:**\nBilledet viser en fu",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "c06536cc-0b12-4e7b-975c-a8551839344d",
+      "page_number": 7,
+      "element_category": "ExtractedPage",
+      "content_length": 5538,
+      "content_preview": "Context: 0.04 Hovedtegninger\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af det tekniske dokument på side 7:\n\n**1. Tekstindhold:**\n\n*   **Titel/Hovedoverskrift:** Øverst til venst",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "688ec1b4-64ed-4e11-9773-72786ec33e5e",
+      "page_number": 8,
+      "element_category": "ExtractedPage",
+      "content_length": 7470,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en detaljeret beskrivelse af side 8 af dokumentet, inklusive al tekst, tekniske detaljer og rumlige relationer, på dansk:\n\n**Sidebeskrivelse: Før",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "9f4843c1-c276-47c5-bd71-4768a6aceebb",
+      "page_number": 9,
+      "element_category": "ExtractedPage",
+      "content_length": 8955,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på side 9 af dokumentet, baseret på den leverede OCR-tekst og billeder:\n\n**1. Teksttransskription",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "9410b2c8-4644-41ed-96af-29b1406b3db8",
+      "page_number": 10,
+      "element_category": "ExtractedPage",
+      "content_length": 10005,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en yderst detaljeret beskrivelse af side 10 fra dokumentet \"tmphp5qgsdj_page10_simple_83c4f446.png\" på dansk:\n\n**1. Synlig Tekst (Alle synlige te",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "051e7c68-6def-4495-aba4-1cc1d105fddd",
+      "page_number": 11,
+      "element_category": "ExtractedPage",
+      "content_length": 11215,
+      "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en yderst detaljeret beskrivelse af side 11 fra dokumentet \"tmphp5qgsdj_page11_simple_48c6a06e.png\", fokuserende på al synlig tekst, tekniske teg",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "full_page_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": true,
+      "has_tables_on_page": false,
+      "image_filepath": ""
+    },
+    {
+      "chunk_id": "db794ccc-9e8a-497f-9202-a4b5b683b1df",
+      "page_number": 2,
+      "element_category": "NarrativeText",
+      "content_length": 41,
+      "content_preview": "Section: None\n\nDørtableau medkodetastatur",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "5792ea0f-d24b-4093-a041-2cbf5a91bf63",
+      "page_number": 2,
+      "element_category": "NarrativeText",
+      "content_length": 71,
+      "content_preview": "Section: None\n\nDørtableau medkodetastaturDørtableau  med kodetastatur 1",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "7ff0e41c-66bf-4fdd-9dfc-cc78fe33425b",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 8515,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af billedet af tabellen, oversat til dansk:\n\n**1. Al Synlig Tekst:**\n\n*   **Øverste Infoboks (Fodnote/Vejledning):**\n    *   \"Alle",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "68b4d415-066c-40e8-a0f1-82c8e85ee4c7",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 4648,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af tabellen, som udelukkende anvender dansk:\n\n**1. Al Synlig Tekst:**\n\n*   **Tabeloverskrift:** DTLF\n*   **Kolonneoverskrifter:**\n",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "46d4738c-d5d4-4cec-81ee-ffeeadfa70b2",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 4242,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Her er en detaljeret beskrivelse af tabellen på dansk:\n\n**1. Al Synlig Tekst:**\n\n*   **Tabeloverskrift:** \"AIA\"\n*   **Kolonneoverskrifter:**\n    *   \"Beskrivelse\"\n",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "013eb191-196a-405e-af64-95126081bf29",
+      "page_number": 4,
+      "element_category": "Table",
+      "content_length": 536,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Jeg kan ikke se nogen tabel i det billede, du har givet. Billedet viser kun en sort, horisontal linje, der strækker sig hen over toppen af billedet, og en sort, de",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "ca5cfce9-4090-4de2-93f7-d832e592e9d2",
+      "page_number": 3,
+      "element_category": "NarrativeText",
+      "content_length": 136,
+      "content_preview": "Section: None\n\nDet anbefales, at der ved indvendig belysning, udover manuel tænd/sluk, etableres dagslysstyring, samt bevægelsesmeldere.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "2d59eb88-90a0-4b4b-b65a-043f891d8472",
+      "page_number": 3,
+      "element_category": "NarrativeText",
+      "content_length": 310,
+      "content_preview": "Section: None\n\nAIA anlæg  Der skal etableres AIA anlæg iht. gældende rammeaftale i Københavns Kommune og tilhørende bygherrekrav for AIA installationer. Der skal etableres AIA i kontorer, anretterkøkk",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "51d4cf65-a4cd-4e21-822c-de1983f7f429",
+      "page_number": 3,
+      "element_category": "NarrativeText",
+      "content_length": 118,
+      "content_preview": "Section: None\n\nDørtelefonanlæg  Der etableres en dørtelefonanlæg til alle boliger samt til alle fællesstuer på etager.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "25c6e4dc-286b-4a3e-9a43-a020d4f710ac",
+      "page_number": 4,
+      "element_category": "NarrativeText",
+      "content_length": 165,
+      "content_preview": "Section: None\n\nAntenneanlæg  Der udføres antenneanlæg for kabel-TV og radio. Der etableres 2 antennestik i hver bolig, samt i alle fælles opholdsrum og personalerum.",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "eeafcf4a-d560-48d6-9733-c25f94eb0bfb",
+      "page_number": 1,
+      "element_category": "Table",
+      "content_length": 2580,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Dette billede viser ikke en tabel, men derimod et grafisk symbol eller en del af et diagram.\n\nHer er en detaljeret beskrivelse af det synlige indhold:\n\n1.  **Alt s",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "baadf770-97c5-49b6-879b-e571ad81929a",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 2769,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det billede, du har givet, viser ikke en tabel. I stedet viser det et diagrammatisk element, sandsynligvis fra et flowdiagram eller et skema.\n\nHer er en detaljeret",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "8d1db5eb-0d5b-4c33-9cf4-ac237f049a31",
+      "page_number": 2,
+      "element_category": "Table",
+      "content_length": 2554,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det indsendte billede viser ikke en tabel. Det er et enkelt grafisk symbol, der sandsynligvis er en del af en større tegning, et diagram eller en illustration i et",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "2cc4cea0-f41f-4239-b0c7-c164ea49f017",
+      "page_number": 3,
+      "element_category": "Table",
+      "content_length": 1849,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Beklager, men det leverede billede viser ikke en tabel. Billedet indeholder kun et udsnit af en grafisk repræsentation, sandsynligvis en del af et flowchart, diagr",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "88f714fd-b866-46b0-a359-a9c084c1bd91",
+      "page_number": 4,
+      "element_category": "Table",
+      "content_length": 2340,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Dette billede viser ikke en tabel. Det er et simpelt diagram eller en grafisk repræsentation, der indeholder følgende elementer:\n\n**1. Synlig tekst:**\n*   Bogstave",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "26559149-12de-49cc-96eb-20433e9d9b90",
+      "page_number": 5,
+      "element_category": "Table",
+      "content_length": 2595,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Denne billedbeskrivelse præsenterer en analyse af det leverede billede, svarende til en tabel eller et diagram fundet på side 5 af et ukendt bygge-/teknisk dokumen",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "de57984f-e5c5-49ec-93df-54fd479c4a72",
+      "page_number": 5,
+      "element_category": "Table",
+      "content_length": 2624,
+      "content_preview": "Context: None\n\nType: Table\n\nSummary: Det uploadede billede indeholder ikke en tabel, men en simpel grafisk illustration. Her er en detaljeret beskrivelse af det, der er synligt:\n\n**1. Alle synlige tek",
+      "has_vlm_captions": true,
+      "vlm_caption_types": [
+        "table_image_caption"
+      ],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": true,
+      "image_filepath": null
+    },
+    {
+      "chunk_id": "56e42310-eeb3-468d-819f-8f4367da1efb",
+      "page_number": 3,
+      "element_category": "NarrativeText",
+      "content_length": 1856,
+      "content_preview": "Section: 0.01 Beskrivelse - Elinstallationer\n\nsammenhængende udligning. Der opsættes hovedudligningsplint ved HT og evt. supplerende plinte, hvor dette kan have relevans.   Føringsveje Der etableres v",
+      "has_vlm_captions": false,
+      "vlm_caption_types": [],
+      "processing_strategy": "unified_fast_vision",
+      "has_images_on_page": false,
+      "has_tables_on_page": false,
+      "image_filepath": null
+    }
+  ]
+}

@@ -173,122 +173,232 @@ class DocumentRetriever(PipelineStep):
         indexing_run_id: str | None = None,
         allowed_document_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search pgvector using cosine distance"""
+        """Search pgvector using HNSW index and native similarity functions"""
 
         # Convert embedding to string format for pgvector
         embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
         try:
-            # Use pgvector similarity search with proper SQL
-            # First, check if we have any chunks with embeddings
-            response = (
-                self.db.table("document_chunks")
-                .select("id,content,metadata,embedding_1024,document_id")
-                .not_.is_("embedding_1024", "null")
-                .limit(1)
-                .execute()
+            # First check if we have a similarity_search function available
+            try:
+                # Try to use native pgvector similarity search function
+                rpc_params = {
+                    'query_embedding': embedding_str,
+                    'similarity_threshold': self.config.danish_thresholds["minimum"],
+                    'match_count': self.config.top_k * 2,  # Get extra for deduplication
+                }
+                
+                # Add optional filters
+                if indexing_run_id:
+                    rpc_params['indexing_run_id_filter'] = indexing_run_id
+                    logger.info(f"Filtering search to indexing run: {indexing_run_id}")
+                    
+                if allowed_document_ids:
+                    rpc_params['allowed_document_ids'] = allowed_document_ids
+
+                # Use stored procedure for fast HNSW search
+                response = self.db.rpc('similarity_search', rpc_params).execute()
+                
+                if response.data:
+                    logger.info(f"HNSW search returned {len(response.data)} results")
+                    return self._format_similarity_search_results(response.data)
+                else:
+                    logger.info("HNSW search returned no results")
+                    
+            except Exception as rpc_error:
+                logger.warning(f"HNSW similarity_search function failed: {rpc_error}")
+                logger.info("Falling back to native pgvector similarity with SQL")
+                
+                # Fallback to native pgvector similarity using SQL
+                # Build dynamic query based on filters
+                base_query = """
+                SELECT id, content, metadata, document_id, indexing_run_id,
+                       (embedding_1024 <=> %s::vector) AS distance
+                FROM document_chunks 
+                WHERE embedding_1024 IS NOT NULL
+                """
+                
+                params = [embedding_str]
+                conditions = []
+                
+                # Add filters
+                if indexing_run_id:
+                    conditions.append("AND indexing_run_id = %s")
+                    params.append(indexing_run_id)
+                    
+                if allowed_document_ids:
+                    placeholders = ','.join(['%s'] * len(allowed_document_ids))
+                    conditions.append(f"AND document_id = ANY(ARRAY[{placeholders}])")
+                    params.extend(allowed_document_ids)
+                
+                # Add similarity threshold
+                conditions.append("AND (embedding_1024 <=> %s::vector) <= %s")
+                params.extend([embedding_str, 1.0 - self.config.danish_thresholds["minimum"]])
+                
+                # Complete query
+                full_query = base_query + " ".join(conditions) + f" ORDER BY distance LIMIT {self.config.top_k * 2}"
+                
+                # Execute raw SQL for pgvector similarity
+                response = self.db.rpc('exec_sql', {
+                    'sql_query': full_query,
+                    'params': params
+                }).execute()
+                
+                if response.data:
+                    logger.info(f"Native pgvector search returned {len(response.data)} results")
+                    return self._format_pgvector_results(response.data)
+                else:
+                    logger.warning("Native pgvector search also returned no results")
+
+            # Final fallback to Python-based similarity if both above methods fail
+            logger.warning("Using Python-based similarity as final fallback")
+            return await self._fallback_python_similarity(
+                query_embedding, indexing_run_id, allowed_document_ids
             )
-
-            if not response.data:
-                logger.warning("No document chunks with embeddings found")
-                return []
-
-            # Get chunks and calculate similarity in Python under RLS client
-            query = (
-                self.db.table("document_chunks")
-                .select("id,content,metadata,embedding_1024,document_id,indexing_run_id")
-                .not_.is_("embedding_1024", "null")
-            )
-
-            # Filter by indexing_run_id if provided
-            if indexing_run_id:
-                query = query.eq("indexing_run_id", indexing_run_id)
-                logger.info(f"Filtering search to indexing run: {indexing_run_id}")
-            # Apply document filter if provided (public/auth/owned set pre-resolved)
-            if allowed_document_ids:
-                query = query.in_("document_id", allowed_document_ids)
-
-            response = query.execute()
-
-            chunks = response.data
-            results_with_scores = []
-
-            for chunk in chunks:
-                if chunk.get("embedding_1024"):
-                    # Parse embedding string to list of floats
-                    chunk_embedding_str = chunk["embedding_1024"]
-                    try:
-                        # Parse the string representation of the vector
-                        import ast
-
-                        chunk_embedding = ast.literal_eval(chunk_embedding_str)
-
-                        # Ensure it's a list of floats
-                        if isinstance(chunk_embedding, list):
-                            chunk_embedding = [float(x) for x in chunk_embedding]
-
-                            # Calculate cosine similarity
-                            similarity = self.cosine_similarity(query_embedding, chunk_embedding)
-                        else:
-                            logger.warning(f"Invalid embedding format for chunk {chunk['id']}")
-                            continue
-
-                    except (ValueError, SyntaxError) as e:
-                        logger.warning(f"Failed to parse embedding for chunk {chunk['id']}: {e}")
-                        continue
-
-                    results_with_scores.append(
-                        {
-                            "id": chunk["id"],
-                            "content": chunk["content"],
-                            "metadata": chunk["metadata"],
-                            "distance": 1 - similarity,  # Convert to distance
-                        }
-                    )
-
-            # Sort by distance (lowest first)
-            results_with_scores.sort(key=lambda x: x["distance"])
-
-            # Deduplicate results based on content (keep the one with best similarity)
-            seen_content = set()
-            unique_results = []
-
-            for result in results_with_scores:
-                # Create a content hash for deduplication (first 200 chars)
-                content_hash = result["content"][:200]
-
-                if content_hash not in seen_content:
-                    seen_content.add(content_hash)
-                    unique_results.append(result)
-
-                    # Stop when we have enough unique results
-                    if len(unique_results) >= self.config.top_k * 2:
-                        break
-
-            results = unique_results
-
-            # Convert results to standard format
-            formatted_results: list[dict[str, Any]] = []
-            for result in results:
-                formatted_results.append(
-                    {
-                        "id": result["id"],
-                        "content": result["content"],
-                        "metadata": result["metadata"],
-                        "source_filename": (
-                            result["metadata"].get("source_filename", "unknown") if result["metadata"] else "unknown"
-                        ),
-                        "page_number": (result["metadata"].get("page_number") if result["metadata"] else None),
-                        "similarity_score": result.get("distance", 0),
-                    }
-                )
-
-            logger.info(f"Search returned {len(formatted_results)} results")
-            return formatted_results
 
         except Exception as e:
-            logger.error(f"Error searching pgvector: {e}")
+            logger.error(f"Error in pgvector search: {e}")
             raise
+
+    def _format_similarity_search_results(self, results: list[dict]) -> list[dict[str, Any]]:
+        """Format results from similarity_search stored procedure"""
+        formatted_results = []
+        seen_content = set()
+        
+        for result in results:
+            # Deduplicate by content hash
+            content_hash = result["content"][:200]
+            if content_hash in seen_content:
+                continue
+            seen_content.add(content_hash)
+            
+            formatted_results.append({
+                "id": result["id"],
+                "content": result["content"],
+                "metadata": result.get("metadata", {}),
+                "source_filename": result.get("metadata", {}).get("source_filename", "unknown"),
+                "page_number": result.get("metadata", {}).get("page_number"),
+                "similarity_score": result.get("distance", 0),  # Note: this should be similarity, not distance
+            })
+            
+            if len(formatted_results) >= self.config.top_k:
+                break
+                
+        return formatted_results
+
+    def _format_pgvector_results(self, results: list[dict]) -> list[dict[str, Any]]:
+        """Format results from native pgvector SQL query"""
+        formatted_results = []
+        seen_content = set()
+        
+        for result in results:
+            # Deduplicate by content hash
+            content_hash = result["content"][:200]
+            if content_hash in seen_content:
+                continue
+            seen_content.add(content_hash)
+            
+            # Convert distance to similarity
+            distance = result.get("distance", 1.0)
+            similarity = 1.0 - distance
+            
+            formatted_results.append({
+                "id": result["id"],
+                "content": result["content"],
+                "metadata": result.get("metadata", {}),
+                "source_filename": result.get("metadata", {}).get("source_filename", "unknown"),
+                "page_number": result.get("metadata", {}).get("page_number"),
+                "similarity_score": similarity,
+            })
+            
+            if len(formatted_results) >= self.config.top_k:
+                break
+                
+        return formatted_results
+
+    async def _fallback_python_similarity(
+        self,
+        query_embedding: list[float], 
+        indexing_run_id: str | None = None,
+        allowed_document_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fallback Python-based similarity calculation (original implementation)"""
+        logger.info("Using Python similarity calculation fallback")
+        
+        # Get chunks and calculate similarity in Python
+        query = (
+            self.db.table("document_chunks")
+            .select("id,content,metadata,embedding_1024,document_id,indexing_run_id")
+            .not_.is_("embedding_1024", "null")
+        )
+
+        # Filter by indexing_run_id if provided
+        if indexing_run_id:
+            query = query.eq("indexing_run_id", indexing_run_id)
+        # Apply document filter if provided
+        if allowed_document_ids:
+            query = query.in_("document_id", allowed_document_ids)
+
+        response = query.execute()
+        chunks = response.data
+        results_with_scores = []
+
+        for chunk in chunks:
+            if chunk.get("embedding_1024"):
+                # Parse embedding string to list of floats
+                chunk_embedding_str = chunk["embedding_1024"]
+                try:
+                    # Parse the string representation of the vector
+                    import ast
+                    chunk_embedding = ast.literal_eval(chunk_embedding_str)
+
+                    # Ensure it's a list of floats
+                    if isinstance(chunk_embedding, list):
+                        chunk_embedding = [float(x) for x in chunk_embedding]
+                        # Calculate cosine similarity
+                        similarity = self.cosine_similarity(query_embedding, chunk_embedding)
+                    else:
+                        logger.warning(f"Invalid embedding format for chunk {chunk['id']}")
+                        continue
+
+                except (ValueError, SyntaxError) as e:
+                    logger.warning(f"Failed to parse embedding for chunk {chunk['id']}: {e}")
+                    continue
+
+                results_with_scores.append({
+                    "id": chunk["id"],
+                    "content": chunk["content"],
+                    "metadata": chunk["metadata"],
+                    "distance": 1 - similarity,  # Convert to distance
+                })
+
+        # Sort by distance (lowest first)
+        results_with_scores.sort(key=lambda x: x["distance"])
+
+        # Deduplicate and format results
+        seen_content = set()
+        formatted_results = []
+
+        for result in results_with_scores:
+            content_hash = result["content"][:200]
+            if content_hash not in seen_content:
+                seen_content.add(content_hash)
+                formatted_results.append({
+                    "id": result["id"],
+                    "content": result["content"],
+                    "metadata": result["metadata"],
+                    "source_filename": (
+                        result["metadata"].get("source_filename", "unknown") if result["metadata"] else "unknown"
+                    ),
+                    "page_number": (result["metadata"].get("page_number") if result["metadata"] else None),
+                    "similarity_score": result.get("distance", 0),
+                })
+                
+                if len(formatted_results) >= self.config.top_k * 2:
+                    break
+
+        logger.info(f"Python fallback search returned {len(formatted_results)} results")
+        return formatted_results
 
     def cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors"""

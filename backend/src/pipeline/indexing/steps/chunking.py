@@ -9,6 +9,12 @@ from uuid import UUID
 import logging
 from pathlib import Path
 
+try:
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+except ImportError:
+    # Fallback if langchain is not available
+    RecursiveCharacterTextSplitter = None
+
 from ...shared.base_step import PipelineStep
 from src.models import StepResult
 from ...shared.models import PipelineError
@@ -37,6 +43,14 @@ class IntelligentChunker:
         self.format_images_with_context = config.get("format_images_with_context", True)
         self.prioritize_vlm_captions = config.get("prioritize_vlm_captions", True)
         self.fallback_to_original_text = config.get("fallback_to_original_text", True)
+        
+        # Semantic chunking parameters
+        self.strategy = config.get("strategy", "element_based")
+        self.chunk_size = config.get("chunk_size", 1000)
+        self.overlap = config.get("overlap", 200)
+        self.separators = config.get("separators", ["\n\n", "\n", " ", ""])
+        self.min_chunk_size = config.get("min_chunk_size", 100)
+        self.max_chunk_size = config.get("max_chunk_size", 2000)
 
     def extract_structural_metadata(self, el: dict) -> dict:
         """Extract structural metadata from element, handling various formats"""
@@ -410,6 +424,14 @@ class IntelligentChunker:
 
     def compose_final_content(self, el: Dict[str, Any], meta: dict) -> str:
         """Compose final content based on element type and category"""
+        # Check if this is a split element with pre-computed content
+        if "split_content" in el:
+            return el["split_content"]
+            
+        # Check if this is a merged element
+        if "merged_content" in el:
+            return el["merged_content"]
+            
         category = meta.get("element_category", "unknown")
         element_type = el.get("element_type", "text")
         section_title = meta.get("section_title_inherited", "Unknown Section")
@@ -470,6 +492,170 @@ class IntelligentChunker:
             text_content = self.extract_text_content(el, meta)
             return text_content
 
+    def apply_semantic_text_splitting(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Apply semantic text splitting to large elements"""
+        if self.strategy != "semantic" or RecursiveCharacterTextSplitter is None:
+            logger.info("Semantic splitting disabled or langchain not available")
+            return elements, {"semantic_splitting_enabled": False}
+            
+        logger.info("Applying semantic text splitting to large elements...")
+        
+        # Initialize text splitter
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.overlap,
+            separators=self.separators,
+            length_function=len,
+            is_separator_regex=False,
+        )
+        
+        split_elements = []
+        splitting_stats = {
+            "elements_processed": 0,
+            "elements_split": 0,
+            "total_new_chunks": 0,
+            "elements_unchanged": 0,
+        }
+        
+        for el in elements:
+            splitting_stats["elements_processed"] += 1
+            
+            # Get element content
+            meta = self.extract_structural_metadata(el)
+            content = self.compose_final_content(el, meta)
+            
+            # Skip if content is too short or already optimal size
+            if len(content) <= self.max_chunk_size:
+                split_elements.append(el)
+                splitting_stats["elements_unchanged"] += 1
+                continue
+                
+            # Split large content
+            try:
+                text_chunks = text_splitter.split_text(content)
+                if len(text_chunks) <= 1:
+                    # No splitting occurred
+                    split_elements.append(el)
+                    splitting_stats["elements_unchanged"] += 1
+                    continue
+                    
+                splitting_stats["elements_split"] += 1
+                splitting_stats["total_new_chunks"] += len(text_chunks)
+                
+                # Create new elements from splits
+                for i, chunk_text in enumerate(text_chunks):
+                    new_element = el.copy()
+                    
+                    # Update metadata for chunk
+                    chunk_meta = meta.copy()
+                    chunk_meta["element_id"] = f"{meta.get('element_id', 'unknown')}_{i}"
+                    chunk_meta["content_length"] = len(chunk_text)
+                    chunk_meta["is_semantic_split"] = True
+                    chunk_meta["split_index"] = i
+                    chunk_meta["total_splits"] = len(text_chunks)
+                    
+                    # Store the split text directly in a way the compose_final_content can use
+                    new_element["split_content"] = chunk_text
+                    new_element["structural_metadata"] = chunk_meta
+                    
+                    split_elements.append(new_element)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to split element {meta.get('element_id')}: {e}")
+                split_elements.append(el)
+                splitting_stats["elements_unchanged"] += 1
+                
+        splitting_stats["semantic_splitting_enabled"] = True
+        logger.info(f"Semantic splitting complete: {splitting_stats}")
+        return split_elements, splitting_stats
+
+    def merge_small_chunks(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Merge small adjacent chunks to enforce minimum chunk size"""
+        if not elements:
+            return elements, {"merging_enabled": False, "no_elements": True}
+            
+        logger.info(f"Merging small chunks (min_size: {self.min_chunk_size})...")
+        
+        merged_elements = []
+        current_merge_group = []
+        merging_stats = {
+            "elements_processed": 0,
+            "small_elements_found": 0,
+            "merge_groups_created": 0,
+            "final_elements": 0,
+        }
+        
+        for el in elements:
+            merging_stats["elements_processed"] += 1
+            
+            # Get element content and metadata
+            meta = self.extract_structural_metadata(el)
+            content = self.compose_final_content(el, meta)
+            content_length = len(content)
+            
+            if content_length < self.min_chunk_size:
+                merging_stats["small_elements_found"] += 1
+                current_merge_group.append(el)
+            else:
+                # Process any pending merge group
+                if current_merge_group:
+                    merged_element = self._merge_element_group(current_merge_group)
+                    if merged_element:
+                        merged_elements.append(merged_element)
+                        merging_stats["merge_groups_created"] += 1
+                    current_merge_group = []
+                
+                # Add current large element as-is
+                merged_elements.append(el)
+                
+        # Handle remaining merge group
+        if current_merge_group:
+            merged_element = self._merge_element_group(current_merge_group)
+            if merged_element:
+                merged_elements.append(merged_element)
+                merging_stats["merge_groups_created"] += 1
+                
+        merging_stats["final_elements"] = len(merged_elements)
+        merging_stats["merging_enabled"] = True
+        logger.info(f"Chunk merging complete: {merging_stats}")
+        
+        return merged_elements, merging_stats
+
+    def _merge_element_group(self, elements: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Merge a group of small elements into one"""
+        if not elements:
+            return None
+            
+        if len(elements) == 1:
+            return elements[0]
+            
+        # Use the first element as base
+        base_element = elements[0].copy()
+        base_meta = self.extract_structural_metadata(base_element)
+        
+        # Combine content from all elements
+        combined_content_parts = []
+        for el in elements:
+            meta = self.extract_structural_metadata(el)
+            content = self.compose_final_content(el, meta)
+            if content.strip():
+                combined_content_parts.append(content.strip())
+                
+        combined_content = "\n\n".join(combined_content_parts)
+        
+        # Update metadata for merged element
+        base_meta["element_id"] = f"merged_{base_meta.get('element_id', 'unknown')}"
+        base_meta["content_length"] = len(combined_content)
+        base_meta["is_merged"] = True
+        base_meta["merged_count"] = len(elements)
+        base_meta["element_category"] = "MergedContent"
+        
+        # Store merged content
+        base_element["merged_content"] = combined_content
+        base_element["structural_metadata"] = base_meta
+        
+        return base_element
+
     def create_final_chunks(
         self, elements: List[Dict[str, Any]]
     ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -482,10 +668,16 @@ class IntelligentChunker:
         # Step 2: Group list items
         grouped_elements, grouping_stats = self.group_list_items(filtered_elements)
 
-        # Step 3: Compose final chunks
+        # Step 3: Apply semantic text splitting (NEW)
+        split_elements, splitting_stats = self.apply_semantic_text_splitting(grouped_elements)
+
+        # Step 4: Merge small chunks (NEW)
+        merged_elements, merging_stats = self.merge_small_chunks(split_elements)
+
+        # Step 5: Compose final chunks
         final_chunks = []
 
-        for el in grouped_elements:
+        for el in merged_elements:
             meta = self.extract_structural_metadata(el)
             text_content = self.extract_text_content(el, meta)
             section_title = meta.get("section_title_inherited", "Unknown Section")
@@ -529,6 +721,8 @@ class IntelligentChunker:
         processing_stats = {
             "filtering_stats": filtering_stats,
             "grouping_stats": grouping_stats,
+            "splitting_stats": splitting_stats,
+            "merging_stats": merging_stats,
             "total_elements_processed": len(elements),
             "final_chunks_created": len(final_chunks),
         }

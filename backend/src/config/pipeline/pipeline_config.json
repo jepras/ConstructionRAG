@@ -77,7 +77,7 @@
       "similarity_metric": "cosine",
       "top_k": 5,
       "similarity_thresholds": { "excellent": 0.75, "good": 0.60, "acceptable": 0.40, "minimum": 0.25 },
-      "danish_thresholds": { "excellent": 0.70, "good": 0.55, "acceptable": 0.35, "minimum": 0.20 }
+      "danish_thresholds": { "excellent": 0.60, "good": 0.45, "acceptable": 0.30, "minimum": 0.15 }
     },
     "generation": {
       "provider": "openrouter",
