@@ -373,15 +373,23 @@ async def main():
     print("=" * 60)
     
     # Configuration
-    INDEXING_RUN_ID = "1ed7dc55-25ea-4b37-8f03-33d9f7aeeff8"
+    INDEXING_RUN_ID = "8e6d54e6-890a-45bc-a294-3bd62a46f815"
     QUERIES = [
-        "Hvor skal føringsvejene være?",
-        "Hvor skal der installeres AIA anlæg?"
+        "Hvad er der om brandsikkerhedsforanstaltninger?",
+        "Hvilke elektriske installationer skal der være?",
+        "Hvad står der om døre og vinduer?",
+        "Beskriv ventilationssystemet",
+        "Hvad er kravene til vandinstallationer?",
+        "Hvilke materialer skal bruges til byggeri?",
+        "Beskriv bygningens struktur og konstruktion",
+        "Hvad er tidsplanen for projektet?",
+        "Hvilke tegninger og dokumenter er inkluderet?",
+        "Hvad er specifikationerne for varmeanlæg?"
     ]
     
-    # Create output directory
-    output_dir = Path("embedding_analysis_output")
-    output_dir.mkdir(exist_ok=True)
+    # Create output directory in runs subfolder
+    output_dir = Path("chunk_analysis_output/runs") / INDEXING_RUN_ID
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Initialize Voyage client
     settings = get_settings()

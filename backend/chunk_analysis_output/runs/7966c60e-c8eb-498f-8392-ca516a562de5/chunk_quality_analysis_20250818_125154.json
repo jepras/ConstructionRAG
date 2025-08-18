@@ -1,0 +1,276 @@
+{
+  "analysis_metadata": {
+    "indexing_run_id": "7966c60e-c8eb-498f-8392-ca516a562de5",
+    "total_chunks_analyzed": 136,
+    "analysis_timestamp": "2025-08-18T12:51:54.171171"
+  },
+  "quality_analysis": {
+    "total_chunks": 136,
+    "size_distribution": {
+      "min": 31,
+      "max": 18255,
+      "mean": 1450.2132352941176,
+      "median": 185,
+      "under_10_chars": 0,
+      "under_50_chars": 1,
+      "under_100_chars": 12,
+      "over_1000_chars": 23,
+      "over_2000_chars": 17
+    },
+    "content_type_analysis": {
+      "category_distribution": {
+        "NarrativeText": 100,
+        "MergedContent": 15,
+        "Table": 2,
+        "ExtractedPage": 13,
+        "List": 6
+      },
+      "total_categories": 5
+    },
+    "problematic_chunks": {
+      "tiny_chunks": [
+        {
+          "chunk_id": "3579cda2-0f68-4cd2-938c-0a75b1394e48",
+          "content": "Section: None\n\nElinstallationer",
+          "size": 31,
+          "page_number": 1,
+          "element_category": "NarrativeText",
+          "processing_strategy": "unknown"
+        }
+      ],
+      "duplicate_content": [
+        {
+          "content_preview": "Section: None\n\nDer afklares nærmere i de kommende faser, hvilket system Socialforvaltningen ønsker a",
+          "duplicate_count": 2,
+          "chunk_ids": [
+            "ec63b3d3-592b-4636-8625-adb1f7e2c359",
+            "c6564675-ca89-418c-9eb8-f8ef99acfcfc"
+          ],
+          "pages": [
+            4,
+            4
+          ]
+        },
+        {
+          "content_preview": "Section: None\n\nAlle mål skal kontrolleres på pladsen. Eventuelle fejl skal meddeles den tegningsansv",
+          "duplicate_count": 5,
+          "chunk_ids": [
+            "15487091-c061-412d-8760-5be4c27df2dd",
+            "6121723e-cf1f-40cf-ade5-4a5e93a591a6",
+            "700d0dab-315d-4b5e-be7a-38ebdc712ad7",
+            "8ef8254c-ecea-4cfc-a675-1ae23f8b498f",
+            "aba87b9b-c96b-4567-89e2-dc598e572a41"
+          ],
+          "pages": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "content_preview": "Section: None\n\nNørrebrogade 45C, 3.sal, 2200 København NT: +45 5761 7272       /       E: eogp@eogp.",
+          "duplicate_count": 5,
+          "chunk_ids": [
+            "9f2c0efd-32cf-4813-b6bc-a6aaf999b64c",
+            "5b186936-d39a-44d3-a10d-a24d0c1ed0c9",
+            "96f7656b-48af-42a1-a268-566ace3eaccf",
+            "0b752ca9-be5e-43a2-acbd-77e9d4b03e65",
+            "416c3182-0372-4114-9b4b-5493c9cfbbc3"
+          ],
+          "pages": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "content_preview": "Section: None\n\nBeSafe A/S - Tørringvej 17A - 2610 RødovreCvr. 36963042 - Telefon 82 82 82 01 - info@",
+          "duplicate_count": 5,
+          "chunk_ids": [
+            "a44a32b5-760b-4fff-a1b4-fce153f1f894",
+            "cfcaccda-7e06-4ee7-918c-6d2f1e08b6df",
+            "fefde375-41c6-4141-a57b-b85a4737967f",
+            "7069a369-6ac9-44dc-9274-a2be79067d6f",
+            "1180a46e-3a1e-4d5c-8ae8-50e3b4535156"
+          ],
+          "pages": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "content_preview": "Section: None\n\nPlantegning udført af BeSafe A/S Revisionsdato 08-04-2025 - 09:00:54\n\nSection: None\n\n",
+          "duplicate_count": 5,
+          "chunk_ids": [
+            "0169e21f-2d68-4626-b6f5-a233bd48b056",
+            "f3c5a300-2f91-4fcc-8239-e315b4d47122",
+            "35fc5e5b-3874-4885-bfb4-ebb58434d959",
+            "ccb81143-6dec-4067-a5f5-b814f5f39489",
+            "92cae8e3-0a5e-44e3-9eb8-37ae3ca8ef03"
+          ],
+          "pages": [
+            2,
+            5,
+            1,
+            4,
+            3
+          ]
+        },
+        {
+          "content_preview": "Section: 0.04 Hovedtegninger\n\nKlub Guldberg - Dispositionsforslag -ByK & TRUST                      ",
+          "duplicate_count": 8,
+          "chunk_ids": [
+            "408bd309-8321-4215-a301-265a5472c27b",
+            "9494041a-b9be-4933-9702-36dbf03dbbe3",
+            "e4702ff2-cd12-41d0-ae48-3688450afd37",
+            "27c00984-16ca-4550-ad52-2bfba1b21f29",
+            "683cca77-fbbe-4011-ab75-015b10bde9d8",
+            "177984a3-c882-4018-bda0-76d08dd7c8e9",
+            "c52ea24e-991c-43d5-adee-510a7e9b6f27",
+            "f6e56f7c-4f75-48c1-8af6-90ef3741fa4f"
+          ],
+          "pages": [
+            10,
+            8,
+            9,
+            11,
+            13,
+            15,
+            14,
+            12
+          ]
+        },
+        {
+          "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indholdet på tmpfn",
+          "duplicate_count": 2,
+          "chunk_ids": [
+            "002f205f-98ca-431b-8455-9ed3050ab7c9",
+            "0d64b3b8-e161-44ef-b6cd-14855e357496"
+          ],
+          "pages": [
+            2,
+            4
+          ]
+        },
+        {
+          "content_preview": "Section: 0.05 Bilag ................................................................................",
+          "duplicate_count": 2,
+          "chunk_ids": [
+            "0d88508d-d49e-4e51-be37-72de814d92f4",
+            "2d48a8da-3e55-4e25-9721-0b9d11771291"
+          ],
+          "pages": [
+            3,
+            2
+          ]
+        },
+        {
+          "content_preview": "Section: 0.01 Beskrivelse - Elinstallationer\n\nKlub Guldberg - Dispositionsforslag -ByK & TRUST      ",
+          "duplicate_count": 2,
+          "chunk_ids": [
+            "7f05bfbf-38e9-429d-ab01-bdf8ca21de13",
+            "ecd283ee-06de-43c7-a019-600fc5f42169"
+          ],
+          "pages": [
+            4,
+            5
+          ]
+        },
+        {
+          "content_preview": "Context: 0.5 Bilagsliste\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af indhold",
+          "duplicate_count": 3,
+          "chunk_ids": [
+            "ac9d8504-7667-4f80-b3f8-053ff39f6302",
+            "f9a7e50f-5b73-4c46-b777-01f692be2f31",
+            "8864c4f2-b009-415e-89e3-253821129774"
+          ],
+          "pages": [
+            8,
+            12,
+            14
+          ]
+        },
+        {
+          "content_preview": "Section: None\n\nTEGN. NR.:REV.:\n\nSection: None\n\nFORMAT:UDFØRT:GODKENDT:KONTROL:\n\nSection: None\n\nPROJE",
+          "duplicate_count": 5,
+          "chunk_ids": [
+            "2da3d01c-4a43-45f3-b0c4-4a7033353021",
+            "52d62e3a-98b9-4a32-9377-d381c8b36508",
+            "99655fdd-267f-4a88-91cf-820fe91695ff",
+            "1bc86daa-7dfe-4021-b619-66c30f699b44",
+            "fe2fa725-0ee2-4a66-8d43-c3a1b3e9d13e"
+          ],
+          "pages": [
+            3,
+            1,
+            2,
+            5,
+            4
+          ]
+        }
+      ],
+      "fragmented_lists": [],
+      "poor_table_captions": [],
+      "poor_image_captions": []
+    },
+    "processing_strategy_analysis": {
+      "unknown": 136
+    },
+    "vlm_captioning_analysis": {
+      "total_chunks_with_vlm": 16,
+      "percentage_with_vlm": 11.76470588235294,
+      "table_captions": {
+        "count": 0,
+        "examples": []
+      },
+      "image_captions": {
+        "count": 13,
+        "examples": [
+          {
+            "chunk_id": "3dea2698-4d8e-455a-967f-3da3930c0b90",
+            "page_number": 1,
+            "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af billedet fra tmpfnm61tdg_page01_complex_1459ff25.png på dansk, der dækker alle de anførte punkter:\n\n**1. ALL VISIBLE T",
+            "full_page_image_caption": "Her er en ekstremt detaljeret beskrivelse af billedet fra tmpfnm61tdg_page01_complex_1459ff25.png på dansk, der dækker alle de anførte punkter:\n\n**1. ALL VISIBLE TEXT (Al Synlig Tekst):**\n\n*   **Top venstre hjørne (BeSafe logo):**\n    *   \"BeSafe\" (stor, fed skrift)\n    *   \"en del af UHG\" (mindre skrift under logoet)\n\n*   **Tegningsindhold (Midtersektion, plantegning):**\n    *   **Rumlabels:**\n        *   \"01.E0.08\"\n        *   \"Wc\"\n        *   \"01.E0.09\"\n        *   \"Wc\"\n        *   \"01.E0.10\"\n        *   \"Wc\"\n        *   \"01.E0.07\"\n        *   \"-Forrum\"\n        *   \"01.E0.12\"\n        *   \"Elevator\"\n        *   \"01.E0.01.\"\n        *   \"Forrum/trappe\"\n        *   \"01.E0.03\"\n        *   \"VM T\"\n        *   \"Vask/rengøring\"\n        *   \"01.E0.04\"\n        *   \"Depot\"\n        *   \"01.E0.11\"\n        *   \"Wc\"\n        *   \"01.E0.06\"\n        *   \"Varmecentral\"\n        *   \"01.E0.02\"\n        *   \"Garderobe\"\n        *   \"01.E0.05\"\n        *   \"Ventilation\"\n    *   **Dimensioner/mål:**\n        *   \"KB 300 mm\" (gentaget flere gange langs grønne linjer)\n        *   \"KS 300 mm\" (langs rød linje, øverst til højre for \"CTS 1\")\n    *   **Betegnelser på installationer:**\n        *   \"CTS 1 _ HT K1.01\" (ved den grønne kasse, øverst til venstre)\n        *   \"CTS 2 Varsling\" (ved den grønne kasse, nederst til højre)\n        *   \"HX K1\" (ved den røde kasse, nederst til højre)\n    *   **Koordinatlinjer:**\n        *   Lodrette tal: \"1\", \"2\", \"3\", \"4\" (cirklet)\n        *   Vandrette bogstaver: \"G\", \"F\", \"E\", \"D\", \"C\", \"B\", \"A\" (cirklet)\n\n*   **Legende/Signaturer (Øverst i højre kolonne):**\n    *   \"Signaturer - Føringsveje og tavler\" (Overskrift)\n    *   **Ledningstyper:**\n        *   \"KBxxx\"\n        *   \"Kabelbakke med skillespor, xxx angiver bredden\" (Grøn, tyk streg)\n        *   \"GBxxx\"\n        *   \"Gitterbakke med skillespor, dim iht. plantegninger\" (Blå, tyk streg, ikke afbildet på den synlige plantegning)\n        *   \"KS xxx\"\n        *   \"Lodret kabelstig, xxx angiver bredden\" (Rød, tyk streg)\n    *   **Symboler:**\n        *   \"Ny stikledning\" (Grå, stiplet linje, ikke afbildet på den synlige plantegning)\n        *   \"HX xx\" (Skråt kryds i firkant)\n        *   \"Hovedkrydsfelt\"\n        *   \"HT xxx\" (Sort fyldt rektangel)\n        *   \"Hovedtavle\"\n        *   \"UT xxx\" (Sort fyldt rektangel)\n        *   \"Undertavle\"\n        *   \"Serviceareal (tavle, krydsfelt)\" (Hvid fyldt rektangel med skrå linje)\n        *   **Pile/retningsangivelser:**\n            *   \"Gennemføring, op og ned\"\n            *   \"Opadgåendeføring\" (Pil opad)\n            *   \"Nedadgåendeføring\" (Pil nedad)\n    *   **Note:**\n        *   \"Ubenævnte mål er i mm\"\n        *   \"Koter i m, system DVR90.\"\n    *   **Henvisninger:**\n        *   \"Vedr. øvrig målsætning se arkitektprojekt\"\n\n*   **Tekniske beskrivelser (Midt i højre kolonne):**\n    *   **ADK/AIA-anlæg (Overskrift):**\n        *   \"Der udføres ADK og AIA-anlæg iht. rumprogram. Der etableres en\"\n        *   \"overvågning med detektorer i stueetagen og 1. sal af alle\"\n        *   \"indgangsdøre, trapperum og evt. kontorer. Derudover etableres\"\n        *   \"der overvågning af gangarealerne og fællesområder i stueetagen.\"\n        *   \"Bygningens nøgleboks skal kobles på AIA.\"\n    *   **Dørtelefonanlæg (Overskrift):**\n        *   \"Der etableres et dørtelefonanlæg med integreret kodetastatur,\"\n        *   \"kald til svartelefon og to-vejs tale. Anlægget skal fungere med\"\n        *   \"opringning fra hovedindgang til svartelefoner, hvorfra døren skal\"\n        *   \"låses op. Kodetastatur skal være integreret i dørtelefonen og skal\"\n        *   \"kunne anvendes klubbens daglige brugere. Der skal leveres og\"\n        *   \"opsættes en svartelefon til hver etage. Dørtelefonen skal\"\n        *   \"overstyres af AIA-anlægget, så dørtelefon og kodetastatur er\"\n        *   \"inaktiv, når AIA-anlægget er tilkoblet.\"\n\n*   **Stempel/Titelblok (Højre side):**\n    *   **Øverst i titelblokken:**\n        *   \"Alle mål skal kontrolleres på pladsen. Eventuelle fejl skal meddeles den tegningsansvarlige.\"\n        *   \"Hvis ikke andet er specificeret, er alle mål i millimeter.\"\n        *   \"Tegninger med nedtonede bygningsdele skal printes gråtonet.\"\n        *   \"112727-01_K07_H1_EK_61.101\" (Tegningsnummer i stor skrift)\n    *   **Tabelhoveder:**\n        *   \"REV.:\"\n        *   \"DATO:\"\n        *   \"EMNE:\"\n    *   **Afkrydsningsfelter for fag:**\n        *   \"LANDO\" (Landmåling)\n        *   \"ARKO\" (Arkitekt)\n        *   \"KONO\" (Konstruktør)\n        *   \"VVS/VENTO\" (VVS/Ventilation)\n        *   \"EL O\" (El)\n    *   **Bygherreinformation:**\n        *   \"BYGHERRE:\"\n        *   \"Byggeri København\"\n        *   \"Nyropsgade 1, 1602 København V\"\n        *   \"T: +45 3366 3366 / E: Byk@okf.kk.dk\"\n    *   **Københavns Kommune logo:** (tre tårne med krone)\n    *   **Bygningsnumre:**\n        *   \"BYGNINGSNUMMER:\"\n        *   \"01\"\n        *   \"KOMMUNENUMMER:\"\n        *   \"0101\"\n        *   \"EJENDOMSNUMMER:\" (ingen værdi angivet)\n    *   **Bygningsnavn:** (ingen værdi angivet)\n    *   **Projektnavn:**\n        *   \"Klub Guldberg\"\n        *   \"<Projektadresse>\" (Placeholder)\n    *   **Projektnummer & Status:**\n        *   \"PROJEKT NR.:\"\n        *   \"12727\"\n        *   \"STATUS:\"\n        *   \"Dispositionforslag\"\n    *   **Tegningsnummer & Filnavn:**\n        *   \"TEGN. NR.:\"\n        *   \"112727-01_K07_H1_EK_61.101\"\n        *   \"FILNAVN: 112727-01_K07_H1_EK_61.101 Føringsveje - Kælderetage.pdf\"\n    *   **Emne:**\n        *   \"EMNE:\"\n        *   \"Føringsveje - Kælderetage\" (Gentaget for tydelighed)\n    *   **Målestok & Dato:**\n        *   \"MÅL:\"\n        *   \"1 : 100\"\n        *   \"DATO:\"\n        *   \"07.02.2025\"\n    *   **Format & Udarbejdelse:**\n        *   \"FORMAT:\"\n        *   \"630 x 297\"\n        *   \"UDFØRT:\"\n        *   \"CRM\"\n        *   \"KONTROL:\"\n        *   \"BRA\"\n        *   \"GODKENDT:\"\n        *   \"SKJ\"\n    *   **ByK & TRUST logo:**\n        *   \"ByK &\"\n        *   \"TRUST\"\n        *   \"Nørrebrogade 45C, 3.sal, 2200 København N\"\n        *   \"T: +45 5761 7272 / E: eogp@eogp.dk\"\n\n*   **BeSafe A/S information (Nederst venstre hjørne):**\n    *   \"ISO 9001-CERTIFICERET VIRKSOMHED\" (stor, fed skrift)\n    *   \"BeSafe\" (stor, fed skrift)\n    *   \"Sikringspartner\" (mindre skrift under logoet)\n    *   \"BeSafe A/S - Tørringvej 17A - 2610 Rødovre\"\n    *   \"Cvr. 36963042 - Telefon 82 82 82 01 - info@besafe.dk\"\n    *   \"Plantegning udført af BeSafe A/S\"\n    *   \"Revisionsdato 08-04-2025 - 09:00:54\"\n\n**2. Technical Drawing Details (Tekniske Tegningsdetaljer):**\n\n*   **Type af tegning:** Dette er en plantegning over en kælderetage, specifikt fokuseret på føringsveje og placering af tekniske skabe/tavler relateret til sikringsanlæg (ADK/AIA) og dørtelefoni.\n*   **Arkitektoniske/ingeniørmæssige elementer:**\n    *   **Bygningsplan:** Viser ruminddeling, vægge (markeret med tynde linjer og isolerings- eller murværksmarkering), døre (åbninger i vægge) og trapper (i \"Forrum/trappe\").\n    *   **Rumidentifikation:** Alle rum er navngivet og har et unikt ID (f.eks., \"01.E0.08 Wc\" hvilket sandsynligvis refererer til etage 01, bygningsdel E, rum nummer 08, WC).\n    *   **Tekniske installationer:** Grønne og røde linjer markerer føringsveje for kabler, og grønne/røde rektangler markerer placeringen af tekniske tavler/skabe.\n*   **Dimensioner, skala og mål:**\n    *   **Målestok:** 1:100, hvilket betyder at 1 enhed på tegningen repræsenterer 100 enheder i virkeligheden.\n    *   **Mål:** Nogle mål og dimensioner er angivet i \"mm\" (millimeter), f.eks. \"KB 300 mm\" og \"KS 300 mm\", der angiver bredden af kabelbakker/kabelstiger.\n    *   **Generel note om mål:** \"Ubenævnte mål er i mm\" og \"Koter i m, system DVR90.\" \"Alle mål skal kontrolleres på pladsen. Eventuelle fejl skal meddeles den tegningsansvarlige. Hvis ikke andet er specificeret, er alle mål i millimeter.\"\n*   **Materialer og konstruktionsdetaljer:** Tegningen viser ikke specifikke materialer for vægge, gulve eller lofter, men standard tegningskonventioner for vægge er anvendt. Isoleringsdetaljer er antydet i vægstrukturen. Fokus er på installationer, ikke bygningskonstruktionens materialer.\n*   **Symboler og tekniske notationer:**\n    *   **Aksenet:** Et koordinatsystem med lodrette tal (1-4) og vandrette bogstaver (A-G) er vist for nem reference og lokalisering.\n    *   **Pil-symboler:** Flere pile angiver retninger (opadgående/nedadgående føring) for installationer.\n    *   **Kabelbakketyper:** Forskellige farver og symboler angiver typer af føringsveje:\n        *   Grøn (KBxxx) = Kabelbakke med skillespor.\n        *   Rød (KS xxx) = Lodret kabelstig.\n        *   Lyseblå (GBxxx) = Gitterbakke (ikke brugt på denne del af plantegningen).\n    *   **Skabs- og tavlesymboler:**\n        *   Grønne fyldte rektangler: Sandsynligvis skabe eller tavler (f.eks. \"CTS 1\", \"CTS 2\").\n        *   Rødt fyldt rektangel: sandsynligvis \"Hovedkrydsfelt\" (HX K1) eller lignende teknisk tavle.\n        *   Mindstemål på tavler (\"HT xxx\", \"UT xxx\") er ikke synlige som mål, men symbolerne indikerer hovedtavler og undertavler.\n        *   Symbol for \"Serviceareal\" (tavle, krydsfelt) - hvidt rektangel med skrå linje er vist i legenenden, men ikke på plantegningen.\n\n**3. Spatial Relationships (Rumulige Forhold):**\n\n*   **Layout og arrangement:** Plantegningen viser en del af en bygning, sandsynligvis en kælderetage, inddelt i flere rum med forskellige funktioner.\n    *   Toiletrum (\"Wc\") er samlet i den venstre del (01.E0.08, 01.E0.09, 01.E0.10, 01.E0.11).\n    *   En \"Varmecentral\" (01.E0.06) er placeret centralt i venstre side af tegningen.\n    *   Et \"Forrum\" (01.E0.07) og en \"Elevator\" (01.E0.12) samt \"Forrum/trappe\" (01.E0.01) danner adgangsveje.\n    *   En \"Garderobe\" (01.E0.02) er centralt placeret.\n    *   \"Vask/rengøring\" (01.E0.03) og \"Depot\" (01.E0.04) er i højre del.\n    *   \"Ventilation\" (01.E0.05) er placeret mod den nederste kant.\n*   **Forbindelser og relationer:**\n    *   De grønne kabelbakker (KB 300 mm) danner en sammenhængende føringsvej, der starter fra venstre mod øverst i venstre hjørne (ved \"CTS 1 HT K1.01\"), løber ned langs en væg, derefter drejer mod højre og ender ved \"CTS 2 Varsling\". Dette indikerer en hovedføringsvej for sikringssystemet.\n    *   Den røde linje (KS 300 mm) ved \"CTS 1 HT K1.01\" indikerer en lodret kabelstig, sandsynligvis op til en anden etage.\n    *   Den røde kasse \"HX K1\" (Hovedkrydsfelt) er placeret umiddelbart ved siden af \"CTS 2 Varsling\", hvilket indikerer en direkte forbindelse eller samling af kabler.\n*   **Referencepunkter og orienteringer:** Aksenettet (A-G, 1-4) giver klare referencepunkter for placering i bygningen. Der er ingen nordpil angivet, så orienteringen er baseret på standard tegnesætning, hvor toppen typisk ville være nord.\n\n**4. Pointers and Annotations (Henvisninger og Anmærkninger):**\n\n*   **Fremhævede elementer:**\n    *   Kabelbakker (grønne linjer) med dimensionen \"KB 300 mm\" (bredde 300 mm). Disse viser den specifikke bane, kablerne skal følge.\n    *   Lodret kabelstig (rød linje) med dimensionen \"KS 300 mm\" (bredde 300 mm). Dette viser et punkt, hvor kabler går vertikalt.\n    *   De tekniske skabe/tavler \"CTS 1 HT K1.01\", \"CTS 2 Varsling\" og \"HX K1\" er tydeligt markeret med rektangulære symboler.\n*   **Tekniske specifikationer for fremhævede områder:**\n    *   \"CTS 1 HT K1.01\": Angiver Control Terminal System 1, sandsynligvis en Hovedtavle (HT) eller styringsenhed for sikring.\n    *   \"CTS 2 Varsling\": Angiver Control Terminal System 2, relateret til varslingsfunktioner.\n    *   \"HX K1\": Angiver Hovedkrydsfelt 1. Dette er et centralt punkt for kabelterminering.\n    *   Alle dimensioner af føringsveje er angivet som bredde (300 mm).\n*   **Forbindelse mellem callouts og tegningselementer:**\n    *   Betegnelser som \"CTS 1 HT K1.01\" er placeret direkte ved det tilhørende symbol i tegningen.\n    *   Dimensioneringen \"KB 300 mm\" er skrevet langs de grønne føringsveje, de henv. til.\n    *   Rumlabels (\"01.E0.0X Navn\") er placeret inden i de respektive rum.\n    *   Aksenettet omkranser tegningen og giver en koordinat reference for alle elementer.\n\n**5. Building Materials and Construction (Bygningsmaterialer og Konstruktion):**\n\n*   **Specifikke bygningsmaterialer nævnt:** Ikke direkte nævnt for bygningskonstruktionen. Vægtyper er angivet med standard symboler for enten lette vægge/skillevægge eller murværk/betonvægge (udfra lag).\n*   **Konstruktionsteknikker og metoder:** Ingen specifikke konstruktionsteknikker er angivet, da tegningen primært fokuserer på de tekniske installationer.\n*   **Tekniske standarder og koder:**\n    *   \"ISO 9001-CERTIFICERET VIRKSOMHED\" (for BeSafe A/S) indikerer kvalitetssikring i processen for udarbejdelse af tegningen og installationerne.\n    *   \"Koter i m, system DVR90.\" angiver standard for højdemål.\n    *   ADK (Adgangskontrol) og AIA (Automatisk Indbrudsalarm) henviser til specifikke sikkerhedsstandarder for installation.\n    *   KRAV: \"Alle mål skal kontrolleres på pladsen. Eventuelle fejl skal meddeles den tegningsansvarlige. Hvis ikke andet er specificeret, er alle mål i millimeter.\"\n    *   KRAV: \"Tegninger med nedtonede bygningsdele skal printes gråtonet.\"\n\nDette dokument er en del af en samlet projektering af sikkerhedssystemer for Byggeri København i \"Klub Guldberg\", og viser en detaljeret plan for kabelføring, styringsskabe og tavler for adgangskontrol, indbrudsalarm og dørtelefoni i kælderetagen."
+          },
+          {
+            "chunk_id": "2954b331-abb1-4365-8eed-deb477f7d160",
+            "page_number": 3,
+            "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en ekstremt detaljeret beskrivelse af billedet fra side 3 i bygge-/teknisk dokumentet:\n\n**Generel oversigt:**\nSiden viser en plantegning af en etage i en by",
+            "full_page_image_caption": "Her er en ekstremt detaljeret beskrivelse af billedet fra side 3 i bygge-/teknisk dokumentet:\n\n**Generel oversigt:**\nSiden viser en plantegning af en etage i en bygning med fokus på føringsveje og sikkerheds-/kommunikationsanlæg. Plantegningen er placeret i venstre side af dokumentet, mens den højre side indeholder en tegningsramme med projektinformation, en signaturforklaring, generelle noter og yderligere beskrivelser af ADK/AIA-anlæg og dørtelefonanlæg. Øverst til venstre ses logo og kontaktoplysninger for \"BeSafe\".\n\n**1. Al Synlig Tekst:**\n\n**Øverst til venstre: BeSafe logo og information**\n*   **BeSafe** (stort, fed skrift)\n*   en del af UHG (mindre skrift under logoet, delvist skjult i det leverede billede, men synligt i det originale).\n*   ISO 9001-CERTIFICERET VIRKSOMHED (under BeSafe logoet)\n*   **BeSafe** (stort, fed skrift under certificering)\n*   Sikringspartner (mindre skrift under BeSafe)\n*   BeSafe A/S - Tørringvej 17A - 2610 Rødovre\n*   Cvr. 36963042 - Telefon 82 82 82 01 - info@besafe.dk\n*   Plantegning udført af BeSafe A/S\n*   Revisionsdato 08-04-2025 - 09:00:54\n\n**Tegningshoved (øverst højre):**\n*   Alle mål skal kontrolleres på pladsen. Eventuelle fejl skal meddeles den tegningsansvarlige.\n*   Hvis ikke andet er specificeret, er alle mål i millimeter.\n*   Tegninger med nedtonede bygningsdele skal printes gråtonet.\n*   **112727-01_K07_H1_E1_61.103** (Stort, fed skrift, formodentlig tegningsnummer)\n\n**Legend (Signaturer - Føringsveje og tavler):**\n*   **Signaturer - Føringsveje og tavler** (Titel på legend)\n*   **KBxxx** (kode)\n    *   Kabelbakke med skillespor, xxx angiver bredden\n*   **GBxxx** (kode)\n    *   Gitterbakke med skillespor, dim iht. plantegninger\n*   **KS xxx** (kode)\n    *   Lodret kabelstig, xxx angiver bredden\n*   **Ny stikledning** (figur med pil og firkant)\n*   **HX xx** (kode)\n    *   Hovedkrydsfelt\n*   **HT xxx** (kode)\n    *   Hovedtavle\n*   **UT xxx** (kode)\n    *   Undertavle\n*   **Serviceareal (tavle, krydsfelt)** (figur med firkant og kryds)\n*   **Gennemføring, op og ned** (2 figurer med pile)\n*   **Opadgåendeføring** (figur med opadgående pil)\n*   **Nedadgåendeføring** (figur med nedadgående pil)\n\n**Noter (under legend):**\n*   **Note:**\n    *   Ubenævnte mål er i mm\n    *   Koter i m, system DVR90.\n*   **Henvisninger:**\n    *   Vedr. øvrig målsætning se arkitektprojekt.\n\n**Tekstbeskrivelser (under tegningshovedet og til højre for plantegningen):**\n*   **ADK/AIA-anlæg** (Overskrift)\n    *   Der udføres ADK og AIA-anlæg iht. rumprogram. Der etableres en overvågning med detektorer i stueetagen og 1. sal af alle indgangsdøre, trapperum og evt. kontorer. Derudover etableres der overvågning af gangarealerne og fællesområder i stueetagen. Bygningens nøgleboks skal kobles på AIA.\n*   **Dørtelefonanlæg** (Overskrift)\n    *   Der etableres et dørtelefonanlæg med integreret kodetastatur, kald til svartelefon og to-vejs tale. Anlægget skal fungere med opringning fra hovedindgang til svartelefoner, hvorfra døren skal låses op. Kodetastatur skal være integreret i dørtelefonen og skal kunne anvendes klubbens daglige brugere. Der skal leveres og opsættes en svartelefon til hver etage. Dørtelefonen skal overstyres af AIA-anlægget, så dørtelefon og kodetastatur er inaktiv, når AIA-anlægget er tilkoblet.\n\n**Tegningsramme (Nederst højre):**\n*   **REV.:** (kolonne)\n*   **DATO:** (kolonne)\n*   **EMNE:** (kolonne)\n*   **LAND** (Afkrydsningsfelt)\n*   **ARK** (Afkrydsningsfelt)\n*   **KON** (Afkrydsningsfelt)\n*   **VVS/VENT** (Afkrydsningsfelt)\n*   **EL** (Afkrydsningsfelt, afkrydset)\n*   **BYGHERRE:** (titel)\n    *   Byggeri København\n    *   Nyropgade 1, 1602 København V\n    *   T: +45 3366 3366 / E: ByK@okf.kk.dk\n*   **BYGNINGSNUMMER:** (titel)\n    *   01\n*   **KOMMUNENUMMER:** (titel)\n    *   0101\n*   **EJENDOMSNUMMER:** (titel)\n    *   (tomt)\n*   **BYGNINGSNAVN:** (titel)\n    *   (tomt)\n*   **PROJEKT NAVN:** (titel)\n    *   Klub Guldberg\n    *   <Projektadresse> (Placeholder)\n*   **PROJEKT NR.:** (titel)\n    *   **12727** (fed)\n*   **STATUS:** (titel)\n    *   Dispositionforslag\n*   **TEGN. NR.:** (titel)\n    *   **112727-01_K07_H1_E1_61.103** (fed)\n*   **REV.:** (kolonne)\n*   **FILNAVN:** 112727-01_K07_H1_E1_61.103 Føringsveje - 1. sal.pdf\n*   **EMNE:** (titel)\n    *   **Føringsveje - 1. sal** (fed og gulmarkeret)\n*   **MÅL:** (titel)\n    *   1:100\n*   **DATO:** (titel)\n    *   07.02.2025\n*   **FORMAT:** (titel)\n    *   630 x 297\n*   **UDFØRT:** (titel)\n    *   CRM\n*   **KONTROL:** (titel)\n    *   BRA\n*   **GODKENDT:** (titel)\n    *   SKJ\n*   **ByK & TRUST** (logo i bunden af tegningsrammen)\n*   Nørrebrogade 45C, 3.sal, 2200 København N\n*   T: +45 5761 7272 / E: eogp@eogp.dk\n\n**AIA-tabel (øverst venstre, over plantegningen):**\n*   **AIA** (titel)\n*   **Beskrivelse** (kolonne)\n    *   JA-110A II - Sirene\n    *   JA-120PW - Pir\n*   **Kommentarer** (kolonne)\n    *   Pir + MW\n*   **Mængde** (kolonne)\n    *   1\n    *   1\n\n**Generelle noter på tegningen:**\n*   BeSafe A/S (delvist skjult, vandmærke over plantegningen)\n\n**Rum- og områdelabels på plantegningen:**\n*   01.E2.06 Wc\n*   01.E2.07 Wc\n*   01.E2.09 Skakt\n*   01.E2.10 Elevator\n*   01.E2.05 Forrum wc\n*   01.E2.01 Forrum/trappe\n*   01.E2.03 Aktivitetsrum 1 - Musik: Loungezone\n*   01.E2.02 Aktivitetsrum 2: Ungeværk\n*   01.E2.04 Aktivitetsrum 1 - Musik: Musikzone\n*   01.E2.11 Skakt\n\n**Akse- og nummerangivelse langs plantegningen:**\n*   Vertikale akser: G, F, E, D, C, B, A (fra top til bund)\n*   Horisontale akser: 1, 2, 3, 4 (fra venstre mod højre)\n\n**Dimensioner og annotations på plantegningen:**\n*   KB 300 mm (markerer grønne føringsveje/kabelbakker) - gentaget mange gange langs de grønne linjer.\n*   En gul trekant med et udråbstegn.\n*   En gul rombe med et overkrydset lyn-symbol.\n*   Et symbol for en sirene (lille hvid kasse med en gul trekant og et horn/højttaler symbol).\n*   Et symbol for en PIR-sensor (lille hvid kasse med tre pile og en streg).\n\n**2. Tekniske Tegningsdetaljer:**\n\n*   **Type af tegning:** Plantegning (grundplan) af en etage, sandsynligvis 1. sal, da \"Føringsveje - 1. sal\" er fremhævet. Den viser primært placeringen af føringsveje (kabelbakker, kabelstiger) og sikkerhedsudstyr (sirene, PIR-sensor).\n*   **Arkitektoniske/ingeniørelementer vist:**\n    *   Vægge (tykke grå linjer)\n    *   Døre (markeringer i væggene)\n    *   Vinduer (markeringer i væggene)\n    *   Trappe (øverst højre hjørne)\n    *   Elevatorskakt (01.E2.10)\n    *   Almindelige skakter (01.E2.09, 01.E2.11)\n    *   Sanitære rum (Wc'er: 01.E2.06, 01.E2.07, 01.E2.08, 01.E2.05)\n    *   Forrum (Forrum/trappe 01.E2.01, Forrum wc 01.E2.05)\n    *   Aktivitetsrum/loungområder (01.E2.03, 01.E2.02, 01.E2.04)\n*   **Dimensioner, skalaer og målinger:**\n    *   Skala: 1:100 (angivet i tegningsrammen).\n    *   Mål er angivet i mm, koter i meter (system DVR90). Specifikke måldimensioner for rum er ikke direkte angivet, men kabelbakkernes bredde er annoteret som \"KB 300 mm\".\n*   **Materialer og konstruktionsdetaljer:**\n    *   Føringsveje er angivet som \"Kabelbakke med skillespor\" (grønne linjer, \"KBxxx\").\n    *   \"Gitterbakke med skillespor\" (Gitterbakke formodes at være angivet som en anden type føringsvej, men er ikke tydeligt vist på plantegningen med en specifik symbolik. Der er ingen tydelig \"GBxxx\" markering i plantegningen.)\n    *   \"Lodret kabelstig\" (KS xxx) er nævnt i legend, men ikke tydeligt vist på plantegningen i den viste etage.\n*   **Symboler og tekniske notationer:**\n    *   Grønne tykke linjer repræsenterer kabelbakker (\"KB 300 mm\").\n    *   Små hvide rektangler placeret på vægge (eller andre overflader) med specifikke symboler indeni (f.eks. sirene, PIR) repræsenterer AIA-anlægsudstyr.\n    *   En pil-symbol, der angiver opadgående føring.\n    *   En pil-symbol, der angiver nedadgående føring.\n    *   En firkant med et kryds repræsenterer et serviceareal (tavle, krydsfelt).\n    *   Sorte fyldte firkanter repræsenterer specifikke tavler (Hovedtavle HT xxx, Undertavle UT xxx) og hovedkrydsfelt (HX xx).\n    *   Cirkler med numre (1, 2, 3, 4) og bogstaver (A, B, C, D, E, F, G) bruges som aksenavigation.\n\n**3. Rumlige Relationer:**\n\n*   **Layout og arrangement af elementer:** Plantegningen viser en rektangulær bygningsstruktur med en central korridor eller fordelingsområde (Forrum/trappe, Forrum wc) der giver adgang til forskellige rum.\n    *   Øverst til venstre: To WC-rum (01.E2.06, 01.E2.07).\n    *   Øverst midt/højre: Skakt (01.E2.09) og Elevator (01.E2.10) samt Forrum/trappe (01.E2.01).\n    *   I midten: Forrum wc (01.E2.05) og et Aktivitetsrum 1 - Musik: Loungezone (01.E2.03) samt et Aktivitetsrum 2: Ungeværk (01.E2.02).\n    *   Nederst: Aktivitetsrum 1 - Musik: Musikzone (01.E2.04) og en Skakt (01.E2.11).\n*   **Forbindelse og relationer:**\n    *   De grønne kabelbakker (\"KB 300 mm\") løber langs væggene og forbinder forskellige dele af etagen. De ser ud til at danne en løkke eller et netværk, der forbinder rummene.\n    *   AIA-udstyrssymbolerne (sirene, PIR) er strategisk placeret i rum som Forrum wc (01.E2.05) og Aktivitetsrum 1 - Musik: Loungezone (01.E2.03), forbundet af kabelbakkerne.\n    *   De nummererede akser (1-4) og bogstavakser (A-G) danner et koordinatsystem for navigation på tegningen.\n*   **Referencepunkter og orienteringer:** Plantegningen er sandsynligvis orienteret med nord opad, som det er standard for byggeplaner, men en nordpil er ikke eksplicit vist.\n\n**4. Pegere og annotationer:**\n\n*   **Hvad specifikke elementer fremhæves:**\n    *   Kabelbakker: De grønne linjer er tydeligt annoteret med \"KB 300 mm\", hvilket angiver bredden.\n    *   PIR-sensor (01.E2.05, cirka ved akse E2): Et symbol for en PIR-sensor (JA-120PW - Pir) er vist på væggen.\n    *   Sirene (01.E2.05, tæt på PIR-sensoren): Et symbol for en sirene (JA-110A II - Sirene) er vist på væggen.\n    *   Gule advarselssymboler: Et gult trekantsymbol med udråbstegn og et gult rombesymbol med overkrydset lyn er placeret i nærheden af PIR-sensoren og sirenen. Deres specifikke betydning er ikke forklaret i legend, men kan indikere installationstype eller sikkerhedsforanstaltninger.\n*   **Tekniske specifikationer for fremhævede områder:**\n    *   \"KB 300 mm\": Indikerer, at kabelbakkerne har en bredde på 300 mm.\n    *   Siren og PIR-sensor har angivne typer (JA-110A II og JA-120PW).\n*   **Forbindelse mellem callouts og tegningselementer:**\n    *   Rummenes koder (f.eks., 01.E2.06) matcher rumliste-konventionen.\n    *   \"KB 300 mm\" annotationer er placeret direkte på de visuelle repræsentationer af kabelbakkerne.\n    *   AIA-tabel præciserer mængden og navnet på den viste sirene og PIR.\n\n**5. Byggematerialer og Konstruktion:**\n\n*   **Specifikke byggematerialer nævnt:**\n    *   Kabelbakker: \"Kabelbakke med skillespor\" og \"Gitterbakke med skillespor\". \"Lodret kabelstig\". Disse er materialer, der anvendes til føringsveje/kabelføring.\n*   **Konstruktionsteknikker og -metoder:**\n    *   Installation af ADK/AIA-anlæg, herunder detektorer (sirener, PIR), i stueetage og 1. sal.\n    *   Overvågning af indgangsdøre, trapperum, kontorer, gangarealer og fællesområder.\n    *   Tilslutning af bygningens nøgleboks til AIA-anlægget.\n    *   Montering af dørtelefonanlæg med integreret kodetastatur og svartelefoner på hver etage.\n    *   Integration og overstyring af dørtelefonanlægget af AIA-anlægget (sikkerhedsfunktion).\n*   **Tekniske standarder og koder:**\n    *   \"ISO 9001-CERTIFICERET VIRKSOMHED\" angiver, at BeSafe opererer under et anerkendt kvalitetsstyringssystem.\n    *   \"System DVR90\" nævnes for koter, hvilket sandsynligvis er en højdereference.\n    *   Anlæggene udføres \"iht. rumprogram\", hvilket indikerer planlægning baseret på rummenes funktion og krav.\n    *   \"Dispositionforslag\" som status for tegningen indikerer, at det er et udkast, der skal godkendes."
+          },
+          {
+            "chunk_id": "8a1b8ed8-b78c-4c52-b931-a6c16076941d",
+            "page_number": 5,
+            "content_preview": "Context: None\n\nType: Image\n\nSummary: Her er en yderst detaljeret beskrivelse af billedet fra side 5 af det tekniske dokument, formuleret på dansk:\n\n**Overordnet Beskrivelse:**\nDokumentet er en teknisk",
+            "full_page_image_caption": "Her er en yderst detaljeret beskrivelse af billedet fra side 5 af det tekniske dokument, formuleret på dansk:\n\n**Overordnet Beskrivelse:**\nDokumentet er en teknisk tegning, der viser en plantegning af en etage, sandsynligvis tredje sal, fokus på føringsveje og installationer for svagstrøm (sikring og dørtelefoni). Detaljeret information om projektet, bygherren, tegningsansvarlige samt legender for symboler er også inkluderet. Siden er struktureret med tegningsfeltet til venstre og informationsblokke til højre. Logoet \"BeSafe\" er prominent placeret øverst til venstre og nederst til venstre som afsender af tegningen.\n\n**1. AL SYNLIG TEKST:**\n\n*   **Titel, Overskrifter, Labels:**\n    *   Øverst til venstre: \"BeSafe\" (logoets navn)\n    *   Nederst til venstre: \"ISO 9001-CERTIFICERET VIRKSOMHED\"\n    *   Nederst til venstre, under \"BeSafe\" logoet: \"Sikringspartner\"\n    *   Nederst til venstre, adresseinfo: \"BeSafe A/S - Tørringvej 17A - 2610 Rødovre\"\n    *   Nederst til venstre, kontaktinfo: \"Cvr. 36963042 - Telefon 82 82 82 01 - info@besafe.dk\"\n    *   Nederst til venstre, tegningsoplysninger: \"Plantegning udført af BeSafe A/S\", \"Revisionsdato 08-04-2025 - 09:00:54\"\n    *   Højre side, øverst: \"Signaturer - Føringsveje og tavler\" (Overskrift for legende)\n    *   Højre side, midt, over en sektion af tekst: \"ADK/AIA-anlæg\" (Under-overskrift)\n    *   Højre side, midt, under forrige sektion: \"Dørtelefonanlæg\" (Under-overskrift)\n    *   Højre side, øverst i tegningshoved: \"Alle mål skal kontrolleres på pladsen. Eventuelle fejl skal meddeles den tegningsansvarlige.\"\n    *   Højre side, øverst i tegningshoved: \"Hvis ikke andet er specificeret, er alle mål i millimeter.\"\n    *   Højre side, øverst i tegningshoved: \"Tegninger med nedtonede bygningsdele skal printes gråtonet.\"\n    *   Højre side, midt i tegningshoved: \"112727-01_K07_H1_E3_61.103\" (Tegningsnummer i stor skrifttype)\n    *   Tegningshoved, felter:\n        *   \"REV.:\"\n        *   \"DATO:\"\n        *   \"EMNE:\" (To gange, én tom og én med indhold)\n        *   \"BYGHERRE:\"\n        *   \"BYGNINGSNUMMER:\"\n        *   \"BYGNINGSNAVN:\"\n        *   \"PROJEKT NAVN:\"\n        *   \"PROJEKT NR.:\"\n        *   \"STATUS:\"\n        *   \"TEGN. NR.:\"\n        *   \"FILNAVN:\"\n        *   \"MAL:\"\n        *   \"DATO:\" (I målestoksfelt)\n        *   \"FORMAT:\"\n        *   \"UDFØRT:\"\n        *   \"KONTROL:\"\n        *   \"GODKENDT:\"\n\n*   **Dimensioner og Mål (på tegningen):**\n    *   \"KB 300 mm\" (Flere steder langs de grønne føringsveje: Vertikalt langs venstre væg, horisontalt i forrum/gangområde, vertikalt langs højre væg.)\n    *   \"KB 300 mm\" angiver bredden af \"Kabelbakke med skillespor\" jf. legende.\n\n*   **Callout numre og referencekoder (på tegningen):**\n    *   **Rumidentifikationer (Startende med \"01.E4.\"):**\n        *   \"01.E4.05 Wc\"\n        *   \"01.E4.06\"\n        *   \"01.E4.12 Skakt\"\n        *   \"01.E4.11 Elevator\"\n        *   \"01.E4.04 Forrum wc\"\n        *   \"01.E4.07 Wc\"\n        *   \"01.E4.13 Skakt\"\n        *   \"01.E4.01 Forrum/trappe\"\n        *   \"01.E4.02 Krea værksted 1\"\n        *   \"01.E4.03 Krea værksted 2\"\n        *   \"01.E4.10 Skakt\"\n\n*   **Noter, specifikationer og beskrivelser:**\n    *   **Note (i legende-område):**\n        *   \"Ubenævnte mål er i mm\"\n        *   \"Koter i m, system DVR90.\"\n    *   **Henvisninger (i legende-område):**\n        *   \"Vedr. øvrig målsætning se arkitektprojekt\"\n    *   **ADK/AIA-anlæg beskrivelse:**\n        *   \"Der udføres ADK og AIA-anlæg iht. rumprogram. Der etableres en\"\n        *   \"overvågning med detektorer i stueetagen og 1. sal af alle\"\n        *   \"indgangsdøre, trapperum og evt. kontorer. Derudover etableres\"\n        *   \"der overvågning af gangarealerne og fællesområder i stueetagen.\"\n        *   \"Bygningens nøgleboks skal kobles på AIA.\"\n    *   **Dørtelefonanlæg beskrivelse:**\n        *   \"Der etableres et dørtelefonanlæg med integreret kodetastatur,\"\n        *   \"kald til svartelefon og to-vejs tale. Anlægget skal fungere med\"\n        *   \"opringning fra hovedindgang til svartelefoner, hvorfra døren skal\"\n        *   \"låses op. Kodetastatur skal være integreret i dørtelefonen og skal\"\n        *   \"kunne anvendes klubbens daglige brugere. Der skal leveres og\"\n        *   \"opsættes en svartelefon til hver etage. Dørtelefonen skal\"\n        *   \"overstyres af AIA-anlægget, så dørtelefon og kodetastatur er\"\n        *   \"inaktiv, når AIA-anlægget er tilkoblet.\"\n\n*   **Legende punkter og forklaringer:**\n    *   \"KBxxx\": \"Kabelbakke med skillespor, xxx angiver bredden\" (grøn farve)\n    *   \"GBxxx\": \"Gitterbakke med skillespor, dim iht. planteginger\" (mørkere grøn/blå farve, ikke vist på tegning)\n    *   \"KS xxx\": \"Lodret kabelstig, xxx angiver bredden\" (rød kasse med kryds)\n    *   \"Ny stikledning\" (Tynd skrå streg med modsat skrå streg over)\n    *   \"HX xx\": \"Hovedkrydsfelt\" (Fyldt hvidt kvadrat med kryds)\n    *   \"HT xxx\": \"Hovedtavle\" (Fyldt sort kvadrat)\n    *   \"UT xxx\": \"Undertavle\" (Halvt fyldt sort kvadrat/rektangel)\n    *   \"Serviceareal (tavle, krydsfelt)\" (Fyldt hvidt kvadrat med skrå linjer)\n    *   \"Gennemføring, op og ned\" (Pil op og ned, modsat rettede, med streg igennem)\n    *   \"Opadgåendeføring\" (Pil opad)\n    *   \"Nedadgåendeføring\" (Pil nedad)\n\n*   **Tekniske annotationer og kommentarer (i tegningshoved):**\n    *   **Bygherre:** \"Byggeri København\", \"Nyropsgade 1, 1602 København V\", \"T: +45 3366 3366 / E: Byk@okf.kk.dk\"\n    *   **Kommunenummer:** \"0101\"\n    *   **Bygningsnummer:** \"01\"\n    *   **Ejendomsnummer:** (Tom)\n    *   **Projekt Navn:** \"Klub Guldberg\", \"<Projektadresse>\" (Placeholder)\n    *   **Projekt Nr.:** \"12727\"\n    *   **Status:** \"Dispositionforslag\"\n    *   **Tegn. Nr.:** \"112727-01_P07_H1_E3_61.103\"\n    *   **Filnavn:** \"112727-01_K07_H1_E3_61.103 Føringsveje - 3. sal.pdf\"\n    *   **Emne (to gange):** \"Føringsveje - 3. sal\" (gul markeret)\n    *   **Mål:** \"1:100\"\n    *   **Dato (i målestoksfelt):** \"07.02.2025\"\n    *   **Format:** \"630 x 297\"\n    *   **Udført:** \"CRM\"\n    *   **Kontrol:** \"BRA\"\n    *   **Godkendt:** \"SKJ\"\n    *   **Bund af tegningshoved (firmaoplysninger):** \"ByK & TRUST\", \"Nørrebrogade 45C, 3.sal, 2200 København N\", \"T: +45 5761 7272 / E: eogp@eogp.dk\"\n    *   **Kategorier med cirkler/ikoner (i tegningshoved):**\n        *   \"LAND\" (udfyldt cirkel)\n        *   \"ARK\" (udfyldt cirkel)\n        *   \"KON\" (udfyldt cirkel)\n        *   \"VVS/VENT\" (udfyldt cirkel)\n        *   \"EL\" (udfyldt cirkel med kryds) - Dette indikerer, at tegningen primært er en EL-tegning.\n\n**2. Tekniske Tegningsdetaljer:**\n\n*   **Type af tegning:** Plantegning. Den viser planløsningen af en etage, sandsynligvis tredje sal, med fokus på installationer for føringsveje til svagstrøm.\n*   **Arkitektoniske/Ingeniørmæssige elementer:**\n    *   **Ruminddeling:** Vægkonturer definerer forskellige rum.\n        *   Wc'er (01.E4.05, 01.E4.07)\n        *   Skakter (01.E4.12, 01.E4.13, 01.E4.10)\n        *   Elevator (01.E4.11)\n        *   Forrum wc (01.E4.04)\n        *   Forrum/trappe (01.E4.01)\n        *   Krea værksted 1 (01.E4.02)\n        *   Krea værksted 2 (01.E4.03)\n    *   **Døre, vinduer:** Vises som åbninger i væggene med standard symboler for døre. Flere døre er synlige, der forbinder gangarealer med wc-rum og værksteder.\n    *   **Akselinjer:** Nummererede akselinjer (\"1\", \"2\", \"3\", \"4\") i vandret retning og bogstaverede akselinjer (\"A\", \"B\", \"C\", \"D\", \"E\", \"F\", \"G\", \"H\" - hvor 'H' ikke er synlig, men implicit) i lodret retning.\n*   **Dimensioner, skalaer og målinger:**\n    *   **Målestok:** 1:100.\n    *   **Mål:** Størstedelen af målene er refereret til at være i millimeter, med koter angivet i meter i DVR90-systemet. Specifikke mål angivet på tegningen er bredder af kabelbakker (\"KB 300 mm\").\n*   **Materialer og konstruktionsdetaljer:**\n    *   De primære materialer, som denne tegning beskriver, er relateret til installation, specifikt \"Kabelbakke med skillespor\" og \"Gitterbakke med skillespor\". Konstruktionen af disse involverer installationsveje til kabler.\n*   **Symboler og tekniske notationer:**\n    *   Grønne linjer med \"KB 300 mm\" angivelse repræsenterer \"Kabelbakke med skillespor\". Disse sporer er primært anbragt langs vægge i gangarealer og inde i visse rum.\n    *   En pil, der går fra \"01.E4.04 Forrum wc\" mod et punkt på den grønne føringsvej ved \"01.E4.07 Wc\", indikerer en retning eller en tilslutning.\n    *   Gitterlinjer repræsenterer vægstrukturer.\n    *   Standard symboler for døre (simple streger med bue for åbningsretning) og rørføringer (tynde linjer, sandsynligvis skjult/nedtonet).\n    *   Nummererede/bogstaverede cirkler angiver akselinjer.\n\n**3. Spatial Relations:**\n\n*   **Layout og arrangement af elementer:**\n    *   Tegningen er en top-down visning af en etage opdelt i flere rum.\n    *   En central gang/forrum (01.E4.01) løber fra højre mod venstre og leder til forskellige rum.\n    *   Til højre for denne gang er \"Krea værksted 1\" (01.E4.02) og \"Krea værksted 2\" (01.E4.03).\n    *   Til venstre er der \"01.E4.04 Forrum wc\", \"01.E4.05 Wc\", \"01.E4.06\", \"01.E4.07 Wc\", \"01.E4.11 Elevator\", og flere \"Skakt\" rum (01.E4.12, 01.E4.13, 01.E4.10).\n    *   De grønne føringsveje (kabelbakker) løber langs væggene i forrummet (01.E4.01) og udvider sig til \"Krea værksted 1\". Der er også et segment i forrummet ved wc'erne (01.E4.04, 01.E4.07).\n*   **Hvordan forskellige dele forbindes eller relaterer:**\n    *   Gangområdet (01.E4.01) er det centrale distributionspunkt, der forbinder forskellige wc'er, kreative værksteder, elevator og skakter.\n    *   Føringsvejene (grønne linjer) løber langs hovedfærdselsårerne og ind i nogle af rummene, hvilket indikerer, hvor kabler til ADK/AIA (Adgangskontrol/Alarm- og overvågningsanlæg) og dørtelefoni vil blive trukket.\n    *   Pilen fra \"Forrum wc\" mod føringsvejen nær \"Wc\" (01.E4.07) kunne indikere en forbindelse for detektorer eller en sensor.\n*   **Referencepunkter og orienteringer:**\n    *   Bygningen er orienteret til en standard nord-pil, selvom nord-pil ikke er eksplicit vist.\n    *   Akselinjerne giver et klart koordinatsystem til at lokalisere specifikke punkter og rum.\n\n**4. Pointers og Annotationer:**\n\n*   **Hvilke specifikke elementer fremhæves:**\n    *   De grønne føringsveje (\"KB 300 mm\") er fremhævet, da de er en central del af installationen for det elektriske anlæg.\n    *   Rummenes navne og numre (e.g., \"01.E4.01 Forrum/trappe\") er direkte annoteret på tegningen.\n    *   Den gule markering rundt om \"Føringsveje - 3. sal\" i tegningshovedet fremhæver formålet med tegningen.\n*   **Tekniske specifikationer for fremhævede områder:**\n    *   Bredden af kabelbakkerne er specificeret som \"300 mm\".\n    *   Teksten \"ADK/AIA-anlæg\" og \"Dørtelefonanlæg\" beskriver formålet og funktionaliteten af de systemer, som føringsvejene understøtter. Dette inkluderer placering af detektorer (stueetagen og 1. sal, ved indgangsdøre, trapperum, kontorer, gangarealer og fællesområder) og krav til dørtelefoni (integreret kodetastatur, to-vejs tale, overstyring af AIA-anlægget).\n*   **Forbindelse mellem callouts og tegningselementer:**\n    *   Rumkoder (f.eks. \"01.E4.05\") er direkte placeret inden i de rum, de identificerer.\n    *   \"KB 300 mm\" er placeret direkte på eller lige ved de grønne linjer, de beskriver.\n\n**5. Byggematerialer og Konstruktion:**\n\n*   **Specifikke byggematerialer nævnt:**\n    *   \"Kabelbakke med skillespor\"\n    *   \"Gitterbakke med skillespor\"\n    *   Vægge (symbolsk repræsentation)\n*   **Konstruktionsteknikker og metoder:**\n    *   Installationen af føringsveje langs vægge, under loftet eller i gulvet (baseret på plantegningens udseende, sandsynligvis langs vægge/loft). \"Skillespor\" indikerer, at bakkerne bruges til at adskille forskellige typer kabler (f.eks. strøm og data).\n    *   Henvisningen til \"rumprogram\" i forbindelse med ADK/AIA-anlægget indikerer en detaljeret plan for systemets udbredelse og funktion i de forskellige rum.\n*   **Tekniske standarder og koder:**\n    *   \"ISO 9001-CERTIFICERET VIRKSOMHED\" (for BeSafe A/S) indikerer kvalitetsstyring.\n    *   Koter i \"system DVR90\" refererer til et specifikt højdesystem, sandsynligvis det Danske Vertikal Reference 1990.\n    *   Mål i millimeter er en standard inden for bygningstegning.\n    *   Overstyring af dørtelefoni af AIA-anlægget er en integreret sikkerhedsfunktion.\n\nSamlet set giver denne tegning en omfattende oversigt over layoutet for sikkerheds- og kommunikationsinstallationer på den tredje sal af en bygning, specificerer materialer, ruter og funktionalitet for ADK/AIA og dørtelefonanlæg."
+          }
+        ]
+      },
+      "full_page_captions": {
+        "count": 0,
+        "examples": []
+      }
+    }
+  },
+  "processing_issues": {
+    "missing_section_titles": 93,
+    "unknown_filenames": 123,
+    "processing_strategy_inconsistencies": [],
+    "image_extraction_issues": [],
+    "table_extraction_issues": []
+  },
+  "recommendations": [
+    "CRITICAL: Implement minimum chunk size validation - found 1 chunks under 50 characters",
+    "HIGH: Fix duplicate content issue - found 11 sets of duplicate chunks",
+    "CRITICAL: Implement semantic text splitter to replace element-only chunking",
+    "HIGH: Add chunk merging logic for chunks under min_chunk_size",
+    "MEDIUM: Implement HNSW index usage for 3x faster retrieval"
+  ]
+}

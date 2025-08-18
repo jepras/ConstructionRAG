@@ -492,13 +492,13 @@ class IntelligentChunker:
             text_content = self.extract_text_content(el, meta)
             return text_content
 
-    def apply_semantic_text_splitting(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
-        """Apply semantic text splitting to large elements"""
+    def apply_semantic_text_splitting_to_chunks(self, chunks: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Apply semantic text splitting to composed chunks that exceed max_chunk_size"""
         if self.strategy != "semantic" or RecursiveCharacterTextSplitter is None:
             logger.info("Semantic splitting disabled or langchain not available")
-            return elements, {"semantic_splitting_enabled": False}
+            return chunks, {"semantic_splitting_enabled": False}
             
-        logger.info("Applying semantic text splitting to large elements...")
+        logger.info(f"Applying semantic text splitting to chunks larger than {self.max_chunk_size} characters...")
         
         # Initialize text splitter
         text_splitter = RecursiveCharacterTextSplitter(
@@ -509,25 +509,31 @@ class IntelligentChunker:
             is_separator_regex=False,
         )
         
-        split_elements = []
+        split_chunks = []
         splitting_stats = {
-            "elements_processed": 0,
-            "elements_split": 0,
+            "chunks_processed": 0,
+            "chunks_split": 0,
             "total_new_chunks": 0,
-            "elements_unchanged": 0,
+            "chunks_unchanged": 0,
+            "largest_chunk_before": 0,
+            "largest_chunk_after": 0,
         }
         
-        for el in elements:
-            splitting_stats["elements_processed"] += 1
+        for chunk in chunks:
+            splitting_stats["chunks_processed"] += 1
+            content = chunk["content"]
+            content_length = len(content)
             
-            # Get element content
-            meta = self.extract_structural_metadata(el)
-            content = self.compose_final_content(el, meta)
+            # Track largest chunk sizes
+            if content_length > splitting_stats["largest_chunk_before"]:
+                splitting_stats["largest_chunk_before"] = content_length
             
-            # Skip if content is too short or already optimal size
-            if len(content) <= self.max_chunk_size:
-                split_elements.append(el)
-                splitting_stats["elements_unchanged"] += 1
+            # Skip if content is within acceptable size
+            if content_length <= self.max_chunk_size:
+                split_chunks.append(chunk)
+                splitting_stats["chunks_unchanged"] += 1
+                if content_length > splitting_stats["largest_chunk_after"]:
+                    splitting_stats["largest_chunk_after"] = content_length
                 continue
                 
             # Split large content
@@ -535,39 +541,46 @@ class IntelligentChunker:
                 text_chunks = text_splitter.split_text(content)
                 if len(text_chunks) <= 1:
                     # No splitting occurred
-                    split_elements.append(el)
-                    splitting_stats["elements_unchanged"] += 1
+                    split_chunks.append(chunk)
+                    splitting_stats["chunks_unchanged"] += 1
+                    if content_length > splitting_stats["largest_chunk_after"]:
+                        splitting_stats["largest_chunk_after"] = content_length
                     continue
                     
-                splitting_stats["elements_split"] += 1
+                splitting_stats["chunks_split"] += 1
                 splitting_stats["total_new_chunks"] += len(text_chunks)
                 
-                # Create new elements from splits
+                # Create new chunks from splits
                 for i, chunk_text in enumerate(text_chunks):
-                    new_element = el.copy()
+                    new_chunk = chunk.copy()
+                    new_chunk["chunk_id"] = f"{chunk['chunk_id']}_split_{i}"
+                    new_chunk["content"] = chunk_text
                     
-                    # Update metadata for chunk
-                    chunk_meta = meta.copy()
-                    chunk_meta["element_id"] = f"{meta.get('element_id', 'unknown')}_{i}"
-                    chunk_meta["content_length"] = len(chunk_text)
-                    chunk_meta["is_semantic_split"] = True
-                    chunk_meta["split_index"] = i
-                    chunk_meta["total_splits"] = len(text_chunks)
+                    # Update metadata for split chunk
+                    new_metadata = chunk["metadata"].copy()
+                    new_metadata["content_length"] = len(chunk_text)
+                    new_metadata["is_semantic_split"] = True
+                    new_metadata["split_index"] = i
+                    new_metadata["total_splits"] = len(text_chunks)
+                    new_metadata["original_chunk_id"] = chunk["chunk_id"]
+                    new_chunk["metadata"] = new_metadata
                     
-                    # Store the split text directly in a way the compose_final_content can use
-                    new_element["split_content"] = chunk_text
-                    new_element["structural_metadata"] = chunk_meta
+                    split_chunks.append(new_chunk)
                     
-                    split_elements.append(new_element)
+                    # Track largest chunk after splitting
+                    if len(chunk_text) > splitting_stats["largest_chunk_after"]:
+                        splitting_stats["largest_chunk_after"] = len(chunk_text)
                     
             except Exception as e:
-                logger.warning(f"Failed to split element {meta.get('element_id')}: {e}")
-                split_elements.append(el)
-                splitting_stats["elements_unchanged"] += 1
+                logger.warning(f"Failed to split chunk {chunk['chunk_id']}: {e}")
+                split_chunks.append(chunk)
+                splitting_stats["chunks_unchanged"] += 1
+                if content_length > splitting_stats["largest_chunk_after"]:
+                    splitting_stats["largest_chunk_after"] = content_length
                 
         splitting_stats["semantic_splitting_enabled"] = True
         logger.info(f"Semantic splitting complete: {splitting_stats}")
-        return split_elements, splitting_stats
+        return split_chunks, splitting_stats
 
     def merge_small_chunks(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Merge small adjacent chunks to enforce minimum chunk size"""
@@ -668,15 +681,11 @@ class IntelligentChunker:
         # Step 2: Group list items
         grouped_elements, grouping_stats = self.group_list_items(filtered_elements)
 
-        # Step 3: Apply semantic text splitting (NEW)
-        split_elements, splitting_stats = self.apply_semantic_text_splitting(grouped_elements)
+        # Step 3: Merge small chunks BEFORE text splitting
+        merged_elements, merging_stats = self.merge_small_chunks(grouped_elements)
 
-        # Step 4: Merge small chunks (NEW)
-        merged_elements, merging_stats = self.merge_small_chunks(split_elements)
-
-        # Step 5: Compose final chunks
-        final_chunks = []
-
+        # Step 4: Compose content for each element
+        composed_chunks = []
         for el in merged_elements:
             meta = self.extract_structural_metadata(el)
             text_content = self.extract_text_content(el, meta)
@@ -689,7 +698,7 @@ class IntelligentChunker:
             # Compose content
             content = self.compose_final_content(el, meta)
 
-            # Create final chunk object
+            # Create chunk object with composed content
             chunk = {
                 "chunk_id": str(uuid.uuid4()),
                 "content": content,
@@ -699,7 +708,7 @@ class IntelligentChunker:
                     "element_category": meta.get("element_category", "unknown"),
                     "section_title_inherited": section_title,
                     "text_complexity": meta.get("text_complexity", "medium"),
-                    "content_length": len(text_content),
+                    "content_length": len(content),  # Use composed content length
                     "has_numbers": meta.get("has_numbers", False),
                     "has_tables_on_page": meta.get("has_tables_on_page", False),
                     "has_images_on_page": meta.get("has_images_on_page", False),
@@ -715,7 +724,10 @@ class IntelligentChunker:
                 },
             }
 
-            final_chunks.append(chunk)
+            composed_chunks.append(chunk)
+
+        # Step 5: Apply semantic text splitting to composed chunks
+        final_chunks, splitting_stats = self.apply_semantic_text_splitting_to_chunks(composed_chunks)
 
         # Combine all processing statistics
         processing_stats = {

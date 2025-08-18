@@ -9,9 +9,15 @@ import asyncio
 import os
 from typing import List, Dict, Any, Optional
 from uuid import UUID
+from datetime import datetime
 
 import httpx
 from beam import Image, task_queue, env
+
+# Version tracking for debugging deployments
+BEAM_VERSION = "2.1.0"  # Update this when making changes
+DEPLOYMENT_DATE = "2025-08-18"
+CHANGES = "Added table validation to prevent malformed table extraction"
 
 # Import our existing pipeline components
 from src.pipeline.indexing.orchestrator import IndexingOrchestrator
@@ -99,6 +105,8 @@ async def run_indexing_pipeline_on_beam(
     try:
         print(f"🚀 Starting Beam indexing pipeline for run: {indexing_run_id}")
         print(f"📄 Processing {len(document_ids)} documents")
+        print(f"⚙️ BEAM VERSION: v{BEAM_VERSION} ({DEPLOYMENT_DATE})")
+        print(f"📝 TABLE VALIDATION: Enabled - will reject malformed tables")
 
         # Initialize services
         print("🔧 Initializing services...")
@@ -270,6 +278,16 @@ def process_documents(
         user_id: User ID who uploaded the documents (optional for email uploads)
         project_id: Project ID the documents belong to (optional for email uploads)
     """
+    # Log version information at the start of every run
+    print("=" * 60)
+    print(f"🚀 BEAM INDEXING PIPELINE v{BEAM_VERSION}")
+    print(f"📅 Deployment Date: {DEPLOYMENT_DATE}")
+    print(f"📝 Changes: {CHANGES}")
+    print(f"🕐 Run started at: {datetime.now().isoformat()}")
+    print(f"📦 Indexing Run ID: {indexing_run_id}")
+    print(f"📄 Documents to process: {len(document_ids)}")
+    print("=" * 60)
+    
     if env.is_remote():
         # Run the async function in an event loop
         return asyncio.run(

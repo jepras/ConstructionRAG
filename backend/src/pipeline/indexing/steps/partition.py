@@ -9,6 +9,7 @@ import requests
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+from collections import Counter
 from uuid import UUID, uuid4
 import logging
 
@@ -57,6 +58,16 @@ class PartitionStep(PipelineStep):
         self.max_image_size_mb = config.get("max_image_size_mb", 10)
         self.ocr_languages = config.get("ocr_languages", ["dan"])
         self.include_coordinates = config.get("include_coordinates", True)
+        
+        # Table validation configuration
+        self.table_validation = config.get("table_validation", {})
+        self.table_validation_enabled = self.table_validation.get("enabled", True)
+        self.max_table_size = self.table_validation.get("max_table_size", 5000)
+        self.max_columns = self.table_validation.get("max_columns", 20)
+        self.max_cells = self.table_validation.get("max_cells", 100)
+        self.repetition_threshold = self.table_validation.get("repetition_threshold", 0.7)
+        self.min_confidence = self.table_validation.get("min_confidence", 0.3)
+        self.reject_on_drawing_pages = self.table_validation.get("reject_on_drawing_pages", True)
 
         # Create temporary directories for processing
         self.temp_dir = Path(tempfile.mkdtemp(prefix="partition_"))
@@ -89,8 +100,14 @@ class PartitionStep(PipelineStep):
 
             for page_num in range(sample_pages):
                 page = doc[page_num]
-                text = page.get_text().strip()
-                text_length = len(text)
+                try:
+                    text = page.get_text().strip()
+                    text_length = len(text)
+                except Exception as e:
+                    # Handle pages without text layers (e.g., pure CAD drawings)
+                    logger.debug(f"Could not extract text from page {page_num + 1}: {e}")
+                    text = ""
+                    text_length = 0
 
                 analysis["text_density"].append(text_length)
                 total_text_chars += text_length
@@ -605,11 +622,12 @@ class PartitionStep(PipelineStep):
             )
 
         except Exception as e:
-            logger.error(f"Partition step failed: {e}")
+            doc_id = getattr(input_data, 'document_id', 'unknown') if input_data else 'unknown'
+            logger.error(f"Partition step failed for document {doc_id}: {e}")
             raise AppError(
-                "Partition step failed",
+                f"Partition step failed for document {doc_id}",
                 error_code=ErrorCode.INTERNAL_ERROR,
-                details={"reason": str(e)},
+                details={"reason": str(e), "document_id": doc_id},
             ) from e
         finally:
             # Clean up downloaded temporary files
@@ -760,8 +778,9 @@ class PartitionStep(PipelineStep):
             return result
 
         except Exception as e:
-            logger.error(f"Hybrid partitioning failed: {e}")
-            raise PipelineError(f"Hybrid partitioning failed: {str(e)}")
+            doc_id = getattr(document_input, 'document_id', 'unknown')
+            logger.error(f"Hybrid partitioning failed for document {doc_id}: {e}")
+            raise PipelineError(f"Hybrid partitioning failed for document {doc_id}: {str(e)}")
 
     async def _partition_document_async(
         self, filepath: str, document_input: DocumentInput
@@ -793,7 +812,9 @@ class PartitionStep(PipelineStep):
         logger.info(f"Processing PDF: {os.path.basename(filepath)}")
 
         # Initialize partitioner
-        partitioner = UnifiedPartitionerV2(str(self.tables_dir), str(self.images_dir))
+        # Pass table validation config to partitioner
+        table_validation_config = self.config.get("table_validation", {})
+        partitioner = UnifiedPartitionerV2(str(self.tables_dir), str(self.images_dir), table_validation_config)
 
         # Stage 1: PyMuPDF analysis
         stage1_results = partitioner.stage1_pymupdf_analysis(filepath)
@@ -801,19 +822,46 @@ class PartitionStep(PipelineStep):
         # Stage 2: Fast text extraction
         text_elements, raw_elements = partitioner.stage2_fast_text_extraction(filepath)
 
-        # Stage 3: Targeted table processing (if enabled)
-        enhanced_tables = []
-        if self.extract_tables:
-            enhanced_tables = partitioner.stage3_targeted_table_processing(
-                filepath, stage1_results["table_locations"]
-            )
+        # Add comprehensive analysis logging for Beam
+        total_images = sum(analysis.get("image_count", 0) for analysis in stage1_results["page_analysis"].values())
+        meaningful_images = sum(analysis.get("meaningful_images", 0) for analysis in stage1_results["page_analysis"].values())
+        pages_needing_extraction = sum(1 for analysis in stage1_results["page_analysis"].values() if analysis.get("needs_extraction", False))
+        
+        print(f"📊 DOCUMENT ANALYSIS COMPLETE")
+        print(f"   📄 Total pages: {stage1_results['document_metadata'].get('total_pages', 0)}")
+        print(f"   🖼️  Total images detected: {total_images}")
+        print(f"   ✅ Meaningful images: {meaningful_images}")
+        print(f"   📋 Tables detected: {len(stage1_results['table_locations'])}")
+        print(f"   📄 Pages needing extraction: {pages_needing_extraction}")
 
-        # Stage 4: Full page extraction (if enabled)
+        # Stage 3: Full page extraction (ALWAYS FIRST - no conditions)
         extracted_pages = []
         if self.extract_images:
+            print(f"📄 FULL PAGE EXTRACTION")
             extracted_pages = partitioner.stage4_full_page_extraction(
                 filepath, stage1_results["page_analysis"]
             )
+            for page_num, page_info in extracted_pages.items():
+                print(f"   ✅ Page {page_num}: {page_info['complexity']} → Full page extracted")
+            print(f"📄 Full page extraction complete: {len(extracted_pages)} pages")
+        else:
+            print(f"📄 Full page extraction: DISABLED")
+
+        # Stage 4: Table metadata processing (ALWAYS metadata only - no individual images)
+        enhanced_tables = []
+        if self.extract_tables:
+            print(f"📋 TABLE METADATA PROCESSING (No individual images)")
+            print(f"   📋 Tables to process: {len(stage1_results['table_locations'])}")
+            
+            enhanced_tables = partitioner.stage3_create_table_elements_only(
+                filepath, stage1_results["table_locations"]
+            )
+            
+            for table_info in stage1_results["table_locations"]:
+                print(f"   ✅ Table on page {table_info['page']}: Metadata only (covered by full page)")
+            print(f"📋 Table metadata complete: {len(enhanced_tables)} elements")
+        else:
+            print(f"📋 Table processing: DISABLED")
 
         # Return all raw results for async post-processing
         return {
@@ -893,50 +941,19 @@ class PartitionStep(PipelineStep):
                         # Keep local file info as fallback
                         uploaded_pages[page_num] = page_info
 
-            # 5. Upload table images to Supabase Storage
+            # 5. SKIP table image upload - Full-page-only approach
             if enhanced_tables:
-                logger.info(
-                    f"Uploading {len(enhanced_tables)} table images to Supabase Storage..."
-                )
-
+                print(f"📋 BEAM: Table metadata preserved for {len(enhanced_tables)} tables")
+                logger.info(f"Table metadata preserved for {len(enhanced_tables)} tables - no individual images uploaded (full-page approach)")
+                print(f"📋 BEAM: Table images BLOCKED - content will be captured in full-page extractions")
+                
+                # Clear any individual table image paths to prevent confusion
+                cleared_count = 0
                 for table_element in enhanced_tables:
-                    try:
-                        table_id = table_element["id"]
-                        image_path = table_element["metadata"].get("image_path")
-
-                        if image_path and Path(image_path).exists():
-                            # Upload table image to Supabase Storage with new structure
-                            upload_result = (
-                                await self.storage_service.upload_table_image(
-                                    image_path=image_path,
-                                    document_id=document_input.document_id,
-                                    table_id=table_id,
-                                    upload_type=document_input.upload_type,
-                                    user_id=document_input.user_id,
-                                    project_id=document_input.project_id,
-                                    index_run_id=document_input.run_id,
-                                )
-                            )
-
-                            # Add Supabase URL to table metadata
-                            table_element["metadata"]["image_url"] = upload_result[
-                                "url"
-                            ]
-                            table_element["metadata"]["image_storage_path"] = (
-                                upload_result["storage_path"]
-                            )
-
-                            logger.info(
-                                f"Uploaded table {table_id}: {upload_result['url']}"
-                            )
-                        else:
-                            logger.debug(f"No image path found for table {table_id}")
-
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to upload table image for {table_id}: {e}"
-                        )
-                        # Keep local path as fallback
+                    if table_element["metadata"].pop("image_path", None):
+                        cleared_count += 1
+                
+                print(f"📋 BEAM: Cleared individual image paths from {cleared_count}/{len(enhanced_tables)} tables")
 
             # 6. Prepare metadata
             metadata = {
@@ -1073,11 +1090,50 @@ class PartitionStep(PipelineStep):
 class UnifiedPartitionerV2:
     """Improved unified PDF partitioning using PyMuPDF analysis + unstructured fast"""
 
-    def __init__(self, tables_dir, images_dir):
+    def __init__(self, tables_dir, images_dir, table_validation_config=None):
         self.tables_dir = Path(tables_dir)
         self.images_dir = Path(images_dir)
         self.tables_dir.mkdir(exist_ok=True)
         self.images_dir.mkdir(exist_ok=True)
+        
+        # Image filtering thresholds (configurable)
+        self.min_image_width = 150  # Reduced from 200 for technical diagrams
+        self.min_image_height = 100  # Reduced from 150 for technical diagrams
+        self.min_image_pixels = 25000  # Reduced from 50k for technical diagrams
+        
+        # Table validation configuration (with defaults)
+        if table_validation_config is None:
+            table_validation_config = {}
+        
+        self.table_validation_enabled = table_validation_config.get("enabled", True)
+        self.max_table_size = table_validation_config.get("max_table_size", 5000)
+        self.max_columns = table_validation_config.get("max_columns", 20)
+        self.max_cells = table_validation_config.get("max_cells", 100)
+        self.repetition_threshold = table_validation_config.get("repetition_threshold", 0.7)
+        self.min_confidence = table_validation_config.get("min_confidence", 0.3)
+        self.reject_on_drawing_pages = table_validation_config.get("reject_on_drawing_pages", True)
+
+    def _count_meaningful_images(self, doc, page, images):
+        """Count images that are large enough to be meaningful (not logos/icons)"""
+        meaningful_count = 0
+        
+        for img in images:
+            try:
+                base_image = doc.extract_image(img[0])
+                width = base_image["width"]
+                height = base_image["height"]
+                
+                # Filter out small images (logos, icons, etc.)
+                if (width >= self.min_image_width and 
+                    height >= self.min_image_height and 
+                    width * height >= self.min_image_pixels):
+                    meaningful_count += 1
+                    
+            except Exception as e:
+                logger.debug(f"Could not analyze image {img[0]}: {e}")
+                continue
+        
+        return meaningful_count
 
     def stage1_pymupdf_analysis(self, filepath):
         """Stage 1: PyMuPDF analysis to detect tables and images"""
@@ -1096,13 +1152,24 @@ class UnifiedPartitionerV2:
             page_index = page_num + 1  # 1-indexed for consistency
 
             # Get images on this page
-            images = page.get_images()
+            try:
+                images = page.get_images()
+            except Exception as e:
+                logger.warning(f"Could not get images from page {page_index}: {e}")
+                images = []
 
             # Get tables on this page (PyMuPDF table detection)
-            table_finder = page.find_tables()
-            tables = list(table_finder)  # Convert to list
+            try:
+                table_finder = page.find_tables()
+                tables = list(table_finder)  # Convert to list
+            except Exception as e:
+                logger.warning(f"Could not find tables on page {page_index}: {e}")
+                tables = []
 
-            # Analyze page complexity
+            # Count meaningful images (filter out logos/icons)
+            meaningful_images = self._count_meaningful_images(doc, page, images)
+            
+            # Analyze page complexity with improved logic
             is_fragmented = False
             if len(images) > 10:
                 small_count = 0
@@ -1115,31 +1182,56 @@ class UnifiedPartitionerV2:
                         continue
                 is_fragmented = small_count >= 3
 
-            # Determine page complexity (matching original notebook logic)
-            if len(images) == 0 and len(tables) == 0:
+            # Special case: many small images might form a technical diagram
+            is_likely_diagram = (len(images) >= 15 and meaningful_images == 0 and len(tables) == 0)
+            
+            # Determine page complexity using meaningful images and tables
+            # IMPROVED: Require minimum meaningful content threshold to avoid logo-only extractions
+            min_meaningful_images_for_extraction = 2  # Require at least 2 meaningful images (filters out single logos)
+            
+            if meaningful_images == 0 and len(tables) == 0 and not is_likely_diagram:
                 complexity = "text_only"
                 needs_extraction = False
-            elif is_fragmented:
-                complexity = "fragmented"
-                needs_extraction = True
-            elif len(images) >= 3:  # Extract if 3+ images
-                complexity = "complex"
-                needs_extraction = True
-            elif len(images) >= 1:  # Extract if any images
-                complexity = "simple"
+            elif meaningful_images >= min_meaningful_images_for_extraction or len(tables) > 0 or is_likely_diagram:
+                # Extract if there are ENOUGH meaningful images OR tables OR likely diagram
+                if is_likely_diagram:
+                    complexity = "diagram"
+                elif is_fragmented:
+                    complexity = "fragmented"
+                elif meaningful_images >= 3:
+                    complexity = "complex"
+                else:
+                    complexity = "simple"
                 needs_extraction = True
             else:
-                complexity = "simple"
+                complexity = "text_only"  # Only logos/small images found (below threshold)
                 needs_extraction = False
 
             # Store page analysis
             page_analysis[page_index] = {
                 "image_count": len(images),
+                "meaningful_images": meaningful_images,
                 "table_count": len(tables),
                 "complexity": complexity,
                 "needs_extraction": needs_extraction,
                 "is_fragmented": is_fragmented,
             }
+            
+            # Add detailed logging for extraction decisions (first 3 pages + any extracted)
+            if page_index <= 3 or needs_extraction:
+                reason = []
+                if meaningful_images >= min_meaningful_images_for_extraction:
+                    reason.append(f"{meaningful_images} meaningful images (≥{min_meaningful_images_for_extraction})")
+                if len(tables) > 0:
+                    reason.append(f"{len(tables)} tables")
+                if is_likely_diagram:
+                    reason.append("likely diagram")
+                if not needs_extraction:
+                    reason.append(f"only {meaningful_images} meaningful images (<{min_meaningful_images_for_extraction})")
+                
+                decision = "EXTRACT" if needs_extraction else "SKIP"
+                reason_str = ", ".join(reason) if reason else "no meaningful content"
+                print(f"📄 BEAM: Page {page_index}: {decision} ({reason_str})")
 
             # Store table locations
             for i, table in enumerate(tables):
@@ -1151,37 +1243,41 @@ class UnifiedPartitionerV2:
                         "bbox": table_bbox,
                         "table_data": table,
                         "complexity": complexity,
+                        "page_analysis": {
+                            "image_count": meaningful_images,
+                            "text_blocks": len(page.get_text_blocks()) if hasattr(page, 'get_text_blocks') else 0,
+                            "complexity": complexity
+                        }
                     }
                 )
 
             # Store image locations
             for i, img in enumerate(images):
                 try:
-                    # Get image rectangle - use a different approach
-                    img_rect = page.get_image_bbox(img)
-                    if img_rect:
-                        image_locations.append(
-                            {
-                                "id": f"image_page{page_index}_img{i}",
-                                "page": page_index,
-                                "bbox": img_rect,
-                                "image_data": img,
-                                "complexity": complexity,
-                            }
-                        )
-                    else:
-                        # Fallback: store image without bbox
-                        image_locations.append(
-                            {
-                                "id": f"image_page{page_index}_img{i}",
-                                "page": page_index,
-                                "bbox": None,
-                                "image_data": img,
-                                "complexity": complexity,
-                            }
-                        )
+                    # Try to get image rectangle, but handle "not a textpage" errors gracefully
+                    img_rect = None
+                    try:
+                        img_rect = page.get_image_bbox(img)
+                    except Exception as bbox_error:
+                        # This commonly fails with "not a textpage of this page" for drawing-heavy PDFs
+                        logger.debug(f"Could not get image bbox on page {page_index}: {bbox_error}")
+                        img_rect = None
+                    
+                    # Store image info regardless of whether we got bbox or not
+                    image_locations.append(
+                        {
+                            "id": f"image_page{page_index}_img{i}",
+                            "page": page_index,
+                            "bbox": img_rect,
+                            "image_data": img,
+                            "complexity": complexity,
+                        }
+                    )
+                    
                 except Exception as e:
-                    # Fallback: store image without bbox
+                    # Final fallback: log the error but continue processing
+                    logger.warning(f"Error processing image {i} on page {page_index}: {e}")
+                    # Still store the image data so we don't lose it completely
                     image_locations.append(
                         {
                             "id": f"image_page{page_index}_img{i}",
@@ -1238,7 +1334,12 @@ class UnifiedPartitionerV2:
             page_index = page_num + 1  # 1-indexed
 
             # Get text blocks with detailed metadata
-            text_dict = page.get_text("dict")
+            try:
+                text_dict = page.get_text("dict")
+            except Exception as text_error:
+                # Handle pages that don't have text layers (e.g., pure CAD drawings)
+                logger.warning(f"Could not extract text dict from page {page_index}: {text_error}")
+                text_dict = {"blocks": []}  # Continue with empty blocks
 
             # Process text blocks
             for block in text_dict.get("blocks", []):
@@ -1300,20 +1401,36 @@ class UnifiedPartitionerV2:
         doc = fitz.open(filepath)
         enhanced_tables = []
         pdf_basename = Path(filepath).stem
+        rejected_tables = []
 
         for i, table_info in enumerate(table_locations):
             try:
                 page_num = table_info["page"]
                 table_data = table_info["table_data"]
+                page_analysis = table_info.get("page_analysis", None)
+                
+                # Validate table before processing
+                is_valid, validation_result = self._validate_table(table_data, page_analysis)
+                
+                if not is_valid:
+                    logger.warning(f"Table {i+1} on page {page_num} rejected: {validation_result['issues']}")
+                    rejected_tables.append({
+                        "page": page_num,
+                        "table_index": i,
+                        "validation": validation_result
+                    })
+                    # Skip this table - it will be captured in full-page extraction
+                    continue
 
                 # Get the page
                 page = doc[page_num - 1]  # PyMuPDF is 0-indexed
 
-                # Extract table as image
+                # Extract full page as table image for better VLM context
+                # Store table bbox for reference but don't clip the image
                 table_bbox = table_data.bbox
                 table_rect = fitz.Rect(table_bbox)
                 matrix = fitz.Matrix(2, 2)  # 200 DPI for tables
-                pixmap = page.get_pixmap(matrix=matrix, clip=table_rect)
+                pixmap = page.get_pixmap(matrix=matrix)  # Full page for VLM context
 
                 # Save table image
                 table_id = f"table_{i+1}"
@@ -1352,10 +1469,87 @@ class UnifiedPartitionerV2:
                 logger.error(f"Error processing table {i+1}: {e}")
 
         doc.close()
+        
+        # Log validation summary
+        if rejected_tables:
+            logger.warning(f"Rejected {len(rejected_tables)} tables due to quality issues")
+            for rejected in rejected_tables:
+                logger.debug(f"  - Page {rejected['page']}: {rejected['validation']['issues']}")
+        
         logger.info(
-            f"Enhanced {len(enhanced_tables)} tables with PyMuPDF processing and metadata"
+            f"Enhanced {len(enhanced_tables)} valid tables, rejected {len(rejected_tables)} invalid tables"
         )
         return enhanced_tables
+
+    def stage3_create_table_elements_only(self, filepath, table_locations):
+        """Create table elements with metadata only (no individual image extraction)"""
+        if not table_locations:
+            logger.info("No tables detected")
+            return []
+
+        logger.info(f"Creating {len(table_locations)} table elements without individual image extraction")
+        
+        doc = fitz.open(filepath)
+        table_elements = []
+        rejected_tables = []
+        
+        for i, table_info in enumerate(table_locations):
+            try:
+                page_num = table_info["page"]
+                table_data = table_info["table_data"]
+                page_analysis = table_info.get("page_analysis", None)
+                
+                # Validate table before processing
+                is_valid, validation_result = self._validate_table(table_data, page_analysis)
+                
+                if not is_valid:
+                    logger.warning(f"Table {i+1} on page {page_num} rejected: {validation_result['issues']}")
+                    rejected_tables.append({
+                        "page": page_num,
+                        "table_index": i,
+                        "validation": validation_result
+                    })
+                    # Skip this table - it will be captured in full-page extraction
+                    continue
+                
+                # Extract table text and HTML (but no image)
+                table_text = table_data.to_markdown()
+                table_html = self._table_to_html(table_data)
+                
+                # Create table element with metadata only
+                table_id = f"table_{i+1}"
+                table_element = {
+                    "id": table_id,
+                    "category": "Table",
+                    "page": page_num,
+                    "text": table_text,
+                    "metadata": {
+                        "page_number": page_num,
+                        "table_id": table_id,
+                        "has_html": bool(table_html),
+                        "html_length": len(table_html) if table_html else 0,
+                        "extraction_method": "text_only_full_page_covers_image",
+                        "text_as_html": table_html,
+                        # No image_path - covered by full-page extraction
+                    },
+                }
+                
+                table_elements.append(table_element)
+                logger.info(f"Created table element {table_id} on page {page_num} (no individual image)")
+                
+            except Exception as e:
+                logger.error(f"Error creating table element {i+1}: {e}")
+        
+        doc.close()
+        
+        # Log validation summary
+        if rejected_tables:
+            logger.warning(f"Rejected {len(rejected_tables)} tables due to quality issues")
+            for rejected in rejected_tables:
+                logger.debug(f"  - Page {rejected['page']}: {rejected['validation']['issues']}")
+        
+        logger.info(f"Created {len(table_elements)} valid table elements, rejected {len(rejected_tables)} invalid tables")
+        return table_elements
 
     def stage4_full_page_extraction(self, filepath, page_analysis):
         """Stage 4: Extract full pages when images are detected (like partition_pdf.py)"""
@@ -1468,6 +1662,124 @@ class UnifiedPartitionerV2:
                     return bool(flags & 2**4)  # Bold flag
         except:
             pass
+        return False
+
+    def _validate_table(self, table_data, page_analysis=None) -> Tuple[bool, Dict[str, Any]]:
+        """Validate table quality and determine if it should be processed"""
+        validation_result = {
+            "is_valid": True,
+            "confidence": 1.0,
+            "issues": [],
+            "metrics": {}
+        }
+        
+        if not self.table_validation_enabled:
+            return True, validation_result
+            
+        try:
+            # Extract table content for analysis
+            table_text = table_data.to_markdown() if hasattr(table_data, 'to_markdown') else str(table_data)
+            table_cells = table_data.extract() if hasattr(table_data, 'extract') else []
+            
+            # Check table size
+            text_length = len(table_text)
+            validation_result["metrics"]["text_length"] = text_length
+            
+            if text_length > self.max_table_size:
+                validation_result["is_valid"] = False
+                validation_result["issues"].append(f"Table too large: {text_length} chars (max: {self.max_table_size})")
+                validation_result["confidence"] *= 0.3
+            
+            # Check number of columns
+            if hasattr(table_data, 'col_count'):
+                col_count = table_data.col_count
+                validation_result["metrics"]["columns"] = col_count
+                
+                if col_count > self.max_columns:
+                    validation_result["is_valid"] = False
+                    validation_result["issues"].append(f"Too many columns: {col_count} (max: {self.max_columns})")
+                    validation_result["confidence"] *= 0.4
+            
+            # Check for repetition
+            repetition_score = self._calculate_repetition_score(table_text)
+            validation_result["metrics"]["repetition_score"] = repetition_score
+            
+            if repetition_score > self.repetition_threshold:
+                validation_result["is_valid"] = False
+                validation_result["issues"].append(f"High repetition: {repetition_score:.2f} (threshold: {self.repetition_threshold})")
+                validation_result["confidence"] *= 0.2
+            
+            # Check if page is primarily a drawing
+            if page_analysis and self.reject_on_drawing_pages:
+                if self._is_drawing_page(page_analysis):
+                    validation_result["is_valid"] = False
+                    validation_result["issues"].append("Page appears to be a drawing/diagram")
+                    validation_result["confidence"] *= 0.3
+            
+            # Final confidence check
+            if validation_result["confidence"] < self.min_confidence:
+                validation_result["is_valid"] = False
+                validation_result["issues"].append(f"Low confidence: {validation_result['confidence']:.2f}")
+            
+        except Exception as e:
+            logger.warning(f"Table validation error: {e}")
+            # On error, be conservative and reject
+            validation_result["is_valid"] = False
+            validation_result["issues"].append(f"Validation error: {str(e)}")
+            
+        return validation_result["is_valid"], validation_result
+    
+    def _calculate_repetition_score(self, text: str) -> float:
+        """Calculate how repetitive the text content is"""
+        if not text or len(text) < 100:
+            return 0.0
+            
+        # Split into words and count duplicates
+        words = text.split()
+        if len(words) == 0:
+            return 0.0
+            
+        # Count word frequencies
+        word_counts = Counter(words)
+        
+        # Calculate repetition score
+        total_words = len(words)
+        unique_words = len(word_counts)
+        
+        # Also check for repeated sequences
+        repeated_sequences = 0
+        sequence_length = 5
+        for i in range(len(words) - sequence_length):
+            sequence = ' '.join(words[i:i+sequence_length])
+            if text.count(sequence) > 2:  # Sequence appears more than twice
+                repeated_sequences += 1
+        
+        # Combine metrics
+        word_repetition = 1 - (unique_words / total_words)
+        sequence_repetition = min(1.0, repeated_sequences / 10)  # Normalize to 0-1
+        
+        return (word_repetition * 0.7) + (sequence_repetition * 0.3)
+    
+    def _is_drawing_page(self, page_analysis: Dict[str, Any]) -> bool:
+        """Determine if a page is primarily a drawing/diagram"""
+        if not page_analysis:
+            return False
+            
+        # Check image count vs text blocks
+        image_count = page_analysis.get("image_count", 0)
+        text_blocks = page_analysis.get("text_blocks", 0)
+        
+        # If many images and few text blocks, likely a drawing
+        if image_count > 3 and text_blocks < 10:
+            return True
+            
+        # Check page complexity score if available
+        complexity = page_analysis.get("complexity", "")
+        if complexity in ["complex", "very_complex"]:
+            # Complex pages with images are often drawings
+            if image_count > 0:
+                return True
+                
         return False
 
     def _table_to_html(self, table_data):

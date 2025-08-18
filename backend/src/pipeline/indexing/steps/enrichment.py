@@ -533,26 +533,70 @@ class EnrichmentStep(PipelineStep):
         # Create a copy to avoid modifying original data
         enriched_data = metadata_output.copy()
 
-        # Process tables
+        # Process tables (but skip VLM if full-page extraction exists for the same page)
         table_elements = enriched_data.get("table_elements", [])
+        extracted_pages = enriched_data.get("extracted_pages", {})
+        
+        print(f"🤖 BEAM: VLM processing decision - {len(table_elements)} table elements found")
         logger.info(f"Processing {len(table_elements)} table elements...")
+        
+        # Debug the data types to fix the comparison issue
+        extracted_page_keys = list(extracted_pages.keys())
+        print(f"🤖 BEAM: Full page extractions available for pages: {extracted_page_keys}")
+        print(f"🤖 BEAM: Debug - extracted_pages key types: {[type(k).__name__ for k in extracted_page_keys[:3]]}")
+
+        tables_processed_with_vlm = 0
+        tables_skipped = 0
 
         for i, table_element in enumerate(table_elements):
-            logger.info(f"Processing table {i+1}/{len(table_elements)}...")
-            table_element["enrichment_metadata"] = await self._enrich_table(
-                table_element
-            )
+            table_page = table_element.get("page")
+            table_id = table_element.get("id", f"table_{i}")
+            
+            # Fix data type comparison - try both int and str versions
+            has_full_page = table_page in extracted_pages or str(table_page) in extracted_pages
+            
+            if i == 0:  # Debug first element
+                print(f"🤖 BEAM: Debug - table_page: {table_page} (type: {type(table_page).__name__})")
+                print(f"🤖 BEAM: Debug - has_full_page: {has_full_page}")
+            
+            if has_full_page:
+                if tables_skipped < 3:  # Only log first 3 skips in detail
+                    print(f"🤖 BEAM: SKIPPING table VLM {i+1}/{len(table_elements)} (ID: {table_id}, page {table_page}) - full-page extraction exists")
+                logger.info(f"Skipping VLM for table {i+1}/{len(table_elements)} on page {table_page} - full-page extraction exists")
+                tables_skipped += 1
+                # Still add basic metadata but skip VLM processing
+                table_element["enrichment_metadata"] = {
+                    "vlm_processed": False,
+                    "skip_reason": "full_page_extraction_exists",
+                    "vlm_processing_timestamp": datetime.now().isoformat(),
+                }
+            else:
+                if tables_processed_with_vlm < 3:  # Only log first 3 processes in detail
+                    print(f"🤖 BEAM: PROCESSING table VLM {i+1}/{len(table_elements)} (ID: {table_id}, page {table_page}) - no full-page coverage")
+                logger.info(f"Processing table {i+1}/{len(table_elements)} with VLM...")
+                tables_processed_with_vlm += 1
+                table_element["enrichment_metadata"] = await self._enrich_table(
+                    table_element
+                )
+
+        print(f"🤖 BEAM: Table VLM summary - {tables_processed_with_vlm} processed, {tables_skipped} skipped")
 
         # Process full-page images
         extracted_pages = enriched_data.get("extracted_pages", {})
+        print(f"🖼️  BEAM: Full-page VLM processing - {len(extracted_pages)} pages to process")
         logger.info(f"Processing {len(extracted_pages)} full-page images...")
 
+        pages_processed = 0
         for page_num, page_info in extracted_pages.items():
+            complexity = page_info.get("complexity", "unknown")
+            print(f"🖼️  BEAM: Processing full-page VLM {pages_processed+1}/{len(extracted_pages)} (page {page_num}, complexity: {complexity})")
             logger.info(f"Processing image page {page_num}...")
+            pages_processed += 1
             page_info["enrichment_metadata"] = await self._enrich_full_page_image(
                 page_info, enriched_data
             )
 
+        print(f"🤖 BEAM: VLM enrichment complete! {pages_processed} full-page images processed, {tables_processed_with_vlm} individual tables processed")
         logger.info("VLM enrichment complete!")
         return enriched_data
 

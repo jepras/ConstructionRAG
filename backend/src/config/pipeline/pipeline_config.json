@@ -14,7 +14,16 @@
       "extract_tables": true,
       "extract_images": true,
       "max_image_size_mb": 10,
-      "ocr_languages": ["dan"]
+      "ocr_languages": ["dan"],
+      "table_validation": {
+        "enabled": true,
+        "max_table_size": 5000,
+        "max_columns": 20,
+        "max_cells": 100,
+        "repetition_threshold": 0.7,
+        "min_confidence": 0.3,
+        "reject_on_drawing_pages": true
+      }
     },
     "metadata": {
       "extract_page_structure": true,
@@ -32,7 +41,7 @@
       "strategy": "semantic",
       "separators": ["\n\n", "\n", " ", ""],
       "min_chunk_size": 100,
-      "max_chunk_size": 2000
+      "max_chunk_size": 1200
     },
     "embedding": {
       "model": "voyage-multilingual-2",

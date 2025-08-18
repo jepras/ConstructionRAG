@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Comprehensive Chunk Quality Analysis
-Analyzes the quality issues in the chunking pipeline
+Enhanced Chunk Quality Analysis with Query Similarity Testing
+Analyzes the quality issues in the chunking pipeline and tests query retrieval performance
 """
 
 import asyncio
@@ -10,7 +10,7 @@ import sys
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from collections import Counter
 from dotenv import load_dotenv
 
@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 load_dotenv()
 
 from src.config.database import get_supabase_admin_client
+from src.pipeline.querying.steps.retrieval import DocumentRetriever, RetrievalConfig, VoyageEmbeddingClient
+from src.config.settings import get_settings
 
 
 async def fetch_all_chunks_with_details(run_id: str) -> List[Dict[str, Any]]:
@@ -239,11 +241,110 @@ def identify_processing_issues(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
     return issues
 
 
+async def test_query_similarity(run_id: str) -> Dict[str, Any]:
+    """Test query retrieval performance with sample queries"""
+    
+    print("\n🔍 Testing query similarity and retrieval...")
+    
+    # Sample test queries based on typical construction document questions
+    test_queries = [
+        "Hvad er der om brandsikkerhedsforanstaltninger?",
+        "Hvilke elektriske installationer skal der være?",
+        "Hvad står der om døre og vinduer?",
+        "Beskriv ventilationssystemet",
+        "Hvad er kravene til vandinstallationer?",
+        "Hvilke materialer skal bruges til byggeri?",
+        "Beskriv bygningens struktur og konstruktion",
+        "Hvad er tidsplanen for projektet?",
+        "Hvilke tegninger og dokumenter er inkluderet?",
+        "Hvad er specifikationerne for varmeanlæg?"
+    ]
+    
+    # Initialize retrieval components
+    settings = get_settings()
+    voyage_client = VoyageEmbeddingClient(api_key=settings.voyage_api_key, model="voyage-multilingual-2")
+    db = get_supabase_admin_client()
+    
+    query_results = {
+        "test_queries": [],
+        "top_10_similarities": [],
+        "bottom_5_similarities": [],
+        "retrieval_statistics": {
+            "avg_top_similarity": 0.0,
+            "avg_bottom_similarity": 0.0,
+            "queries_with_good_matches": 0,  # similarity > 0.7
+            "queries_with_poor_matches": 0,  # similarity < 0.3
+        }
+    }
+    
+    all_similarities = []
+    
+    for i, query in enumerate(test_queries):
+        try:
+            print(f"  Testing query {i+1}: {query[:50]}...")
+            
+            # Generate embedding for query
+            query_embedding = await voyage_client.get_embedding(query)
+            
+            # Perform vector search using pgvector
+            search_response = (
+                db.rpc("search_chunks_by_run", {
+                    "query_embedding": query_embedding,
+                    "indexing_run_id_param": run_id,
+                    "similarity_threshold": 0.1,
+                    "match_count": 10
+                })
+                .execute()
+            )
+            
+            results = search_response.data or []
+            
+            if results:
+                similarities = [float(r.get("similarity", 0)) for r in results]
+                
+                query_result = {
+                    "query": query,
+                    "total_results": len(results),
+                    "top_similarity": similarities[0] if similarities else 0,
+                    "avg_similarity": sum(similarities) / len(similarities) if similarities else 0,
+                    "top_result_preview": results[0].get("content", "")[:200] + "..." if results[0].get("content") else "",
+                    "all_similarities": similarities
+                }
+                
+                query_results["test_queries"].append(query_result)
+                all_similarities.extend(similarities)
+                
+                # Track good vs poor matches
+                if similarities[0] > 0.7:
+                    query_results["retrieval_statistics"]["queries_with_good_matches"] += 1
+                elif similarities[0] < 0.3:
+                    query_results["retrieval_statistics"]["queries_with_poor_matches"] += 1
+                    
+        except Exception as e:
+            print(f"    Error testing query: {e}")
+            query_results["test_queries"].append({
+                "query": query,
+                "error": str(e)
+            })
+    
+    # Calculate overall statistics
+    if all_similarities:
+        sorted_similarities = sorted(all_similarities, reverse=True)
+        
+        query_results["top_10_similarities"] = sorted_similarities[:10]
+        query_results["bottom_5_similarities"] = sorted_similarities[-5:]
+        
+        query_results["retrieval_statistics"]["avg_top_similarity"] = sum(sorted_similarities[:10]) / 10 if len(sorted_similarities) >= 10 else sum(sorted_similarities) / len(sorted_similarities)
+        query_results["retrieval_statistics"]["avg_bottom_similarity"] = sum(sorted_similarities[-5:]) / 5 if len(sorted_similarities) >= 5 else sum(sorted_similarities) / len(sorted_similarities)
+    
+    return query_results
+
+
 async def main():
     """Main analysis function"""
     
     print("=" * 60)
-    print("CHUNK QUALITY ANALYSIS")
+    print("ENHANCED CHUNK QUALITY & QUERY ANALYSIS")
     print("=" * 60)
     
     INDEXING_RUN_ID = "8e6d54e6-890a-45bc-a294-3bd62a46f815"
@@ -265,6 +366,9 @@ async def main():
     # Identify processing issues
     processing_issues = identify_processing_issues(chunks)
     
+    # Test query similarity
+    query_analysis = await test_query_similarity(INDEXING_RUN_ID)
+    
     # Combine results
     results = {
         "analysis_metadata": {
@@ -274,7 +378,8 @@ async def main():
         },
         "quality_analysis": quality_analysis,
         "processing_issues": processing_issues,
-        "recommendations": generate_recommendations(quality_analysis, processing_issues)
+        "query_similarity_analysis": query_analysis,
+        "recommendations": generate_recommendations(quality_analysis, processing_issues, query_analysis)
     }
     
     # Save results
@@ -288,7 +393,7 @@ async def main():
     print_summary(results)
 
 
-def generate_recommendations(quality_analysis: Dict[str, Any], processing_issues: Dict[str, Any]) -> List[str]:
+def generate_recommendations(quality_analysis: Dict[str, Any], processing_issues: Dict[str, Any], query_analysis: Dict[str, Any]) -> List[str]:
     """Generate recommendations based on analysis"""
     
     recommendations = []
@@ -313,6 +418,17 @@ def generate_recommendations(quality_analysis: Dict[str, Any], processing_issues
     if vlm_percentage < 10:
         recommendations.append(f"MEDIUM: Low VLM usage - only {vlm_percentage:.1f}% of chunks use VLM captions")
     
+    # Query performance
+    if query_analysis.get("retrieval_statistics"):
+        stats = query_analysis["retrieval_statistics"]
+        poor_matches = stats.get("queries_with_poor_matches", 0)
+        if poor_matches > 3:
+            recommendations.append(f"HIGH: Poor retrieval performance - {poor_matches} queries with similarity < 0.3")
+        
+        avg_top = stats.get("avg_top_similarity", 0)
+        if avg_top < 0.5:
+            recommendations.append(f"HIGH: Low average similarity scores - top results average {avg_top:.3f}")
+    
     # Processing inconsistencies
     inconsistencies = len(processing_issues["processing_strategy_inconsistencies"])
     if inconsistencies > 0:
@@ -330,11 +446,12 @@ def print_summary(results: Dict[str, Any]):
     """Print analysis summary"""
     
     print("\n" + "=" * 60)
-    print("CHUNK QUALITY SUMMARY")
+    print("ENHANCED ANALYSIS SUMMARY")
     print("=" * 60)
     
     qa = results["quality_analysis"]
     pi = results["processing_issues"]
+    qr = results["query_similarity_analysis"]
     
     print(f"\n📊 BASIC STATISTICS:")
     print(f"  Total chunks: {qa['total_chunks']}")
@@ -356,6 +473,15 @@ def print_summary(results: Dict[str, Any]):
     print(f"\n🤖 VLM ANALYSIS:")
     print(f"  Chunks with VLM captions: {qa['vlm_captioning_analysis']['total_chunks_with_vlm']}")
     print(f"  VLM usage percentage: {qa['vlm_captioning_analysis']['percentage_with_vlm']:.1f}%")
+    
+    print(f"\n🔍 QUERY RETRIEVAL ANALYSIS:")
+    if qr.get("retrieval_statistics"):
+        stats = qr["retrieval_statistics"]
+        print(f"  Queries with good matches (>0.7): {stats.get('queries_with_good_matches', 0)}")
+        print(f"  Queries with poor matches (<0.3): {stats.get('queries_with_poor_matches', 0)}")
+        print(f"  Average top similarity: {stats.get('avg_top_similarity', 0):.3f}")
+        print(f"  Top 10 similarities: {qr.get('top_10_similarities', [])[:3]}...")
+        print(f"  Bottom 5 similarities: {qr.get('bottom_5_similarities', [])}")
     
     print(f"\n📋 TOP RECOMMENDATIONS:")
     for i, rec in enumerate(results["recommendations"][:5], 1):
