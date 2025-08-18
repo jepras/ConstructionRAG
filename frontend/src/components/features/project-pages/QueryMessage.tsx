@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { MessageSquare, FileText } from 'lucide-react';
+import { MessageSquare, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { QueryResponse } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import SourceViewerModal from './SourceViewerModal';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface QueryMessageProps {
   message: {
@@ -22,6 +23,7 @@ export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
   const isUser = message.type === 'user';
   const [selectedSource, setSelectedSource] = useState<QueryResponse['search_results'][0] | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
 
   const handleSourceClick = (source: QueryResponse['search_results'][0]) => {
     setSelectedSource(source);
@@ -32,6 +34,26 @@ export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
     setIsModalOpen(false);
     setSelectedSource(null);
   };
+
+  const renderSourceButton = (result: QueryResponse['search_results'][0], index: number) => (
+    <button
+      key={index}
+      className="block w-full text-left px-2 py-1 rounded hover:bg-muted/50 transition-colors group cursor-pointer border border-transparent hover:border-border"
+      onClick={() => handleSourceClick(result)}
+      title="Click to view full source text"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground group-hover:text-foreground flex items-center gap-1">
+          <FileText className="w-3 h-3" />
+          {result.source_filename}
+          {result.page_number && ` • Page ${result.page_number}`}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {Math.round(result.similarity_score * 100)}% match
+        </span>
+      </div>
+    </button>
+  );
 
   if (isUser) {
     return (
@@ -67,27 +89,34 @@ export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
                 <div className="mt-3 pt-3 border-t border-border">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-3 h-3 text-muted-foreground" />
-                    <span className="text-xs font-medium text-muted-foreground">Sources</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Sources ({message.searchResults.length})
+                    </span>
                   </div>
-                  <div className="space-y-1">
-                    {message.searchResults.slice(0, 3).map((result, index) => (
-                      <button
-                        key={index}
-                        className="block w-full text-left px-2 py-1 rounded hover:bg-muted/50 transition-colors group cursor-pointer"
-                        onClick={() => handleSourceClick(result)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground group-hover:text-foreground">
-                            {result.source_filename}
-                            {result.page_number && ` • Page ${result.page_number}`}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {Math.round(result.similarity_score * 100)}% match
-                          </span>
-                        </div>
+                  
+                  <Collapsible open={isSourcesExpanded} onOpenChange={setIsSourcesExpanded}>
+                    <CollapsibleTrigger asChild>
+                      <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2">
+                        {isSourcesExpanded ? (
+                          <>
+                            <ChevronUp className="w-3 h-3" />
+                            Hide sources
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-3 h-3" />
+                            Show sources
+                          </>
+                        )}
                       </button>
-                    ))}
-                  </div>
+                    </CollapsibleTrigger>
+                    
+                    <CollapsibleContent className="space-y-1">
+                      {message.searchResults.map((result, index) => 
+                        renderSourceButton(result, index)
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
                 </div>
               )}
             </>

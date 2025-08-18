@@ -23,7 +23,7 @@ export default function SourceViewerModal({ isOpen, onClose, searchResult }: Sou
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col sm:max-w-3xl md:max-w-4xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -37,6 +37,7 @@ export default function SourceViewerModal({ isOpen, onClose, searchResult }: Sou
               size="sm" 
               onClick={onClose}
               className="h-8 w-8 p-0"
+              aria-label="Close source viewer"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -57,7 +58,7 @@ export default function SourceViewerModal({ isOpen, onClose, searchResult }: Sou
         <div className="flex-1 overflow-hidden">
           <div className="h-full overflow-y-auto">
             <div className="bg-secondary rounded-lg p-4 border border-border">
-              <div className="text-sm text-card-foreground whitespace-pre-wrap leading-relaxed">
+              <div className="text-sm text-card-foreground whitespace-pre-wrap leading-relaxed font-mono">
                 {searchResult.content}
               </div>
             </div>

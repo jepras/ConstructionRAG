@@ -46,23 +46,28 @@ class ResponseGenerator(PipelineStep):
         super().__init__("ResponseGenerator")
         self.config = config
         self.settings = get_settings()
-        
+
         # Log which model is configured to be used
         logger.info(f"🤖 ResponseGenerator initialized with primary model: {self.config.model}")
         logger.info(f"🤖 Fallback models configured: {self.config.fallback_models}")
 
-    async def execute(self, input_data: List[SearchResult]) -> StepResult:
+    async def execute(self, input_data: tuple[str, List[SearchResult]]) -> StepResult:
         """Execute the generation step"""
         start_time = datetime.utcnow()
 
+        # Unpack the query and search results
+        query, search_results = input_data
+
         try:
-            logger.info(f"Generating response for {len(input_data)} retrieved documents")
+            logger.info(
+                f"Generating response for query: '{query[:100]}...' with {len(search_results)} retrieved documents"
+            )
 
             # Generate the response
-            response = await self.generate_response(input_data)
+            response = await self.generate_response(query, search_results)
 
             # Calculate quality metrics
-            quality_metrics = await self.calculate_quality_metrics(input_data, response)
+            quality_metrics = await self.calculate_quality_metrics(search_results, response)
 
             return StepResult(
                 step=self.get_step_name(),
@@ -90,7 +95,7 @@ class ResponseGenerator(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def generate_response(self, search_results: List[SearchResult]) -> QueryResponse:
+    async def generate_response(self, query: str, search_results: List[SearchResult]) -> QueryResponse:
         """Generate a comprehensive response based on retrieved documents"""
 
         if not search_results:
@@ -115,7 +120,7 @@ class ResponseGenerator(PipelineStep):
         context = self._prepare_context(search_results)
 
         # Generate the response using OpenRouter
-        response_text, model_used, tokens_used = await self._call_openrouter(context)
+        response_text, model_used, tokens_used = await self._call_openrouter(query, context)
 
         # Extract sources from search results
         sources = [
@@ -154,11 +159,13 @@ class ResponseGenerator(PipelineStep):
         # Log the search results metadata for debugging
         logger.info(f"📄 Preparing context from {len(search_results)} search results:")
         for i, result in enumerate(search_results, 1):
-            logger.info(f"📄 Result {i}: filename='{result.source_filename}', page={result.page_number}, similarity={result.similarity_score:.3f}")
+            logger.info(
+                f"📄 Result {i}: filename='{result.source_filename}', page={result.page_number}, similarity={result.similarity_score:.3f}"
+            )
             logger.info(f"📄 Result {i} metadata keys: {list(result.metadata.keys()) if result.metadata else 'None'}")
             if result.metadata:
                 logger.info(f"📄 Result {i} metadata content: {result.metadata}")
-            
+
             context_parts.append(
                 f"Kilde {i} (side {result.page_number}, {result.source_filename}):\n{result.content}\n"
             )
@@ -166,21 +173,21 @@ class ResponseGenerator(PipelineStep):
         logger.info(f"📄 Final context length: {len(''.join(context_parts))} characters")
         return "\n".join(context_parts)
 
-    async def _call_openrouter(self, context: str) -> tuple[str, str, int]:
+    async def _call_openrouter(self, query: str, context: str) -> tuple[str, str, int]:
         """Call OpenRouter API to generate response"""
 
         # Prepare the prompt
-        prompt = self._create_prompt(context)
+        prompt = self._create_prompt(query, context)
 
         # Try primary model first, then fallbacks
         models_to_try = [self.config.model] + self.config.fallback_models
-        
+
         logger.info(f"🤖 Attempting to use models in order: {models_to_try}")
         logger.info(f"🤖 Primary model from config: {self.config.model}")
 
         for i, model in enumerate(models_to_try):
             try:
-                logger.info(f"🤖 Trying model {i+1}/{len(models_to_try)}: {model}")
+                logger.info(f"🤖 Trying model {i + 1}/{len(models_to_try)}: {model}")
                 response_text, tokens_used = await self._make_openrouter_request(model, prompt)
                 logger.info(f"✅ Successfully used model: {model} (tokens: {tokens_used})")
                 return response_text, model, tokens_used
@@ -196,29 +203,38 @@ class ResponseGenerator(PipelineStep):
             0,
         )
 
-    def _create_prompt(self, context: str) -> str:
+    def _create_prompt(self, query: str, context: str) -> str:
         """Create the prompt for the LLM"""
 
-        prompt = f"""Du er en ekspert på dansk byggeri og konstruktion. Du modtager et spørgsmål og skal svare kort og præcist baseret på den kontekst du får leveret:
+        prompt = f"""Du er en ekspert på dansk byggeri og konstruktion. Du skal besvare følgende spørgsmål baseret på den kontekst du får leveret:
+
+SPØRGSMÅL:
+{query}
 
 KONTEKST:
 {context}
 
 Vurder baseret på spørgsmålet om du skal give et længere detaljeret svar eller et kort svar på få sætninger. 
 
+VIGTIGT!
+- Hvis du ikke har fået nok kontekst til at svare på spørgsmål, så gør brugere opmærksom på dette og forsøg ikke at svar på spørgsmålet! I stedet skriv KUN: "Jeg har ikke nok informationer til at svare på dit spørgsmål"
+- Hvis du vurderer at du har et godt kort svar, så skriv kun det korte svar. 
+
 INSTRUKTIONER:
 - Svar på dansk
 - Vær præcis og faktuel
-- Hvis du ikke har fået nok kontekst til at svare på spørgsmål, så gør brugere opmærksom på dette og forsøg ikke at svar på spørgsmålet!
 - Citer relevante dele af kilderne når det er relevant (brug citationer som [Dokumentnavn, sidetal])
 - Hold svaret under 500 ord
+- Lav gerne mange korte afsnit for at gøre det nemt at læse.
+- Formater dit svar i normal tekst format - ikke noget markdown.
 
 SVAR:"""
-        
-        # Log the first 1000 chars of the prompt to see what context is being sent
+
+        # Log the prompt components to see what's being sent
         logger.info(f"💬 Created prompt with {len(prompt)} characters")
-        logger.info(f"💬 Context preview (first 1000 chars): {context[:1000]}...")
-        
+        logger.info(f"💬 Query: {query}")
+        logger.info(f"💬 Context preview (first 500 chars): {context[:500]}...")
+
         return prompt
 
     async def _make_openrouter_request(self, model: str, prompt: str) -> tuple[str, int]:
@@ -304,16 +320,18 @@ SVAR:"""
             result_count=len(search_results),
         )
 
-    async def validate_prerequisites_async(self, input_data: List[SearchResult]) -> bool:
+    async def validate_prerequisites_async(self, input_data: tuple[str, List[SearchResult]]) -> bool:
         """Validate that we have the required inputs"""
-        return self.settings.OPENROUTER_API_KEY is not None and len(input_data) > 0
+        query, search_results = input_data
+        return self.settings.OPENROUTER_API_KEY is not None and len(search_results) > 0
 
-    def estimate_duration(self, input_data: List[SearchResult]) -> int:
+    def estimate_duration(self, input_data: tuple[str, List[SearchResult]]) -> int:
         """Estimate the duration of this step in seconds"""
+        query, search_results = input_data
         # Base time for API call + processing
         base_time = 3
 
         # Add time based on number of documents to process
-        doc_time = len(input_data) * 0.5
+        doc_time = len(search_results) * 0.5
 
         return int(base_time + doc_time)

@@ -231,7 +231,7 @@ class QueryPipelineOrchestrator:
             run_logger.info("Step 3: Generating response...")
             step3_start = datetime.utcnow()
 
-            generation_result = await self.generator.execute(search_results)
+            generation_result = await self.generator.execute((request.query, search_results))
             if generation_result.status != "completed":
                 raise Exception(f"Generation failed: {generation_result.error_message}")
 
