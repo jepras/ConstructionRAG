@@ -97,6 +97,10 @@ class DocumentRetriever(PipelineStep):
         """Execute the retrieval step"""
         start_time = datetime.utcnow()
 
+        logger.info(f"🔍 RETRIEVAL EXECUTE: Starting search with run_id={indexing_run_id}")
+        logger.info(f"🔍 RETRIEVAL EXECUTE: Input variations - original: '{input_data.original[:50]}...'")
+        logger.info(f"🔍 RETRIEVAL EXECUTE: Allowed document IDs: {len(allowed_document_ids) if allowed_document_ids else 'None'}")
+
         try:
             # Search documents using query variations
             results = await self.search(input_data, indexing_run_id, allowed_document_ids)
@@ -140,20 +144,38 @@ class DocumentRetriever(PipelineStep):
     ) -> list[SearchResult]:
         """Search documents using best query variation"""
 
+        logger.info(f"🔍 SEARCH: Starting search process")
+
         # Select best variation (for now, use original)
         # TODO: Implement variation selection logic
         best_query = self.select_best_variation(variations)
+        logger.info(f"🔍 SEARCH: Selected best query: '{best_query[:100]}...'")
 
         # Embed query using same model as documents
+        logger.info(f"🔍 SEARCH: Generating embedding with model: {self.config.embedding_model}")
+        embed_start = datetime.utcnow()
         query_embedding = await self.embed_query(best_query)
+        embed_duration = (datetime.utcnow() - embed_start).total_seconds() * 1000
+        logger.info(f"🔍 SEARCH: Embedding generated in {embed_duration:.1f}ms, dimensions: {len(query_embedding)}")
 
         # Search pgvector using embedding_1024 column
+        logger.info(f"🔍 SEARCH: Starting pgvector search")
+        search_start = datetime.utcnow()
         results = await self.search_pgvector(query_embedding, indexing_run_id, allowed_document_ids)
+        search_duration = (datetime.utcnow() - search_start).total_seconds() * 1000
+        logger.info(f"🔍 SEARCH: Pgvector search completed in {search_duration:.1f}ms, found {len(results)} raw results")
 
         # Filter by similarity threshold
+        logger.info(f"🔍 SEARCH: Applying similarity filtering")
         filtered_results = self.filter_by_similarity(results)
+        logger.info(f"🔍 SEARCH: After filtering: {len(filtered_results)} results")
 
-        logger.info(f"Retrieved {len(filtered_results)} results")
+        if filtered_results:
+            top_similarity = max(r.similarity_score for r in filtered_results)
+            avg_similarity = sum(r.similarity_score for r in filtered_results) / len(filtered_results)
+            logger.info(f"🔍 SEARCH: Top similarity: {top_similarity:.3f}, Average: {avg_similarity:.3f}")
+
+        logger.info(f"🔍 SEARCH: Search completed, returning {len(filtered_results)} results")
         return filtered_results
 
     def select_best_variation(self, variations: QueryVariations) -> str:
@@ -178,83 +200,93 @@ class DocumentRetriever(PipelineStep):
         # Convert embedding to string format for pgvector
         embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
+        logger.info(f"🔍 PGVECTOR: Starting pgvector search with embedding dims: {len(query_embedding)}")
+        logger.info(f"🔍 PGVECTOR: Config - top_k: {self.config.top_k}, threshold: {self.config.danish_thresholds['minimum']}")
+
         try:
-            # First check if we have a similarity_search function available
+            # First check if we have match_chunks function available (HNSW optimized)
             try:
-                # Try to use native pgvector similarity search function
+                logger.info(f"🔍 PGVECTOR: Attempting match_chunks HNSW function")
+                # Try to use HNSW-optimized match_chunks function 
+                # IMPORTANT: match_chunks uses SIMILARITY thresholds (higher = more similar)  
+                # Function checks: 1 - (embedding <=> query) > match_threshold
+                # So we need similarity threshold, not distance threshold
+                # Use very permissive similarity threshold, let pipeline do quality filtering
+                hnsw_threshold = 0.1  # Similarity threshold: accept 10%+ similar results
                 rpc_params = {
-                    'query_embedding': embedding_str,
-                    'similarity_threshold': self.config.danish_thresholds["minimum"],
+                    'query_embedding': query_embedding,  # Use raw embedding, not string format
+                    'match_threshold': hnsw_threshold,
                     'match_count': self.config.top_k * 2,  # Get extra for deduplication
                 }
                 
                 # Add optional filters
                 if indexing_run_id:
                     rpc_params['indexing_run_id_filter'] = indexing_run_id
-                    logger.info(f"Filtering search to indexing run: {indexing_run_id}")
+                    logger.info(f"🔍 PGVECTOR: Filtering search to indexing run: {indexing_run_id}")
                     
+                # Note: match_chunks doesn't support document_ids filter directly
                 if allowed_document_ids:
-                    rpc_params['allowed_document_ids'] = allowed_document_ids
+                    logger.info(f"🔍 PGVECTOR: Will filter {len(allowed_document_ids)} document IDs post-query")
 
-                # Use stored procedure for fast HNSW search
-                response = self.db.rpc('similarity_search', rpc_params).execute()
+                logger.info(f"🔍 PGVECTOR: HNSW params: threshold={rpc_params['match_threshold']}, count={rpc_params['match_count']}")
+
+                # Use HNSW-optimized match_chunks function  
+                hnsw_start = datetime.utcnow()
+                response = self.db.rpc('match_chunks', rpc_params).execute()
+                hnsw_duration = (datetime.utcnow() - hnsw_start).total_seconds() * 1000
                 
-                if response.data:
-                    logger.info(f"HNSW search returned {len(response.data)} results")
-                    return self._format_similarity_search_results(response.data)
+                # Filter by document IDs if specified (post-query filtering)
+                filtered_results = response.data if response.data else []
+                if allowed_document_ids and filtered_results:
+                    filtered_results = [r for r in response.data if r.get('document_id') in allowed_document_ids]
+                    logger.info(f"🔍 PGVECTOR: After document ID filtering: {len(filtered_results)} results")
+                
+                if filtered_results:
+                    logger.info(f"🔍 PGVECTOR: ✅ HNSW search SUCCESS in {hnsw_duration:.1f}ms - {len(filtered_results)} results")
+                    return self._format_match_chunks_results(filtered_results, query_embedding)
                 else:
-                    logger.info("HNSW search returned no results")
+                    logger.warning(f"🔍 PGVECTOR: ⚠️  HNSW returned no results in {hnsw_duration:.1f}ms with threshold {hnsw_threshold}")
+                    logger.warning(f"🔍 PGVECTOR: ⚠️  This means no chunks passed HNSW threshold {hnsw_threshold} for this query")
+                    logger.warning(f"🔍 PGVECTOR: 🚨 FALLING BACK TO PYTHON to compare results - investigate threshold mismatch!")
+                    
+                    # Compare with Python fallback to understand threshold differences
+                    python_start = datetime.utcnow()
+                    python_results = await self._fallback_python_similarity(
+                        query_embedding, indexing_run_id, allowed_document_ids
+                    )
+                    python_duration = (datetime.utcnow() - python_start).total_seconds() * 1000
+                    
+                    if python_results:
+                        logger.warning(f"🔍 PGVECTOR: 🐍 Python found {len(python_results)} results in {python_duration:.1f}ms")
+                        logger.warning(f"🔍 PGVECTOR: 🐍 Top Python similarity: {python_results[0]['similarity_score']:.4f}")
+                        logger.warning(f"🔍 PGVECTOR: 🚨 HNSW threshold {hnsw_threshold} too restrictive - Python found results!")
+                        return python_results
+                    else:
+                        logger.info(f"🔍 PGVECTOR: 🐍 Python also found no results in {python_duration:.1f}ms - query genuinely has no matches")
+                        return []
                     
             except Exception as rpc_error:
-                logger.warning(f"HNSW similarity_search function failed: {rpc_error}")
-                logger.info("Falling back to native pgvector similarity with SQL")
+                logger.error(f"🔍 PGVECTOR: ❌ HNSW match_chunks function failed!")
+                logger.error(f"🔍 PGVECTOR: Error type: {type(rpc_error).__name__}")
+                logger.error(f"🔍 PGVECTOR: Error message: {str(rpc_error)}")
+                logger.error(f"🔍 PGVECTOR: RPC params were: {rpc_params}")
+                logger.warning(f"🔍 PGVECTOR: 🚨 FALLING BACK TO PYTHON SIMILARITY - this should be rare!")
                 
-                # Fallback to native pgvector similarity using SQL
-                # Build dynamic query based on filters
-                base_query = """
-                SELECT id, content, metadata, document_id, indexing_run_id,
-                       (embedding_1024 <=> %s::vector) AS distance
-                FROM document_chunks 
-                WHERE embedding_1024 IS NOT NULL
-                """
+                # Fallback to Python similarity
+                python_start = datetime.utcnow()
+                python_results = await self._fallback_python_similarity(
+                    query_embedding, indexing_run_id, allowed_document_ids
+                )
+                python_duration = (datetime.utcnow() - python_start).total_seconds() * 1000
                 
-                params = [embedding_str]
-                conditions = []
-                
-                # Add filters
-                if indexing_run_id:
-                    conditions.append("AND indexing_run_id = %s")
-                    params.append(indexing_run_id)
-                    
-                if allowed_document_ids:
-                    placeholders = ','.join(['%s'] * len(allowed_document_ids))
-                    conditions.append(f"AND document_id = ANY(ARRAY[{placeholders}])")
-                    params.extend(allowed_document_ids)
-                
-                # Add similarity threshold
-                conditions.append("AND (embedding_1024 <=> %s::vector) <= %s")
-                params.extend([embedding_str, 1.0 - self.config.danish_thresholds["minimum"]])
-                
-                # Complete query
-                full_query = base_query + " ".join(conditions) + f" ORDER BY distance LIMIT {self.config.top_k * 2}"
-                
-                # Execute raw SQL for pgvector similarity
-                response = self.db.rpc('exec_sql', {
-                    'sql_query': full_query,
-                    'params': params
-                }).execute()
-                
-                if response.data:
-                    logger.info(f"Native pgvector search returned {len(response.data)} results")
-                    return self._format_pgvector_results(response.data)
+                if python_results:
+                    logger.warning(f"🔍 PGVECTOR: 🐍 Python fallback SUCCESS in {python_duration:.1f}ms - {len(python_results)} results")
+                    logger.warning(f"🔍 PGVECTOR: 🐍 Top Python similarity: {python_results[0]['similarity_score']:.4f}")
+                    logger.warning(f"🔍 PGVECTOR: 🚨 HNSW FAILED but Python found results - investigate threshold mismatch!")
                 else:
-                    logger.warning("Native pgvector search also returned no results")
-
-            # Final fallback to Python-based similarity if both above methods fail
-            logger.warning("Using Python-based similarity as final fallback")
-            return await self._fallback_python_similarity(
-                query_embedding, indexing_run_id, allowed_document_ids
-            )
+                    logger.info(f"🔍 PGVECTOR: 🐍 Python fallback also found no results in {python_duration:.1f}ms")
+                
+                return python_results
 
         except Exception as e:
             logger.error(f"Error in pgvector search: {e}")
@@ -279,6 +311,53 @@ class DocumentRetriever(PipelineStep):
                 "source_filename": result.get("metadata", {}).get("source_filename", "unknown"),
                 "page_number": result.get("metadata", {}).get("page_number"),
                 "similarity_score": result.get("distance", 0),  # Note: this should be similarity, not distance
+            })
+            
+            if len(formatted_results) >= self.config.top_k:
+                break
+                
+        return formatted_results
+
+    def _format_match_chunks_results(self, results: list[dict], query_embedding: list[float]) -> list[dict[str, Any]]:
+        """Format results from match_chunks HNSW function"""
+        formatted_results = []
+        seen_content = set()
+        
+        for result in results:
+            # Deduplicate by content hash
+            content_hash = result["content"][:200]
+            if content_hash in seen_content:
+                continue
+            seen_content.add(content_hash)
+            
+            # Calculate REAL similarity using actual embeddings
+            chunk_embedding_str = result.get("embedding_1024")
+            if chunk_embedding_str:
+                try:
+                    # Parse the stored embedding
+                    import ast
+                    if isinstance(chunk_embedding_str, str):
+                        chunk_embedding = ast.literal_eval(chunk_embedding_str)
+                    else:
+                        chunk_embedding = chunk_embedding_str
+                    
+                    # Calculate actual cosine similarity
+                    actual_similarity = self.cosine_similarity(query_embedding, chunk_embedding)
+                except Exception as e:
+                    logger.warning(f"Failed to calculate similarity for chunk {result['id']}: {e}")
+                    # Fall back to estimated similarity based on HNSW ordering
+                    actual_similarity = 1.0 - (len(formatted_results) * 0.05)
+            else:
+                # Fall back to estimated similarity if no embedding available
+                actual_similarity = 1.0 - (len(formatted_results) * 0.05)
+            
+            formatted_results.append({
+                "id": result["id"],
+                "content": result["content"],
+                "metadata": result.get("metadata", {}),
+                "source_filename": result.get("metadata", {}).get("source_filename", "unknown"),
+                "page_number": result.get("metadata", {}).get("page_number"),
+                "similarity_score": max(actual_similarity, 0.0),  # Real similarity score
             })
             
             if len(formatted_results) >= self.config.top_k:
@@ -391,13 +470,19 @@ class DocumentRetriever(PipelineStep):
                         result["metadata"].get("source_filename", "unknown") if result["metadata"] else "unknown"
                     ),
                     "page_number": (result["metadata"].get("page_number") if result["metadata"] else None),
-                    "similarity_score": result.get("distance", 0),
+                    "similarity_score": 1 - result.get("distance", 1),  # Convert distance to similarity
                 })
                 
                 if len(formatted_results) >= self.config.top_k * 2:
                     break
 
-        logger.info(f"Python fallback search returned {len(formatted_results)} results")
+        if formatted_results:
+            top_similarity = max(r["similarity_score"] for r in formatted_results)
+            avg_similarity = sum(r["similarity_score"] for r in formatted_results) / len(formatted_results)
+            logger.info(f"🐍 Python fallback returned {len(formatted_results)} results")
+            logger.info(f"🐍 Python similarity range: {top_similarity:.4f} (top) to {avg_similarity:.4f} (avg)")
+        else:
+            logger.info(f"🐍 Python fallback found no results")
         return formatted_results
 
     def cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
@@ -427,7 +512,15 @@ class DocumentRetriever(PipelineStep):
         filtered_results = []
 
         for result in results:
-            similarity_score = 1 - result["similarity_score"]  # Convert distance to similarity
+            # Check if this is already a similarity score (HNSW results) or distance (SQL results)
+            # HNSW results come with estimated similarity scores (0.1 to 1.0)
+            # SQL results come with distance values that need conversion
+            if result["similarity_score"] <= 1.0 and result["similarity_score"] >= 0.1:
+                # This looks like a similarity score from HNSW (estimated)
+                similarity_score = result["similarity_score"]
+            else:
+                # This looks like a distance score from SQL, convert to similarity
+                similarity_score = 1 - result["similarity_score"]
 
             if similarity_score >= min_threshold:
                 search_result = SearchResult(

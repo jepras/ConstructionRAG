@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MessageSquare, FileText } from 'lucide-react';
 import { QueryResponse } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import SourceViewerModal from './SourceViewerModal';
 
 interface QueryMessageProps {
   message: {
@@ -19,6 +20,18 @@ interface QueryMessageProps {
 
 export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
   const isUser = message.type === 'user';
+  const [selectedSource, setSelectedSource] = useState<QueryResponse['search_results'][0] | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleSourceClick = (source: QueryResponse['search_results'][0]) => {
+    setSelectedSource(source);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedSource(null);
+  };
 
   if (isUser) {
     return (
@@ -60,11 +73,8 @@ export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
                     {message.searchResults.slice(0, 3).map((result, index) => (
                       <button
                         key={index}
-                        className="block w-full text-left px-2 py-1 rounded hover:bg-muted/50 transition-colors group"
-                        onClick={() => {
-                          // TODO: Implement source viewer
-                          console.log('View source:', result);
-                        }}
+                        className="block w-full text-left px-2 py-1 rounded hover:bg-muted/50 transition-colors group cursor-pointer"
+                        onClick={() => handleSourceClick(result)}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground group-hover:text-foreground">
@@ -97,6 +107,12 @@ export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
           </div>
         )}
       </div>
+      
+      <SourceViewerModal 
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        searchResult={selectedSource}
+      />
     </div>
   );
 }

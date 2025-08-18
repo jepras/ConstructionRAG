@@ -46,15 +46,17 @@ class ResponseGenerator(PipelineStep):
         super().__init__("ResponseGenerator")
         self.config = config
         self.settings = get_settings()
+        
+        # Log which model is configured to be used
+        logger.info(f"🤖 ResponseGenerator initialized with primary model: {self.config.model}")
+        logger.info(f"🤖 Fallback models configured: {self.config.fallback_models}")
 
     async def execute(self, input_data: List[SearchResult]) -> StepResult:
         """Execute the generation step"""
         start_time = datetime.utcnow()
 
         try:
-            logger.info(
-                f"Generating response for {len(input_data)} retrieved documents"
-            )
+            logger.info(f"Generating response for {len(input_data)} retrieved documents")
 
             # Generate the response
             response = await self.generate_response(input_data)
@@ -88,9 +90,7 @@ class ResponseGenerator(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def generate_response(
-        self, search_results: List[SearchResult]
-    ) -> QueryResponse:
+    async def generate_response(self, search_results: List[SearchResult]) -> QueryResponse:
         """Generate a comprehensive response based on retrieved documents"""
 
         if not search_results:
@@ -141,9 +141,7 @@ class ResponseGenerator(PipelineStep):
                 "model_used": model_used,
                 "tokens_used": tokens_used,
                 "confidence": confidence,
-                "sources_count": len(
-                    search_results
-                ),  # Use actual number of search results
+                "sources_count": len(search_results),  # Use actual number of search results
             },
             quality_metrics=quality_metrics,
         )
@@ -153,12 +151,19 @@ class ResponseGenerator(PipelineStep):
 
         context_parts = []
 
+        # Log the search results metadata for debugging
+        logger.info(f"📄 Preparing context from {len(search_results)} search results:")
         for i, result in enumerate(search_results, 1):
+            logger.info(f"📄 Result {i}: filename='{result.source_filename}', page={result.page_number}, similarity={result.similarity_score:.3f}")
+            logger.info(f"📄 Result {i} metadata keys: {list(result.metadata.keys()) if result.metadata else 'None'}")
+            if result.metadata:
+                logger.info(f"📄 Result {i} metadata content: {result.metadata}")
+            
             context_parts.append(
-                f"Kilde {i} (side {result.page_number}, {result.source_filename}):\n"
-                f"{result.content}\n"
+                f"Kilde {i} (side {result.page_number}, {result.source_filename}):\n{result.content}\n"
             )
 
+        logger.info(f"📄 Final context length: {len(''.join(context_parts))} characters")
         return "\n".join(context_parts)
 
     async def _call_openrouter(self, context: str) -> tuple[str, str, int]:
@@ -169,15 +174,18 @@ class ResponseGenerator(PipelineStep):
 
         # Try primary model first, then fallbacks
         models_to_try = [self.config.model] + self.config.fallback_models
+        
+        logger.info(f"🤖 Attempting to use models in order: {models_to_try}")
+        logger.info(f"🤖 Primary model from config: {self.config.model}")
 
-        for model in models_to_try:
+        for i, model in enumerate(models_to_try):
             try:
-                response_text, tokens_used = await self._make_openrouter_request(
-                    model, prompt
-                )
+                logger.info(f"🤖 Trying model {i+1}/{len(models_to_try)}: {model}")
+                response_text, tokens_used = await self._make_openrouter_request(model, prompt)
+                logger.info(f"✅ Successfully used model: {model} (tokens: {tokens_used})")
                 return response_text, model, tokens_used
             except Exception as e:
-                logger.warning(f"Failed with model {model}: {e}")
+                logger.warning(f"❌ Failed with model {model}: {e}")
                 continue
 
         # If all models fail, return a fallback response
@@ -191,24 +199,29 @@ class ResponseGenerator(PipelineStep):
     def _create_prompt(self, context: str) -> str:
         """Create the prompt for the LLM"""
 
-        return f"""Du er en ekspert på dansk byggeri og konstruktion. Baser dit svar på de givne kilder og giv et detaljeret, præcist svar på dansk.
+        prompt = f"""Du er en ekspert på dansk byggeri og konstruktion. Du modtager et spørgsmål og skal svare kort og præcist baseret på den kontekst du får leveret:
 
 KONTEKST:
 {context}
 
+Vurder baseret på spørgsmålet om du skal give et længere detaljeret svar eller et kort svar på få sætninger. 
+
 INSTRUKTIONER:
-- Giv et detaljeret svar baseret på kilderne
-- Brug dansk sprog
+- Svar på dansk
 - Vær præcis og faktuel
-- Hvis kilderne ikke indeholder nok information, sig det tydeligt
-- Citer relevante dele af kilderne når det er relevant
+- Hvis du ikke har fået nok kontekst til at svare på spørgsmål, så gør brugere opmærksom på dette og forsøg ikke at svar på spørgsmålet!
+- Citer relevante dele af kilderne når det er relevant (brug citationer som [Dokumentnavn, sidetal])
 - Hold svaret under 500 ord
 
 SVAR:"""
+        
+        # Log the first 1000 chars of the prompt to see what context is being sent
+        logger.info(f"💬 Created prompt with {len(prompt)} characters")
+        logger.info(f"💬 Context preview (first 1000 chars): {context[:1000]}...")
+        
+        return prompt
 
-    async def _make_openrouter_request(
-        self, model: str, prompt: str
-    ) -> tuple[str, int]:
+    async def _make_openrouter_request(self, model: str, prompt: str) -> tuple[str, int]:
         """Make a request to OpenRouter API"""
 
         if not self.settings.openrouter_api_key:
@@ -237,9 +250,7 @@ SVAR:"""
             )
 
             if response.status_code != 200:
-                raise Exception(
-                    f"OpenRouter API error: {response.status_code} - {response.text}"
-                )
+                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]
@@ -288,18 +299,12 @@ SVAR:"""
         # Map to the correct QualityMetrics fields
         return QualityMetrics(
             relevance_score=overall_quality,
-            confidence=(
-                "good"
-                if overall_quality > 0.6
-                else "acceptable" if overall_quality > 0.4 else "low"
-            ),
+            confidence=("good" if overall_quality > 0.6 else "acceptable" if overall_quality > 0.4 else "low"),
             top_similarity=relevance,
             result_count=len(search_results),
         )
 
-    async def validate_prerequisites_async(
-        self, input_data: List[SearchResult]
-    ) -> bool:
+    async def validate_prerequisites_async(self, input_data: List[SearchResult]) -> bool:
         """Validate that we have the required inputs"""
         return self.settings.OPENROUTER_API_KEY is not None and len(input_data) > 0
 
