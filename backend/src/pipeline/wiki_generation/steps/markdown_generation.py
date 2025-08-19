@@ -45,7 +45,9 @@ class MarkdownGenerationStep(PipelineStep):
 
         wiki_cfg = ConfigService().get_effective_config("wiki")
         gen_cfg = wiki_cfg.get("generation", {})
-        self.model = gen_cfg.get("model", config.get("model", "google/gemini-2.5-flash"))
+        defaults_cfg = ConfigService().get_effective_config("defaults")
+        global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
+        self.model = gen_cfg.get("model", global_default_model)
         self.language = config.get("language", "danish")
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))

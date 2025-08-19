@@ -65,9 +65,11 @@ class OverviewGenerationStep(PipelineStep):
             logger.warning(f"[Wiki:Overview] Failed to initialize VoyageEmbeddingClient: {e}")
             self.voyage_client = None
 
-        # Generation model from SoT wiki generation section
+        # Generation model from SoT wiki generation section, fallback to global default
         wiki_cfg = ConfigService().get_effective_config("wiki")
-        self.model = wiki_cfg.get("generation", {}).get("model", config.get("model", "google/gemini-2.5-flash"))
+        defaults_cfg = ConfigService().get_effective_config("defaults")
+        global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
+        self.model = wiki_cfg.get("generation", {}).get("model", global_default_model)
         self.similarity_threshold = config.get("similarity_threshold", 0.3)
         self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
         self.overview_query_count = config.get("overview_query_count", 12)
