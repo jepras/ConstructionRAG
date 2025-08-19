@@ -105,7 +105,18 @@
     }
   },
   "wiki": {
-    "generation": { "temperature": 0.2 }
+    "generation": { 
+      "temperature": 0.2,
+      "max_pages": 4,
+      "queries_per_page": 4
+    },
+    "retrieval": {
+      "top_k": 10,
+      "max_chunks_per_page": 20,
+      "similarity_threshold": 0.15,
+      "embedding_model": "voyage-multilingual-2",
+      "dimensions": 1024
+    }
   }
 }
 

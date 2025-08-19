@@ -113,8 +113,8 @@ async def create_wiki_generation_run(
     try:
         logger.info(f"Starting wiki generation for index_run_id: {index_run_id}")
         
-        # Get orchestrator (use anon client for authenticated user paths)
-        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+        # Get orchestrator (always use admin client for pipeline execution)
+        orchestrator = WikiGenerationOrchestrator()
 
         # Access and metadata for indexing run
         # CRITICAL: Use authenticated client for PipelineReadService to pass JWT context for RLS
@@ -191,7 +191,7 @@ async def list_wiki_runs(
 ):
     """List all wiki generation runs for an indexing run."""
     try:
-        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+        orchestrator = WikiGenerationOrchestrator()
 
         # Access and upload type
         reader = PipelineReadService()
@@ -259,7 +259,7 @@ async def get_wiki_pages(
 ):
     """Get list of pages and metadata for a specific wiki run."""
     try:
-        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+        orchestrator = WikiGenerationOrchestrator()
 
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))
@@ -329,7 +329,7 @@ async def get_wiki_page_content(
 ):
     """Get the content of a specific wiki page."""
     try:
-        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+        orchestrator = WikiGenerationOrchestrator()
         storage_service = StorageService()
 
         # Get wiki run details
@@ -401,7 +401,7 @@ async def get_wiki_metadata(
 ):
     """Get metadata for a specific wiki run."""
     try:
-        orchestrator = WikiGenerationOrchestrator(db_client=(get_supabase_client() if current_user else None))
+        orchestrator = WikiGenerationOrchestrator()
 
         # Get wiki run details
         wiki_run = await orchestrator.get_wiki_run(str(wiki_run_id))

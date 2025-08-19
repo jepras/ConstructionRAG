@@ -51,6 +51,10 @@ class StructureGenerationStep(PipelineStep):
         self.max_tokens = config.get("structure_max_tokens", 6000)
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
+        
+        # Add new config for testing limits
+        self.max_pages = gen_cfg.get("max_pages", 10)  # Default to 10 if not specified
+        self.queries_per_page = gen_cfg.get("queries_per_page", 8)  # Default to 8 if not specified
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute structure generation step."""
@@ -179,9 +183,10 @@ IMPORTANT: The wiki content will be generated in Danish language.
 
 # Return output 
 ## Return output rules
+- Create EXACTLY {self.max_pages} wiki pages in total (including the overview page).
 - Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language). Do NOT create multiple overview pages with similar names. 
 
-- Make sure each page has a topic and 6-10 associated queries that will help them retrieve relevant information for that topic. Like this for overview (in the language the document is, probably danish): 
+- Make sure each page has a topic and EXACTLY {self.queries_per_page} associated queries that will help them retrieve relevant information for that topic. Like this for overview (in the language the document is, probably danish): 
 
 project_overview_queries = [
     # Core project identity
@@ -218,8 +223,11 @@ Return your analysis in the following JSON format:
      "id": "page-1",
      "title": "[Page title]",
      "description": "[Brief description of what this page will cover]",
-     "proposed_queries": [
-       "[]"
+     "queries": [
+       "query 1",
+       "query 2",
+       "query 3",
+       "query 4"
      ],
      "related_pages": [
        "[]"
@@ -236,8 +244,7 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 - DO NOT include any explanation text before or after the JSON
 - Ensure the JSON is properly formatted and valid
 - Start directly with {{ and end with }}
-
-Your proposed tests for step 5 seems good. Please output the json that step outputs so i can check it as well."""
+"""
 
         return prompt
 

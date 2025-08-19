@@ -7,12 +7,13 @@ from typing import Any
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 from src.models import StepResult
-from src.pipeline.indexing.steps.embedding import VoyageEmbeddingClient
+from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 
 from ...shared.base_step import PipelineStep
+from ...shared import SharedRetrievalConfig, RetrievalCore
 
 logger = logging.getLogger(__name__)
 
@@ -31,25 +32,35 @@ class PageContentRetrievalStep(PipelineStep):
         self.storage_service = storage_service or StorageService()
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
-        self.similarity_threshold = config.get("similarity_threshold", 0.3)
-        self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
-
-        # Initialize Voyage for query embeddings (match document embeddings)
-        settings = get_settings()
-        # Force same model/dims as query pipeline to match embedding_1024
-        self.query_embedding_model = "voyage-multilingual-2"
-        self.query_embedding_dims_expected = 1024
-        try:
-            self.voyage_client = VoyageEmbeddingClient(
-                api_key=settings.voyage_api_key,
-                model=self.query_embedding_model,
-            )
-            logger.info(
-                f"[Wiki:Retrieval] Using query embedding model='{self.query_embedding_model}', expected_dims={self.query_embedding_dims_expected}"
-            )
-        except Exception as e:
-            logger.warning(f"[Wiki:Retrieval] Failed to initialize VoyageEmbeddingClient: {e}")
-            self.voyage_client = None
+        
+        # Load wiki retrieval config from SoT
+        wiki_cfg = ConfigService().get_effective_config("wiki")
+        retrieval_cfg = wiki_cfg.get("retrieval", {})
+        
+        # Configure retrieval settings
+        self.max_chunks_per_query = retrieval_cfg.get("top_k", 10)
+        self.max_chunks_per_page = retrieval_cfg.get("max_chunks_per_page", 20)
+        self.similarity_threshold = retrieval_cfg.get("similarity_threshold", 0.15)
+        
+        # Create shared retrieval configuration
+        shared_config = SharedRetrievalConfig(
+            embedding_model=retrieval_cfg.get("embedding_model", "voyage-multilingual-2"),
+            dimensions=retrieval_cfg.get("dimensions", 1024),
+            top_k=self.max_chunks_per_query,
+            similarity_thresholds={"minimum": self.similarity_threshold},
+            danish_thresholds={"minimum": self.similarity_threshold}
+        )
+        
+        # Initialize shared retrieval core
+        self.retrieval_core = RetrievalCore(
+            config=shared_config,
+            db_client=self.supabase
+        )
+        
+        logger.info(
+            f"[Wiki:Retrieval] Using shared retrieval with model='{shared_config.embedding_model}', "
+            f"top_k={self.max_chunks_per_query}, threshold={self.similarity_threshold}"
+        )
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute page content retrieval step."""
@@ -63,27 +74,11 @@ class PageContentRetrievalStep(PipelineStep):
             # Retrieve content for each page
             page_contents = {}
             total_chunks_retrieved = 0
-
-            # Diagnostics: detect sample chunk embedding length
-            chunks_with_embeddings = metadata.get("chunks_with_embeddings", [])
-            sample_len = 0
-            for ch in chunks_with_embeddings:
-                emb = ch.get("embedding_1024")
-                if emb is not None:
-                    if isinstance(emb, str):
-                        try:
-                            import ast
-
-                            emb = ast.literal_eval(emb)
-                        except Exception:
-                            emb = None
-                    if isinstance(emb, list):
-                        sample_len = len(emb)
-                        break
-            if sample_len:
-                logger.info(
-                    f"[Wiki:Retrieval] Sample chunk embedding length detected: {sample_len}; similarity_threshold={self.similarity_threshold}"
-                )
+            
+            logger.info(
+                f"[Wiki:Retrieval] Starting retrieval with threshold={self.similarity_threshold}, "
+                f"max_chunks_per_query={self.max_chunks_per_query}, max_chunks_per_page={self.max_chunks_per_page}"
+            )
 
             for page in wiki_structure["pages"]:
                 page_id = page["id"]
@@ -166,19 +161,34 @@ class PageContentRetrievalStep(PipelineStep):
         """Retrieve content for a specific page using its queries."""
         all_retrieved_chunks = []
         source_documents = {}
-
-        chunks_with_embeddings = metadata["chunks_with_embeddings"]
+        indexing_run_id = metadata.get("indexing_run_id")
 
         for query in queries:
-            logger.debug(f"Processing query: {query}")
+            logger.info(f"🔍 [Wiki:Retrieval] Processing query: '{query[:80]}...'")
 
-            # Generate embedding for query
-            query_embedding = await self._generate_query_embedding(query)
+            # Generate embedding using shared service
+            query_embedding = await self.retrieval_core.generate_query_embedding(query)
 
-            # Find similar chunks
-            similar_chunks = await self._find_similar_chunks(query_embedding, chunks_with_embeddings)
+            # Search using shared retrieval core with HNSW optimization
+            similar_chunks = await self.retrieval_core.search_with_fallback(
+                query_embedding,
+                indexing_run_id=indexing_run_id,
+                language="danish"
+            )
 
-            logger.info(f"[Wiki:Retrieval] Query '{query[:40]}...' retrieved {len(similar_chunks)} chunks")
+            logger.info(f"📊 [Wiki:Retrieval] Query retrieved {len(similar_chunks)} chunks")
+            
+            # Log details about top chunks for debugging
+            if similar_chunks:
+                for i, chunk in enumerate(similar_chunks[:3]):
+                    content_type = chunk.get("metadata", {}).get("element_type", "text")
+                    content_preview = chunk["content"][:200].replace("\n", " ")
+                    logger.info(
+                        f"   Top {i+1} (sim={chunk.get('similarity_score', 0):.3f}, type={content_type}): "
+                        f"{content_preview}..."
+                    )
+            else:
+                logger.warning(f"   ⚠️ No results for query: '{query}'")
 
             # Add query information to chunks
             for chunk in similar_chunks:
@@ -191,7 +201,7 @@ class PageContentRetrievalStep(PipelineStep):
                     if document_id not in source_documents:
                         source_documents[document_id] = {
                             "document_id": document_id,
-                            "filename": chunk.get("metadata", {}).get("source_filename", "Unknown"),
+                            "filename": chunk.get("metadata", {}).get("source_filename", chunk.get("source_filename", "Unknown")),
                             "chunk_count": 0,
                         }
                     source_documents[document_id]["chunk_count"] += 1
@@ -200,8 +210,13 @@ class PageContentRetrievalStep(PipelineStep):
         unique_chunks = self._deduplicate_chunks(all_retrieved_chunks)
         unique_chunks.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
 
-        # Limit to top chunks
-        top_chunks = unique_chunks[: self.max_chunks_per_query * 2]  # Allow more for deduplication
+        # Limit to configured max chunks per page
+        top_chunks = unique_chunks[: self.max_chunks_per_page]
+        
+        logger.info(
+            f"✅ [Wiki:Retrieval] Page aggregation complete: "
+            f"{len(top_chunks)} unique chunks from {len(queries)} queries"
+        )
 
         return {
             "retrieved_chunks": top_chunks,
@@ -210,65 +225,10 @@ class PageContentRetrievalStep(PipelineStep):
             "total_chunks_retrieved": len(top_chunks),
         }
 
-    async def _generate_query_embedding(self, query_text: str) -> list[float]:
-        if not self.voyage_client:
-            raise ValueError("Voyage client not initialized for query embeddings")
-        embeddings = await self.voyage_client.get_embeddings([query_text])
-        vector = embeddings[0] if embeddings else []
-        if len(vector) != self.query_embedding_dims_expected:
-            logger.warning(
-                f"[Wiki:Retrieval] Query embedding dims mismatch: got {len(vector)}, expected {self.query_embedding_dims_expected}"
-            )
-        logger.info(f"[Wiki:Retrieval] Generated query embedding len={len(vector)} for text='{query_text[:50]}...'")
-        return vector
-
-    async def _find_similar_chunks(
-        self, query_embedding: list[float], chunks_with_embeddings: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Find similar chunks using cosine similarity."""
-        similar_chunks = []
-
-        for chunk in chunks_with_embeddings:
-            chunk_embedding = chunk.get("embedding_1024")
-            if not chunk_embedding:
-                continue
-
-            # Parse embedding if it's a string
-            if isinstance(chunk_embedding, str):
-                try:
-                    import ast
-
-                    chunk_embedding = ast.literal_eval(chunk_embedding)
-                except Exception:
-                    continue
-
-            # Calculate cosine similarity
-            similarity = self._cosine_similarity(query_embedding, chunk_embedding)
-
-            if similarity >= self.similarity_threshold:
-                chunk_with_similarity = {
-                    **chunk,
-                    "similarity_score": similarity,
-                }
-                similar_chunks.append(chunk_with_similarity)
-
-        # Sort by similarity score and limit results
-        similar_chunks.sort(key=lambda x: x["similarity_score"], reverse=True)
-        return similar_chunks[: self.max_chunks_per_query]
-
-    def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
-        """Calculate cosine similarity between two vectors."""
-        if len(vec1) != len(vec2):
-            return 0.0
-
-        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
-        norm1 = sum(a * a for a in vec1) ** 0.5
-        norm2 = sum(b * b for b in vec2) ** 0.5
-
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
-
-        return dot_product / (norm1 * norm2)
+    # Note: The following methods have been removed as they are now handled by RetrievalCore:
+    # - _generate_query_embedding (replaced by retrieval_core.generate_query_embedding)
+    # - _find_similar_chunks (replaced by retrieval_core.search_with_fallback)
+    # - _cosine_similarity (replaced by shared similarity service)
 
     def _deduplicate_chunks(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Remove duplicate chunks based on content similarity."""

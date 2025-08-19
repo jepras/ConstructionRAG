@@ -201,7 +201,8 @@ async def get_project_with_run(
             .eq("project_id", str(project_id))
             .eq("indexing_run_id", str(indexing_run_id))
             .eq("user_id", current_user["id"])
-            .single()
+            .order("created_at", desc=True)
+            .limit(1)
         )
         
         run_res = run_query.execute()
@@ -211,7 +212,7 @@ async def get_project_with_run(
             from src.utils.exceptions import AppError
             raise AppError("Indexing run not found for this project", error_code=ErrorCode.NOT_FOUND)
         
-        run_data = run_res.data
+        run_data = run_res.data[0]  # Get first (latest) record
         
         return {
             "id": str(indexing_run_id),  # Frontend expects this as main ID
