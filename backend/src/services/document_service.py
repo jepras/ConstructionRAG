@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from src.services.db_service import DbService
 from src.services.storage_service import StorageService
 from src.utils.exceptions import DatabaseError, StorageError
+from src.utils.filename_utils import sanitize_filename
 from src.utils.logging import get_logger
 from supabase import Client
 
@@ -38,12 +39,16 @@ class DocumentService:
         Returns a dict with document_id and storage_url.
         """
         document_id = str(uuid4())
+        # Sanitize filename for storage compatibility
+        sanitized_filename = sanitize_filename(filename)
+        self.logger.info(f"Sanitized filename: '{filename}' -> '{sanitized_filename}'")
+        
         # Create temp file for upload
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(file_bytes)
             temp_path = tmp.name
         try:
-            storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{filename}"
+            storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
             storage_url = await self.storage.upload_file(file_path=temp_path, storage_path=storage_path)
         except StorageError:
             raise
@@ -58,7 +63,7 @@ class DocumentService:
         doc_row = {
             "id": document_id,
             "user_id": None,
-            "filename": filename,
+            "filename": sanitized_filename,
             "file_size": len(file_bytes),
             "file_path": storage_url,
             "status": "processing",
@@ -74,7 +79,7 @@ class DocumentService:
             raise
         except Exception as exc:  # noqa: BLE001
             self.logger.error("create document failed", error=str(exc))
-            raise DatabaseError(f"Failed to store document record for {filename}") from exc
+            raise DatabaseError(f"Failed to store document record for {sanitized_filename}") from exc
 
         # Create junction link
         try:
@@ -99,12 +104,16 @@ class DocumentService:
     ) -> dict[str, Any]:
         """Create a document for a user project: insert row, upload, and update path."""
         document_id = str(uuid4())
+        
+        # Sanitize filename for storage compatibility
+        sanitized_filename = sanitize_filename(filename)
+        self.logger.info(f"Sanitized filename: '{filename}' -> '{sanitized_filename}'")
 
         # Insert initial row
         doc_row = {
             "id": document_id,
             "user_id": user_id,
-            "filename": filename,
+            "filename": sanitized_filename,
             "file_size": file_size,
             "status": "pending",
             "upload_type": "user_project",
@@ -125,7 +134,7 @@ class DocumentService:
             tmp.write(file_bytes)
             temp_path = tmp.name
         try:
-            storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}"
+            storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
             storage_url = await self.storage.upload_file(file_path=temp_path, storage_path=storage_path)
         except StorageError:
             raise

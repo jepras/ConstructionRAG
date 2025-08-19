@@ -8,6 +8,7 @@ from uuid import UUID
 
 from src.services.storage_client_resolver import StorageClientResolver
 from src.utils.exceptions import StorageError
+from src.utils.filename_utils import sanitize_filename
 
 
 class UploadType(str, Enum):
@@ -214,11 +215,14 @@ class StorageService:
     ) -> dict[str, Any]:
         """Upload a generated file (markdown, etc.) to the generated folder."""
         try:
+            # Sanitize filename for storage compatibility
+            sanitized_filename = sanitize_filename(filename)
+            
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/index-runs/{index_run_id}/generated/{filename}"
+                storage_path = f"email-uploads/index-runs/{index_run_id}/generated/{sanitized_filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{filename}"
+                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{sanitized_filename}"
 
             # Upload file
             url = await self.upload_file(file_path, storage_path, content_type)
@@ -227,7 +231,7 @@ class StorageService:
             return {
                 "url": url,
                 "storage_path": storage_path,
-                "filename": filename,
+                "filename": sanitized_filename,
                 "upload_type": upload_type.value,
             }
 
@@ -246,11 +250,14 @@ class StorageService:
     ) -> dict[str, Any]:
         """Upload the original PDF file."""
         try:
+            # Sanitize filename for storage compatibility
+            sanitized_filename = sanitize_filename(filename)
+            
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{filename}"
+                storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}"
+                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
 
             # Upload file
             url = await self.upload_file(file_path, storage_path, "application/pdf")
@@ -259,7 +266,7 @@ class StorageService:
             return {
                 "url": url,
                 "storage_path": storage_path,
-                "filename": filename,
+                "filename": sanitized_filename,
                 "upload_type": upload_type.value,
             }
 
