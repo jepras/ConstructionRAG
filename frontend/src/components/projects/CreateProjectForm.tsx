@@ -128,6 +128,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
           onFilesSelected={handleFilesSelected}
           selectedFiles={files}
           onRemoveFile={handleRemoveFile}
+          maxFiles={20}
           disabled={createProjectMutation.isPending}
         />
       </div>

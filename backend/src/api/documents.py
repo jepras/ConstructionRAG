@@ -82,10 +82,13 @@ async def create_upload(
             request_id=get_request_id(),
         )
 
-    if len(files) > 10:
+    # Different limits for anonymous vs authenticated uploads
+    max_files_limit = 5 if project_id is None else 20  # 5 for email uploads, 20 for project uploads
+    if len(files) > max_files_limit:
+        upload_type = "anonymous" if project_id is None else "authenticated"
         raise ValidationError(
-            "Maximum 10 PDF files allowed per upload",
-            details={"field_errors": [{"field": "files", "message": "At most 10 files per upload"}]},
+            f"Maximum {max_files_limit} PDF files allowed per {upload_type} upload",
+            details={"field_errors": [{"field": "files", "message": f"At most {max_files_limit} files per {upload_type} upload"}]},
             request_id=get_request_id(),
         )
 
