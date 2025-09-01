@@ -20,12 +20,23 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [isPublic, setIsPublic] = useState(true)
   const [shareWithAI, setShareWithAI] = useState(true)
   const [language, setLanguage] = useState("English")
+  const [validationComplete, setValidationComplete] = useState(false)
+  const [filesAreValid, setFilesAreValid] = useState(false)
+  const [estimatedTime, setEstimatedTime] = useState(0)
   
   const uploadMutation = useUploadFiles()
 
   const handleFilesSelected = (newFiles: File[]) => {
     setFiles(newFiles)
     uploadMutation.reset() // Clear any previous errors
+    setValidationComplete(false) // Reset validation state
+    setFilesAreValid(false)
+  }
+  
+  const handleValidationComplete = (isValid: boolean, estimatedMinutes: number) => {
+    setValidationComplete(true)
+    setFilesAreValid(isValid)
+    setEstimatedTime(estimatedMinutes)
   }
 
   const handleRemoveFile = (index: number) => {
@@ -80,7 +91,9 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
           onFilesSelected={handleFilesSelected}
           selectedFiles={files}
           onRemoveFile={handleRemoveFile}
+          onValidationComplete={handleValidationComplete}
           disabled={uploadMutation.isPending}
+          showValidation={true}
         />
       </div>
 
@@ -249,7 +262,12 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
       <Button
         onClick={handleSubmit}
-        disabled={uploadMutation.isPending || files.length === 0 || !email}
+        disabled={
+          uploadMutation.isPending || 
+          files.length === 0 || 
+          !email ||
+          (files.length > 0 && (!validationComplete || !filesAreValid))
+        }
         className="w-full h-12 text-base"
       >
         {uploadMutation.isPending ? (
@@ -257,6 +275,15 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Indexing Repository...
           </>
+        ) : files.length > 0 && !validationComplete ? (
+          <>
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Validating Files...
+          </>
+        ) : files.length > 0 && !filesAreValid ? (
+          "Fix Validation Errors to Continue"
+        ) : estimatedTime > 0 ? (
+          `Index Repository (~${estimatedTime} min)`
         ) : (
           "Index Repository"
         )}

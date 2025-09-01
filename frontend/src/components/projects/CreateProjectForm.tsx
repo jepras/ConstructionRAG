@@ -22,6 +22,9 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   const [shareWithAI, setShareWithAI] = useState(true)
   const [language, setLanguage] = useState("English")
   const [selectedExperts, setSelectedExperts] = useState<string[]>([])
+  const [validationComplete, setValidationComplete] = useState(false)
+  const [filesAreValid, setFilesAreValid] = useState(false)
+  const [estimatedTime, setEstimatedTime] = useState(0)
   
   const createProjectMutation = useCreateProject()
 
@@ -34,6 +37,14 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
 
   const handleFilesSelected = (newFiles: File[]) => {
     setFiles(newFiles)
+    setValidationComplete(false) // Reset validation state
+    setFilesAreValid(false)
+  }
+  
+  const handleValidationComplete = (isValid: boolean, estimatedMinutes: number) => {
+    setValidationComplete(true)
+    setFilesAreValid(isValid)
+    setEstimatedTime(estimatedMinutes)
   }
 
   const handleRemoveFile = (index: number) => {
@@ -128,8 +139,10 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
           onFilesSelected={handleFilesSelected}
           selectedFiles={files}
           onRemoveFile={handleRemoveFile}
+          onValidationComplete={handleValidationComplete}
           maxFiles={20}
           disabled={createProjectMutation.isPending}
+          showValidation={true}
         />
       </div>
 
@@ -270,7 +283,12 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
 
       <Button
         onClick={handleSubmit}
-        disabled={createProjectMutation.isPending || files.length === 0 || !projectName.trim()}
+        disabled={
+          createProjectMutation.isPending || 
+          files.length === 0 || 
+          !projectName.trim() ||
+          (files.length > 0 && (!validationComplete || !filesAreValid))
+        }
         className="w-full h-12 text-base"
       >
         {createProjectMutation.isPending ? (
@@ -278,6 +296,15 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Creating Project...
           </>
+        ) : files.length > 0 && !validationComplete ? (
+          <>
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Validating Files...
+          </>
+        ) : files.length > 0 && !filesAreValid ? (
+          "Fix Validation Errors to Continue"
+        ) : estimatedTime > 0 ? (
+          `Create Project (~${estimatedTime} min processing)`
         ) : (
           "Create Project"
         )}

@@ -61,42 +61,7 @@ class ConstructionVLMCaptioner:
         logger.info(f"VLM Captioner initialized with {self.model_name}")
         logger.info(f"Caption language set to: {self.caption_language}")
 
-    async def caption_table_html_async(self, table_html: str, element_context: dict) -> dict:
-        """Generate caption for table using HTML representation"""
-
-        page_num = element_context.get("page_number", "unknown")
-        source_file = element_context.get("source_filename", "unknown")
-
-        prompt = f"""You are analyzing a table from page {page_num} of a construction/technical document ({source_file}).
-
-Below is the HTML representation of the table. Please provide a comprehensive caption that includes:
-
-1. **Table Purpose**: What type of information does this table contain?
-2. **Structure**: How many rows/columns, what are the headers?
-3. **Key Data**: What are the most important values, measurements, or specifications?
-4. **Technical Details**: Any codes, standards, measurements, or specifications mentioned
-5. **Context**: How this table might relate to construction/engineering work
-
-HTML Table:
-{table_html}
-
-IMPORTANT: Please provide your detailed, technical caption in {self.caption_language}."""
-
-        try:
-            response = await self.vlm_client.ainvoke([HumanMessage(content=prompt)])
-            return {
-                "caption": response.content.strip(),
-                "prompt": prompt,
-                "prompt_template": "table_html_caption_v1",
-            }
-        except Exception as e:
-            logger.error(f"Error captioning table HTML: {e}")
-            return {
-                "caption": f"Error generating caption: {str(e)}",
-                "prompt": prompt,
-                "prompt_template": "table_html_caption_v1",
-                "error": str(e),
-            }
+    # HTML table captioning removed - relying on image captions only
 
     async def caption_table_image_async(self, image_url: str, element_context: dict) -> dict:
         """Generate caption for table using extracted image"""
@@ -301,7 +266,7 @@ class EnrichmentStep(PipelineStep):
                 {
                     "id": table["id"],
                     "page": table["structural_metadata"].get("page_number", 0),
-                    "has_html_caption": bool(table.get("enrichment_metadata", {}).get("table_html_caption")),
+                    "has_vlm_caption": bool(table.get("enrichment_metadata", {}).get("table_image_caption")),
                     "has_image_caption": bool(table.get("enrichment_metadata", {}).get("table_image_caption")),
                     "caption_words": table.get("enrichment_metadata", {}).get("caption_word_count", 0),
                 }
@@ -580,7 +545,6 @@ class EnrichmentStep(PipelineStep):
             "vlm_processed": True,
             "vlm_processing_timestamp": datetime.now().isoformat(),
             "vlm_processing_error": None,
-            "table_html_caption": None,
             "table_image_caption": None,
             "table_image_filepath": None,
             "caption_word_count": 0,
@@ -597,19 +561,7 @@ class EnrichmentStep(PipelineStep):
         start_time = datetime.utcnow()
 
         try:
-            # Get table HTML
-            table_html = table_element.get("metadata", {}).get("text_as_html", "")
-            if table_html and table_html.strip():
-                logger.debug(f"Captioning table HTML ({len(table_html)} chars)...")
-                vlm_result = await self.vlm_captioner.caption_table_html_async(
-                    table_html, table_element["structural_metadata"]
-                )
-                enrichment_metadata["table_html_caption"] = vlm_result["caption"]
-                enrichment_metadata["prompt_used"] = vlm_result["prompt"]
-                enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
-                logger.debug(f"HTML caption generated ({len(enrichment_metadata['table_html_caption'])} chars)")
-
-            # Get table image (Supabase URL or local path)
+            # Get table image (Supabase URL or local path) - VLM captions from images only
             image_url_data = table_element.get("metadata", {}).get("image_url")
 
             # Extract the actual URL string
@@ -632,13 +584,10 @@ class EnrichmentStep(PipelineStep):
                 logger.warning(f"No valid image URL extracted from: {image_url_data}")
 
             # Calculate caption statistics
-            total_caption_length = 0
-            if enrichment_metadata["table_html_caption"]:
-                total_caption_length += len(enrichment_metadata["table_html_caption"].split())
             if enrichment_metadata["table_image_caption"]:
-                total_caption_length += len(enrichment_metadata["table_image_caption"].split())
-
-            enrichment_metadata["caption_word_count"] = total_caption_length
+                enrichment_metadata["caption_word_count"] = len(enrichment_metadata["table_image_caption"].split())
+            else:
+                enrichment_metadata["caption_word_count"] = 0
 
         except Exception as e:
             logger.error(f"Error processing table: {e}")

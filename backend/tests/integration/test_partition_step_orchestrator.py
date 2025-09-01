@@ -134,7 +134,7 @@ async def test_partition_step_orchestrator():
                         print(
                             f"     {i+1}. {table.get('category', 'Unknown')}: {table.get('text_preview', '')[:100]}..."
                         )
-                        print(f"        Has HTML: {table.get('has_html', False)}")
+                        print(f"        Has image: {table.get('has_image', False)}")
 
             if partition_result.data:
                 print(f"\n📁 Full Data Structure:")

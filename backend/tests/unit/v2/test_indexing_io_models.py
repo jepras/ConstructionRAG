@@ -19,7 +19,7 @@ def test_partition_output_adapter_accepts_typical_data():
                 "id": "tab1",
                 "page": 1,
                 "text": "a|b",
-                "metadata": {"page_number": 1, "text_as_html": "<table></table>"},
+                "metadata": {"page_number": 1},
             }
         ],
         "extracted_pages": {1: {"filename": "p1.png", "width": 100, "height": 100}},

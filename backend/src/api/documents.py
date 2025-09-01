@@ -52,10 +52,140 @@ class UploadCreateResponse(BaseModel):
     message: str
 
 
+class FileValidationResult(BaseModel):
+    """Result for a single file validation."""
+    
+    filename: str
+    is_valid: bool
+    errors: list[str]
+    warnings: list[str]
+    metadata: dict[str, Any]
+    page_analysis: dict[str, Any]
+    security: dict[str, Any]
+    processing_estimate: dict[str, Any]
+
+
+class ValidationResponse(BaseModel):
+    """Response for batch file validation."""
+    
+    files: list[FileValidationResult]
+    is_valid: bool
+    total_pages: int
+    total_processing_time_estimate: int
+    total_processing_time_minutes: float
+    errors: list[str]
+    warnings: list[str]
+
+
 ## Legacy /api/email-uploads removed in v2
 
 
 ## Legacy project-scoped single-upload removed in v2
+
+
+# Validation endpoint for pre-upload checks
+
+
+@router.post("/uploads/validate", response_model=ValidationResponse)
+async def validate_uploads(
+    files: list[UploadFile] = File(...),  # noqa: B008
+    current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+):
+    """Validate PDF files before upload.
+    
+    This endpoint performs security, integrity, and processing time estimation
+    without storing the files. It helps prevent malicious content and provides
+    upfront feedback about processing requirements.
+    
+    Rate limits:
+    - Anonymous: 50 PDFs per hour
+    - Authenticated: Unlimited
+    """
+    from src.middleware.rate_limiter import rate_limit_middleware
+    from src.services.pdf_validation_service import PDFValidationService
+    from fastapi import Request
+    from starlette.datastructures import State
+    
+    # Create a mock request for rate limiting
+    # In production, this would be handled by middleware
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "url": "/api/uploads/validate",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+    request._state = State()
+    
+    # Apply rate limiting
+    is_authenticated = current_user is not None
+    await rate_limit_middleware(
+        request=request,
+        file_count=len(files),
+        is_authenticated=is_authenticated,
+    )
+    
+    # Initialize validation service
+    validator = PDFValidationService()
+    
+    # Prepare files for validation
+    files_to_validate = []
+    for file in files:
+        if not file.filename:
+            raise ValidationError(
+                "File must have a filename",
+                details={"field_errors": [{"field": "files", "message": "Filename required"}]},
+                request_id=get_request_id(),
+            )
+        
+        # Read file content
+        content = await file.read()
+        files_to_validate.append((file.filename, content))
+        
+        # Reset file position for potential future reads
+        await file.seek(0)
+    
+    # Validate all files
+    try:
+        validation_result = await validator.validate_batch(
+            files=files_to_validate,
+            is_authenticated=is_authenticated,
+        )
+        
+        # Convert to response model
+        return ValidationResponse(
+            files=[
+                FileValidationResult(
+                    filename=f["filename"],
+                    is_valid=f["is_valid"],
+                    errors=f.get("errors", []),
+                    warnings=f.get("warnings", []),
+                    metadata=f.get("metadata", {}),
+                    page_analysis=f.get("page_analysis", {}),
+                    security=f.get("security", {}),
+                    processing_estimate=f.get("processing_estimate", {}),
+                )
+                for f in validation_result["files"]
+            ],
+            is_valid=validation_result["is_valid"],
+            total_pages=validation_result.get("total_pages", 0),
+            total_processing_time_estimate=validation_result.get("total_processing_time_estimate", 0),
+            total_processing_time_minutes=validation_result.get("total_processing_time_minutes", 0.0),
+            errors=validation_result.get("errors", []),
+            warnings=validation_result.get("warnings", []),
+        )
+        
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Validation error: {e}")
+        raise AppError(
+            "Failed to validate files",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        ) from e
 
 
 # Flat unified upload endpoint (anonymous or authenticated)

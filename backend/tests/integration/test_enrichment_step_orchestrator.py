@@ -130,12 +130,12 @@ async def test_enrichment_step_orchestrator():
             else:
                 print(f"     ❌ No image URL found")
 
-            # Check for HTML content
-            html_content = table.get("metadata", {}).get("text_as_html", "")
-            if html_content:
-                print(f"     HTML content: {len(html_content)} chars")
+            # Check for table metadata
+            metadata = table.get("metadata", {})
+            if metadata:
+                print(f"     Table metadata keys: {list(metadata.keys())}")
             else:
-                print(f"     ❌ No HTML content found")
+                print(f"     ❌ No metadata found")
 
         # Check extracted pages
         extracted_pages = metadata_data.get("extracted_pages", {})
@@ -229,8 +229,8 @@ async def test_enrichment_step_orchestrator():
                         tables_with_enrichment.append(
                             {
                                 "id": table.get("id"),
-                                "html_caption": bool(
-                                    enrichment.get("table_html_caption")
+                                "vlm_caption": bool(
+                                    enrichment.get("table_image_caption")
                                 ),
                                 "image_caption": bool(
                                     enrichment.get("table_image_caption")
@@ -243,7 +243,7 @@ async def test_enrichment_step_orchestrator():
                 print(f"   Tables with enrichment: {len(tables_with_enrichment)}")
                 for table in tables_with_enrichment[:3]:
                     print(
-                        f"     - Table {table['id']}: HTML={table['html_caption']}, Image={table['image_caption']}, Processed={table['processed']}"
+                        f"     - Table {table['id']}: VLM={table['vlm_caption']}, Image={table['image_caption']}, Processed={table['processed']}"
                     )
                     if table["error"]:
                         print(f"       Error: {table['error']}")

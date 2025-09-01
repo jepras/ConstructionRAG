@@ -248,14 +248,7 @@ class PartitionStep(PipelineStep):
                     },
                 }
 
-                # Add table-specific metadata if available
-                if (
-                    hasattr(element.metadata, "text_as_html")
-                    and element.metadata.text_as_html
-                ):
-                    normalized_element["metadata"][
-                        "text_as_html"
-                    ] = element.metadata.text_as_html
+                # Skip HTML metadata - we'll rely on VLM captions only
 
                 # Categorize elements like current system
                 if element.category in ["Table"]:
@@ -571,11 +564,7 @@ class PartitionStep(PipelineStep):
                         partition_result.get("document_metadata", {}).get("title", "")
                     ),
                 },
-                "tables_with_html": sum(
-                    1
-                    for table in partition_result.get("table_elements", [])
-                    if table.get("metadata", {}).get("text_as_html")
-                ),
+                "tables_with_vlm_ready": len(partition_result.get("table_elements", [])),
             }
 
             # Create sample outputs for debugging (keep for backward compatibility)
@@ -601,15 +590,8 @@ class PartitionStep(PipelineStep):
                             if len(elem.get("text", "")) > 200
                             else elem.get("text", "")
                         ),
-                        "has_html": bool(
-                            elem.get("metadata", {}).get("text_as_html", "")
-                        ),
-                        "html_preview": (
-                            elem.get("metadata", {}).get("text_as_html", "")[:100]
-                            + "..."
-                            if len(elem.get("metadata", {}).get("text_as_html", ""))
-                            > 100
-                            else elem.get("metadata", {}).get("text_as_html", "")
+                        "has_image": bool(
+                            elem.get("metadata", {}).get("image_url", "")
                         ),
                     }
                     for elem in partition_result.get("table_elements", [])[:2]
@@ -1516,9 +1498,8 @@ class UnifiedPartitionerV2:
                 save_path = self.tables_dir / filename
                 pixmap.save(str(save_path))
 
-                # Extract table text and HTML
+                # Extract table text only (no HTML needed)
                 table_text = table_data.to_markdown()
-                table_html = self._table_to_html(table_data)
 
                 # Create enhanced table element
                 enhanced_table = {
@@ -1529,10 +1510,7 @@ class UnifiedPartitionerV2:
                     "metadata": {
                         "page_number": page_num,
                         "table_id": table_id,
-                        "has_html": bool(table_html),
-                        "html_length": len(table_html) if table_html else 0,
                         "extraction_method": "pymupdf_table_image",
-                        "text_as_html": table_html,  # This is what enrichment step expects
                         "image_path": str(save_path),
                         "width": pixmap.width,
                         "height": pixmap.height,
@@ -1590,9 +1568,8 @@ class UnifiedPartitionerV2:
                     # Skip this table - it will be captured in full-page extraction
                     continue
                 
-                # Extract table text and HTML (but no image)
+                # Extract table text only (no HTML, no image)
                 table_text = table_data.to_markdown()
-                table_html = self._table_to_html(table_data)
                 
                 # Create table element with metadata only
                 table_id = f"table_{i+1}"
@@ -1604,10 +1581,7 @@ class UnifiedPartitionerV2:
                     "metadata": {
                         "page_number": page_num,
                         "table_id": table_id,
-                        "has_html": bool(table_html),
-                        "html_length": len(table_html) if table_html else 0,
                         "extraction_method": "text_only_full_page_covers_image",
-                        "text_as_html": table_html,
                         # No image_path - covered by full-page extraction
                     },
                 }
@@ -1860,28 +1834,7 @@ class UnifiedPartitionerV2:
                 
         return False
 
-    def _table_to_html(self, table_data):
-        """Convert PyMuPDF table to HTML"""
-        try:
-            # Convert to pandas DataFrame and then to HTML
-            df = table_data.to_pandas()
-            if not df.empty:
-                html = df.to_html(
-                    index=False, header=True, classes="table table-striped"
-                )
-                return html
-        except Exception as e:
-            logger.warning(f"Pandas HTML conversion failed: {e}")
-
-        # Fallback: simple text-to-HTML
-        try:
-            text = table_data.extract()
-            if text:
-                return f"<table><tr><td>{text.replace(chr(10), '</td></tr><tr><td>')}</td></tr></table>"
-        except:
-            pass
-
-        return ""
+    # HTML conversion removed - relying on VLM captions only
 
     def _cleanup_extracted_files(self):
         """Clean up extracted files, keeping only table images"""

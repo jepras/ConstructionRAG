@@ -57,10 +57,10 @@ export default function Home() {
       <div className="container mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4">
-            Any project detail, a <span className="text-primary">quick search</span> away.
+            Any project detail - <span className="text-primary">instantly available</span>.
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            Get <span className="font-semibold text-foreground">precise, source-verified</span> answers from deep within your project documents instantly.
+            No more digging through a hell of nested folders & unsearchable pdfs to find the detail you need
           </p>
         </div>
 

@@ -1,29 +1,75 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useState, useEffect } from "react"
 import { useDropzone } from "react-dropzone"
-import { Upload, X, FileText } from "lucide-react"
+import { Upload, X, FileText, CheckCircle, AlertCircle, Clock, Loader2, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { cn } from "@/lib/utils"
+import { useFileValidation } from "@/hooks/useFileValidation"
 
 interface FileDropzoneProps {
   onFilesSelected: (files: File[]) => void
   selectedFiles: File[]
   onRemoveFile: (index: number) => void
+  onValidationComplete?: (isValid: boolean, estimatedMinutes: number) => void
   maxFiles?: number
   maxSize?: number
   disabled?: boolean
+  showValidation?: boolean
 }
 
 export function FileDropzone({
   onFilesSelected,
   selectedFiles,
   onRemoveFile,
+  onValidationComplete,
   maxFiles = 5,
   maxSize = 50 * 1024 * 1024, // 50MB
-  disabled = false
+  disabled = false,
+  showValidation = true
 }: FileDropzoneProps) {
   const [error, setError] = useState<string | null>(null)
+  
+  const {
+    validateFiles,
+    clearValidation,
+    getFileValidation,
+    isValidating,
+    overallValid,
+    totalPages,
+    estimatedMinutes,
+    errors: validationErrors,
+    warnings: validationWarnings
+  } = useFileValidation()
+
+  // Track if component has mounted to avoid validation on initial render
+  const [hasMounted, setHasMounted] = useState(false)
+  
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
+
+  // Trigger validation when files change (but not on mount)
+  useEffect(() => {
+    if (!hasMounted) return
+    
+    if (showValidation && selectedFiles.length > 0) {
+      validateFiles(selectedFiles)
+    } else if (selectedFiles.length === 0) {
+      clearValidation()
+    }
+    // Remove validateFiles and clearValidation from deps to avoid infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFiles, showValidation, hasMounted])
+
+  // Notify parent when validation completes
+  useEffect(() => {
+    if (onValidationComplete && !isValidating && selectedFiles.length > 0) {
+      onValidationComplete(overallValid, estimatedMinutes)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isValidating, overallValid, estimatedMinutes, selectedFiles.length])
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
     setError(null)
@@ -100,24 +146,115 @@ export function FileDropzone({
 
       {selectedFiles.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">
-            Selected files ({selectedFiles.length}/{maxFiles})
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-foreground">
+              Selected files ({selectedFiles.length}/{maxFiles})
+            </p>
+            {showValidation && isValidating && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Validating...
+              </div>
+            )}
+            {showValidation && !isValidating && selectedFiles.length > 0 && (
+              <div className="flex items-center gap-2 text-sm">
+                {overallValid ? (
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <div className="flex items-center gap-2 cursor-help">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span className="text-green-600 border-b border-dotted border-green-600">
+                          {totalPages} pages • ~{estimatedMinutes} min
+                        </span>
+                        <Info className="h-3 w-3 text-green-600" />
+                      </div>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80">
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-semibold">Processing Time Estimate</h4>
+                        <p className="text-sm text-muted-foreground">
+                          These are rough estimates that depend on PDF complexity. 
+                          We use pessimistic calculations assuming worst-case scenarios 
+                          (OCR processing, complex tables, image extraction) to avoid 
+                          underestimating.
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Actual processing may be faster.
+                        </p>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+                ) : (
+                  <>
+                    <AlertCircle className="h-4 w-4 text-destructive" />
+                    <span className="text-destructive">Validation failed</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <div className="space-y-2">
-            {selectedFiles.map((file, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-card border border-border rounded-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <FileText className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(file.size)}
-                    </p>
+            {selectedFiles.map((file, index) => {
+              const validation = showValidation ? getFileValidation(file.name) : undefined
+              const isValid = validation ? validation.is_valid : true
+              const pageCount = validation?.metadata?.page_count
+              const processingTime = validation?.processing_estimate?.estimated_minutes
+              
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "flex items-center justify-between p-3 bg-card border rounded-lg",
+                    showValidation && validation && !isValid
+                      ? "border-destructive/50 bg-destructive/5"
+                      : "border-border"
+                  )}
+                >
+                  <div className="flex items-center space-x-3">
+                    {showValidation && validation ? (
+                      isValid ? (
+                        <CheckCircle className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                      )
+                    ) : (
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{file.name}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>{formatFileSize(file.size)}</span>
+                        {showValidation && validation && (
+                          <>
+                            {pageCount && (
+                              <span className="flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                {pageCount} pages
+                              </span>
+                            )}
+                            {processingTime && (
+                              <HoverCard>
+                                <HoverCardTrigger asChild>
+                                  <span className="flex items-center gap-1 cursor-help border-b border-dotted border-muted-foreground">
+                                    <Clock className="h-3 w-3" />
+                                    ~{processingTime} min
+                                  </span>
+                                </HoverCardTrigger>
+                                <HoverCardContent>
+                                  <p className="text-xs">Estimated processing time (pessimistic calculation)</p>
+                                </HoverCardContent>
+                              </HoverCard>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {showValidation && validation && !isValid && validation.errors.length > 0 && (
+                        <p className="text-xs text-destructive mt-1">
+                          {validation.errors[0]}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -126,9 +263,32 @@ export function FileDropzone({
                 >
                   <X className="h-4 w-4" />
                 </Button>
-              </div>
-            ))}
+                </div>
+              )
+            })}
           </div>
+          
+          {showValidation && validationErrors.length > 0 && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+              <p className="text-sm font-medium text-destructive mb-1">Validation Errors:</p>
+              <ul className="text-xs text-destructive space-y-1">
+                {validationErrors.map((error, i) => (
+                  <li key={i}>• {error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {showValidation && validationWarnings.length > 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+              <p className="text-sm font-medium text-yellow-700 mb-1">Warnings:</p>
+              <ul className="text-xs text-yellow-600 space-y-1">
+                {validationWarnings.map((warning, i) => (
+                  <li key={i}>• {warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>

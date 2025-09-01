@@ -116,13 +116,11 @@ class IntelligentChunker:
         # Check if this element has VLM enrichment metadata
         enrichment_meta = el.get("enrichment_metadata")
         if enrichment_meta and self.prioritize_vlm_captions:
-            # For tables, use VLM captions if available
+            # For tables, use VLM image caption if available
             if el.get("element_type") == "table" or el.get("category") == "Table":
-                # Prefer image caption over HTML caption for tables
+                # Use image caption for tables (HTML captions removed)
                 if enrichment_meta.get("table_image_caption"):
                     return enrichment_meta["table_image_caption"]
-                elif enrichment_meta.get("table_html_caption"):
-                    return enrichment_meta["table_html_caption"]
 
             # For full-page images, use VLM caption
             elif (
