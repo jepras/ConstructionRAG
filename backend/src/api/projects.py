@@ -163,14 +163,15 @@ async def delete_project(
     current_user: dict[str, Any] = CURRENT_USER_DEP,
     db_client=DB_CLIENT_DEP,
 ):
+    """Soft delete a project (marks as deleted but keeps data for recovery)."""
     svc = ProjectService(db_client)
-    ok = svc.delete(project_id, user_id=current_user["id"])
+    ok = svc.soft_delete(project_id, user_id=current_user["id"])
     if not ok:
         from src.shared.errors import ErrorCode
         from src.utils.exceptions import AppError
 
-        raise AppError("Project not found", error_code=ErrorCode.NOT_FOUND)
-    return {"status": "deleted"}
+        raise AppError("Project not found or already deleted", error_code=ErrorCode.NOT_FOUND)
+    return {"status": "deleted", "message": "Project has been soft deleted and can be recovered within 30 days"}
 
 
 @router.get("/projects/{project_id}/runs/{indexing_run_id}", response_model=dict[str, Any])

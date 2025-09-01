@@ -91,13 +91,15 @@ const mockProjects = [
 function DashboardContent() {
   const { isLoading: authLoading } = useAuth()
   const [showMockData, setShowMockData] = useState(false) // Toggle for demo
+  const [refreshKey, setRefreshKey] = useState(0) // Force refresh on delete
   
   // Fetch user projects with wikis from API - only when authenticated
   const { 
     data: backendProjects = [], 
     isLoading: projectsLoading,
-    error: projectsError 
-  } = useUserProjectsWithWikis(50, 0)
+    error: projectsError,
+    refetch
+  } = useUserProjectsWithWikis(50, 0, refreshKey) // Pass refreshKey as dependency
 
   // Transform backend projects to frontend format
   const transformedProjects = backendProjects.map(transformUserProject)
@@ -113,6 +115,17 @@ function DashboardContent() {
 
   // Use mock data for demo or transformed real data from API
   const projects = showMockData ? mockProjects : transformedProjects
+
+  // Handle project deletion
+  const handleProjectDelete = () => {
+    // Force refetch of projects
+    if (refetch) {
+      refetch()
+    } else {
+      // Fallback: increment refresh key to trigger re-render
+      setRefreshKey(prev => prev + 1)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -159,7 +172,11 @@ function DashboardContent() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard 
+                key={project.id} 
+                project={project} 
+                onDelete={handleProjectDelete}
+              />
             ))}
           </div>
         )}

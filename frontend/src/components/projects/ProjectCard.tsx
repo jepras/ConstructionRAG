@@ -1,10 +1,25 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FileText, CheckCircle, Clock, AlertCircle, FolderOpen } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { FileText, CheckCircle, Clock, AlertCircle, FolderOpen, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
 
 interface ProjectCardProps {
   project: {
@@ -17,21 +32,25 @@ interface ProjectCardProps {
     lastUpdated?: string
   }
   className?: string
+  onDelete?: () => void // Callback to refresh the project list after deletion
 }
 
-export function ProjectCard({ project, className }: ProjectCardProps) {
+export function ProjectCard({ project, className, onDelete }: ProjectCardProps) {
+  const router = useRouter()
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const getStatusIcon = () => {
     switch (project.status) {
       case 'wiki_generated':
-        return <CheckCircle className="h-4 w-4 text-green-500" />
+        return <CheckCircle className="h-4 w-4 text-primary" />
       case 'processing':
-        return <Clock className="h-4 w-4 text-yellow-500" />
+        return <Clock className="h-4 w-4 text-muted-foreground" />
       case 'failed':
-        return <AlertCircle className="h-4 w-4 text-red-500" />
+        return <AlertCircle className="h-4 w-4 text-destructive" />
       case 'no_documents':
-        return <AlertCircle className="h-4 w-4 text-gray-500" />
+        return <AlertCircle className="h-4 w-4 text-muted-foreground" />
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />
+        return <Clock className="h-4 w-4 text-muted-foreground" />
     }
   }
 
@@ -81,11 +100,42 @@ export function ProjectCard({ project, className }: ProjectCardProps) {
   // Make all projects with wikis clickable
   const isClickable = project.status === 'wiki_generated'
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault() // Prevent navigation if card is clickable
+    e.stopPropagation() // Prevent event bubbling
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDelete = async () => {
+    setIsDeleting(true)
+    try {
+      const result = await apiClient.deleteProject(project.id)
+      if (result.success || result.message) {
+        toast.success(result.message || "Project has been moved to trash and can be recovered within 30 days.")
+        // Call the onDelete callback to refresh the list
+        if (onDelete) {
+          onDelete()
+        }
+        // Optionally refresh the page
+        router.refresh()
+      } else {
+        throw new Error("Failed to delete project")
+      }
+    } catch (error) {
+      console.error('Delete error:', error)
+      toast.error(error instanceof Error ? error.message : "Failed to delete project")
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteDialog(false)
+    }
+  }
+
   const CardWrapper = isClickable ? Link : 'div'
   const wrapperProps = isClickable ? { href: projectUrl } : {}
 
   return (
-    <CardWrapper {...wrapperProps}>
+    <>
+      <CardWrapper {...wrapperProps}>
       <Card className={cn(
         "bg-card border-border transition-all duration-200",
         isClickable && "hover:bg-secondary/50 cursor-pointer hover:border-primary/50",
@@ -101,6 +151,15 @@ export function ProjectCard({ project, className }: ProjectCardProps) {
               </h3>
             </div>
             <div className="flex items-center gap-1 ml-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
               {getStatusIcon()}
             </div>
           </div>
@@ -139,5 +198,28 @@ export function ProjectCard({ project, className }: ProjectCardProps) {
         </CardContent>
       </Card>
     </CardWrapper>
+
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Project</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete "{project.name}"? 
+            This action will move the project to trash where it can be recovered within 30 days.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={confirmDelete}
+            disabled={isDeleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isDeleting ? "Deleting..." : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

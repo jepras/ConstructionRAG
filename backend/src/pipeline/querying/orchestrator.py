@@ -314,6 +314,7 @@ class QueryPipelineOrchestrator:
             query_run_data = {
                 "id": query_run_id,
                 "user_id": request.user_id,
+                "indexing_run_id": str(request.indexing_run_id) if request.indexing_run_id else None,
                 "access_level": ("public" if not request.user_id else "private"),
                 "original_query": request.query,
                 "query_variations": (variations.model_dump(exclude_none=True) if variations else None),

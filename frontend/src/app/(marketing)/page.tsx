@@ -57,10 +57,10 @@ export default function Home() {
       <div className="container mx-auto px-6 py-12">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4">
-            Any project detail - <span className="text-primary">instantly available</span>.
+            Any project detail - <span className="text-primary">instantly available</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            No more digging through a hell of nested folders & unsearchable pdfs to find the detail you need
+            No more digging through a hell of nested folders & unsearchable pdfs to find the answers you need
           </p>
         </div>
 

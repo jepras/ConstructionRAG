@@ -200,17 +200,19 @@ async def list_user_projects_with_wikis(
                     wiki_structure,
                     pages_metadata
                 ),
-                projects!project_wikis_project_id_fkey(
+                projects!inner(
                     name,
                     description,
                     created_at,
-                    updated_at
+                    updated_at,
+                    deleted_at
                 )
             """)
             .eq("user_id", current_user["id"])
             .eq("upload_type", "user_project")
             .eq("wiki_status", "completed")
             .gt("pages_count", 0)
+            .is_("projects.deleted_at", "null")  # Filter out soft-deleted projects
             .order("project_id, created_at", desc=True)
         )
         
