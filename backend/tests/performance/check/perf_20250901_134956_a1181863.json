@@ -1,0 +1,60 @@
+{
+  "metadata": {
+    "indexing_run_id": "a1181863-1d32-4192-9ba3-935660480e54",
+    "analysis_timestamp": "2025-09-01T13:49:56.436055",
+    "description": "\u201cfirst test\u201d",
+    "version": "2.0"
+  },
+  "velocity_metrics": {
+    "wall_clock_seconds": 94.1,
+    "wall_clock_minutes": 1.6,
+    "sequential_sum_seconds": 55.9,
+    "parallelization_factor": 0.59,
+    "step_timings": {
+      "partition": 19.0,
+      "metadata": 0.0,
+      "enrichment": 20.5,
+      "chunking": 0.0
+    },
+    "embedding_seconds": 16.4,
+    "pages_per_second": 0,
+    "docs_per_minute": 0.6,
+    "total_documents": 1,
+    "total_pages": 0
+  },
+  "captioning_metrics": {
+    "total_images_detected": 47,
+    "total_tables_detected": 1,
+    "total_images_captioned": 4,
+    "total_tables_captioned": 1,
+    "total_drawing_items": 0,
+    "pages_with_drawings": 0,
+    "pages_with_vector_drawings": 0,
+    "total_vlm_time": 20.452623,
+    "docs_with_vlm": 1,
+    "avg_vlm_seconds_per_item": 4.09,
+    "caption_rate": 10.4
+  },
+  "chunk_metrics": {
+    "total_chunks": 53,
+    "avg_chunk_size": 634.9,
+    "chunks_over_1200": 4,
+    "chunks_under_50": 1,
+    "longest_chunk_size": 9132,
+    "shortest_chunk_size": 47,
+    "median_chunk_size": 178,
+    "chunks_over_1200_pct": 7.5,
+    "chunks_under_50_pct": 1.9
+  },
+  "content_distribution": {
+    "total_elements": 114,
+    "text_elements": 66,
+    "list_elements": 0,
+    "table_elements": 1,
+    "image_elements": 47,
+    "text_pct": 57.9,
+    "list_pct": 0.0,
+    "table_pct": 0.9,
+    "image_pct": 41.2
+  }
+}

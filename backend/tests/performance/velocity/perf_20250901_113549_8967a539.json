@@ -1,0 +1,76 @@
+{
+  "metadata": {
+    "indexing_run_id": "8967a539-049c-4ce1-8674-6ade349e7de3",
+    "analysis_timestamp": "2025-09-01T11:35:49.087165",
+    "description": "\u201cadded drawing detection\u201d",
+    "version": "1.0"
+  },
+  "summary": {
+    "total_documents": 14,
+    "total_pages": 0,
+    "wall_clock_seconds": 691.6,
+    "wall_clock_minutes": 11.5,
+    "sequential_sum_seconds": 1464.8,
+    "parallelization_factor": 2.12,
+    "parallelization_savings_seconds": 773.2
+  },
+  "step_timings": {
+    "partition_seconds": 680.5,
+    "metadata_seconds": 91.2,
+    "enrichment_seconds": 518.1,
+    "chunking_seconds": 0.0,
+    "embedding_seconds": 174.9
+  },
+  "step_percentages": {
+    "partition_pct": 46.5,
+    "metadata_pct": 6.2,
+    "enrichment_pct": 35.4,
+    "chunking_pct": 0.0,
+    "embedding_pct": 11.9
+  },
+  "vlm_metrics": {
+    "total_images": 38,
+    "total_tables": 51,
+    "total_items": 89,
+    "total_vlm_seconds": 518.1,
+    "avg_seconds_per_item": 5.8,
+    "items_per_second": 0.17,
+    "docs_with_vlm": 13
+  },
+  "wiki_generation": {
+    "duration_seconds": 83.4,
+    "duration_minutes": 1.4
+  },
+  "performance_rates": {
+    "pages_per_second": 0,
+    "docs_per_minute": 1.2,
+    "avg_seconds_per_doc": 49.4
+  },
+  "top_slowest_docs": [
+    {
+      "filename": "DNI_K07_H1_ETX_N400_Belysningsplan_st._og_1sal.pdf",
+      "pages": null,
+      "total_seconds": 143.1665
+    },
+    {
+      "filename": "DNI_K07_H1_EXT_N500_Velfrdsteknologi_stuen_og_1_sal.pdf",
+      "pages": null,
+      "total_seconds": 135.175209
+    },
+    {
+      "filename": "DNI_K07_H1_ETX_N300_Fringer_og_tavler_Stuen_og_1_sal.pdf",
+      "pages": null,
+      "total_seconds": 134.586172
+    },
+    {
+      "filename": "Niva_Friplejehjem_ydelsesfordelingsplan_ABR_18.pdf",
+      "pages": null,
+      "total_seconds": 114.172784
+    },
+    {
+      "filename": "Bilag_1_SafeLight_Datablade.pdf",
+      "pages": null,
+      "total_seconds": 111.059622
+    }
+  ]
+}

@@ -1,6 +1,6 @@
-# Performance Testing & Analysis
+# Velocity Performance Testing & Analysis
 
-This directory contains tools and results for tracking ConstructionRAG indexing pipeline performance over time.
+This directory contains tools and results for tracking ConstructionRAG indexing pipeline performance and velocity metrics over time.
 
 ## 📊 Analysis Scripts
 
@@ -10,10 +10,10 @@ Analyzes indexing run performance and saves results for tracking improvements ov
 **Usage:**
 ```bash
 cd backend
-python tests/performance/analyze_and_track_performance.py <indexing_run_id> "Description of changes"
+python tests/performance/velocity/analyze_and_track_performance.py <indexing_run_id> "Description of changes"
 
 # Example:
-python tests/performance/analyze_and_track_performance.py ca079abb-b746-45fb-b448-0c4f5f185f8c "Baseline - before optimizations"
+python tests/performance/velocity/analyze_and_track_performance.py ca079abb-b746-45fb-b448-0c4f5f185f8c "Baseline - before optimizations"
 ```
 
 **Output:**
@@ -25,7 +25,7 @@ Provides detailed VLM metrics and parallelization analysis.
 
 **Usage:**
 ```bash
-python tests/performance/analyze_timing_detailed.py
+python tests/performance/velocity/analyze_timing_detailed.py
 ```
 
 ### 3. `analyze_all_timings.py`
@@ -33,7 +33,7 @@ Basic timing analysis with console output only.
 
 **Usage:**
 ```bash
-python tests/performance/analyze_all_timings.py
+python tests/performance/velocity/analyze_all_timings.py
 ```
 
 ## 📈 Tracked Metrics
@@ -114,13 +114,13 @@ Based on baseline analysis (17.7 minutes for 14 docs):
 Example workflow:
 ```bash
 # Baseline
-python tests/performance/analyze_and_track_performance.py <run1> "Baseline"
+python tests/performance/velocity/analyze_and_track_performance.py <run1> "Baseline"
 
 # After adding parallelization
-python tests/performance/analyze_and_track_performance.py <run2> "Added 5x parallelization"
+python tests/performance/velocity/analyze_and_track_performance.py <run2> "Added 5x parallelization"
 
 # After VLM optimization
-python tests/performance/analyze_and_track_performance.py <run3> "Batch VLM processing enabled"
+python tests/performance/velocity/analyze_and_track_performance.py <run3> "Batch VLM processing enabled"
 ```
 
 ## 🔍 Analyzing Results

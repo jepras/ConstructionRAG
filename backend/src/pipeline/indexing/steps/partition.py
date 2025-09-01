@@ -530,6 +530,21 @@ class PartitionStep(PipelineStep):
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
 
+            # Calculate drawing statistics from page_analysis
+            page_analysis = partition_result.get("page_analysis", {})
+            total_drawing_items = sum(
+                page_data.get("drawing_items", 0) 
+                for page_data in page_analysis.values()
+            )
+            pages_with_vector_drawings = sum(
+                1 for page_data in page_analysis.values()
+                if page_data.get("has_vector_drawings", False)
+            )
+            pages_with_any_drawings = sum(
+                1 for page_data in page_analysis.values()
+                if page_data.get("drawing_items", 0) > 0
+            )
+            
             # Create summary statistics
             summary_stats = {
                 "text_elements": len(partition_result.get("text_elements", [])),
@@ -545,6 +560,9 @@ class PartitionStep(PipelineStep):
                 "original_image_count": partition_result.get("metadata", {}).get(
                     "original_image_count", 0
                 ),
+                "total_drawing_items": total_drawing_items,
+                "pages_with_vector_drawings": pages_with_vector_drawings,
+                "pages_with_any_drawings": pages_with_any_drawings,
                 "document_metadata": {
                     "total_pages": partition_result.get("document_metadata", {}).get(
                         "total_pages", 0
@@ -1095,6 +1113,9 @@ class PartitionStep(PipelineStep):
             cleaned_analysis[page_num] = {
                 "image_count": analysis.get("image_count"),
                 "table_count": analysis.get("table_count"),
+                "meaningful_images": analysis.get("meaningful_images"),
+                "drawing_items": analysis.get("drawing_items"),
+                "has_vector_drawings": analysis.get("has_vector_drawings"),
                 "complexity": analysis.get("complexity"),
                 "needs_extraction": analysis.get("needs_extraction"),
                 "is_fragmented": analysis.get("is_fragmented"),
@@ -1212,26 +1233,49 @@ class UnifiedPartitionerV2:
             # Special case: many small images might form a technical diagram
             is_likely_diagram = (len(images) >= 15 and meaningful_images == 0 and len(tables) == 0)
             
+            # Check for vector drawings (architectural plans, technical drawings)
+            has_vector_drawings = False
+            drawing_item_count = 0
+            try:
+                drawings = page.get_drawings()
+                # Count total drawing items (lines, curves, rects, etc.)
+                for drawing in drawings:
+                    items = drawing.get("items", [])
+                    drawing_item_count += len(items)
+                # Threshold of 4000 items indicates complex vector drawing
+                has_vector_drawings = drawing_item_count >= 4000
+            except Exception as e:
+                logger.debug(f"Could not analyze drawings on page {page_index}: {e}")
+            
             # Determine page complexity using meaningful images and tables
             # IMPROVED: Require minimum meaningful content threshold to avoid logo-only extractions
             min_meaningful_images_for_extraction = 2  # Require at least 2 meaningful images (filters out single logos)
             
-            if meaningful_images == 0 and len(tables) == 0 and not is_likely_diagram:
-                complexity = "text_only"
-                needs_extraction = False
-            elif meaningful_images >= min_meaningful_images_for_extraction or len(tables) > 0 or is_likely_diagram:
-                # Extract if there are ENOUGH meaningful images OR tables OR likely diagram
-                if is_likely_diagram:
-                    complexity = "diagram"
-                elif is_fragmented:
+            # Precedence: Images → Drawings → Tables
+            if meaningful_images >= min_meaningful_images_for_extraction:
+                # Images take precedence
+                if is_fragmented:
                     complexity = "fragmented"
                 elif meaningful_images >= 3:
                     complexity = "complex"
                 else:
                     complexity = "simple"
                 needs_extraction = True
+            elif has_vector_drawings:
+                # Vector drawings are second priority
+                complexity = "complex_vector_drawing"
+                needs_extraction = True
+            elif len(tables) > 0:
+                # Tables are third priority
+                complexity = "simple"
+                needs_extraction = True
+            elif is_likely_diagram:
+                # Special case for diagrams
+                complexity = "diagram"
+                needs_extraction = True
             else:
-                complexity = "text_only"  # Only logos/small images found (below threshold)
+                # No significant visual content
+                complexity = "text_only"
                 needs_extraction = False
 
             # Store page analysis
@@ -1239,6 +1283,8 @@ class UnifiedPartitionerV2:
                 "image_count": len(images),
                 "meaningful_images": meaningful_images,
                 "table_count": len(tables),
+                "drawing_items": drawing_item_count,
+                "has_vector_drawings": has_vector_drawings,
                 "complexity": complexity,
                 "needs_extraction": needs_extraction,
                 "is_fragmented": is_fragmented,
@@ -1249,12 +1295,17 @@ class UnifiedPartitionerV2:
                 reason = []
                 if meaningful_images >= min_meaningful_images_for_extraction:
                     reason.append(f"{meaningful_images} meaningful images (≥{min_meaningful_images_for_extraction})")
+                if has_vector_drawings:
+                    reason.append(f"vector drawing ({drawing_item_count:,} items)")
                 if len(tables) > 0:
                     reason.append(f"{len(tables)} tables")
                 if is_likely_diagram:
                     reason.append("likely diagram")
                 if not needs_extraction:
-                    reason.append(f"only {meaningful_images} meaningful images (<{min_meaningful_images_for_extraction})")
+                    if drawing_item_count > 0:
+                        reason.append(f"only {drawing_item_count:,} drawing items (<4000)")
+                    else:
+                        reason.append(f"only {meaningful_images} meaningful images (<{min_meaningful_images_for_extraction})")
                 
                 decision = "EXTRACT" if needs_extraction else "SKIP"
                 reason_str = ", ".join(reason) if reason else "no meaningful content"

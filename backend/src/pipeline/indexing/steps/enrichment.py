@@ -61,9 +61,7 @@ class ConstructionVLMCaptioner:
         logger.info(f"VLM Captioner initialized with {self.model_name}")
         logger.info(f"Caption language set to: {self.caption_language}")
 
-    async def caption_table_html_async(
-        self, table_html: str, element_context: dict
-    ) -> dict:
+    async def caption_table_html_async(self, table_html: str, element_context: dict) -> dict:
         """Generate caption for table using HTML representation"""
 
         page_num = element_context.get("page_number", "unknown")
@@ -100,14 +98,12 @@ IMPORTANT: Please provide your detailed, technical caption in {self.caption_lang
                 "error": str(e),
             }
 
-    async def caption_table_image_async(
-        self, image_url: str, element_context: dict
-    ) -> dict:
+    async def caption_table_image_async(self, image_url: str, element_context: dict) -> dict:
         """Generate caption for table using extracted image"""
 
         page_num = element_context.get("page_number", "unknown")
         source_file = element_context.get("source_filename", "unknown")
-        
+
         # Add optional bbox focus hint if available
         focus_hint = ""
         if bbox := element_context.get("bbox"):
@@ -117,13 +113,9 @@ IMPORTANT: Please provide your detailed, technical caption in {self.caption_lang
 
 Please provide a comprehensive description that captures:
 
-1. **All Visible Text**: Read and transcribe ALL text visible in the table, including headers, data, footnotes
+1. **All Visible Text**: Read and transcribe ALL text visible in the table, including headers, data, footnotes.
 2. **Table Structure**: Number of rows, columns, organization
-3. **Technical Content**: Any measurements, codes, specifications, standards mentioned
-4. **Data Relationships**: How the data is organized and what it represents
-5. **Construction Context**: How this information relates to building/engineering work
-
-Focus on being extremely detailed about all visible text and numbers - this will be used for search and retrieval.
+3. **Data Relationships**: How the data is organized and what it represents
 
 IMPORTANT: Please provide your detailed description in {self.caption_language}."""
 
@@ -169,43 +161,16 @@ IMPORTANT: Please provide your detailed description in {self.caption_language}."
 **Text Context from this page:**
 {page_text_context[:1500]}"""  # Configurable context limit
 
-        prompt = f"""You are analyzing a full-page image from page {page_num} of a construction/technical document ({source_file}). This page has {complexity} visual complexity.
+        prompt = f"""You are analyzing a full-page image from page {page_num} of a construction/technical document ({source_file}). This page has {complexity} visual complexity. It may contain diagrams, technical drawings, tables, and text, but you should focus on the area that has the image associated.
 
-Please provide an EXTREMELY DETAILED description that captures:
-
-1. **ALL VISIBLE TEXT**: Read and transcribe every piece of text, including:
-   - Titles, headings, labels
-   - Dimension annotations and measurements  
-   - Callout numbers and reference codes
-   - Notes, specifications, and descriptions
-   - Legend items and explanations
-   - All technical annotations and comments
-
-2. **Technical Drawing Details**: 
-   - Type of drawing (floor plan, elevation, detail, etc.)
-   - Architectural/engineering elements shown
-   - Dimensions, scales, and measurements
-   - Materials and construction details
-   - Symbols and technical notations
-
-3. **Spatial Relationships**:
-   - Layout and arrangement of elements
-   - How different parts connect or relate
-   - Reference points and orientations
-
-4. **Pointers and Annotations**:
-   - What specific elements are being highlighted
-   - Technical specifications for highlighted areas
-   - Connection between callouts and drawing elements
-
-5. **Building Materials and Construction**:
-   - Specific building materials mentioned
-   - Construction techniques and methods
-   - Technical standards and codes
+Please provide an detailed description that captures:
+1. All the text associated with the image. Any annotation, measurement, label, note, legend, or technical detail.
+2. The technical drawing details - what type of drawing, what elements are shown, dimensions, materials, etc.
+3. The spatial relationships - how different parts relate or connect.
+4. Any pointers or annotations - what specific elements are being highlighted or called out.
+5. Any building materials, construction techniques, or technical standards mentioned.
 
 {context_section}
-
-CRITICAL: Focus on extracting ALL text and technical information - this will be used for search and retrieval. Be extremely thorough with visible text, numbers, codes, and technical details. There is NO LIMIT to how long the description can be - include all relevant information.
 
 IMPORTANT: Please provide your comprehensive description in {self.caption_language}."""
 
@@ -289,9 +254,7 @@ class EnrichmentStep(PipelineStep):
                     if hasattr(input_data, "data") and input_data.data
                     else input_data.sample_outputs.get("metadata_data", {})
                 )
-                logger.info(
-                    f"Processing metadata output from StepResult ({input_data.step})"
-                )
+                logger.info(f"Processing metadata output from StepResult ({input_data.step})")
             elif hasattr(input_data, "data") and input_data.data is not None:
                 # Input is a StepResult from metadata step (legacy)
                 metadata_output = input_data.data
@@ -316,18 +279,10 @@ class EnrichmentStep(PipelineStep):
             # Create summary statistics
             summary_stats = {
                 "tables_processed": len(
-                    [
-                        t
-                        for t in enriched_data.get("table_elements", [])
-                        if "enrichment_metadata" in t
-                    ]
+                    [t for t in enriched_data.get("table_elements", []) if "enrichment_metadata" in t]
                 ),
                 "images_processed": len(
-                    [
-                        p
-                        for p in enriched_data.get("extracted_pages", {}).values()
-                        if "enrichment_metadata" in p
-                    ]
+                    [p for p in enriched_data.get("extracted_pages", {}).values() if "enrichment_metadata" in p]
                 ),
                 "total_caption_words": sum(
                     t.get("enrichment_metadata", {}).get("caption_word_count", 0)
@@ -346,15 +301,9 @@ class EnrichmentStep(PipelineStep):
                 {
                     "id": table["id"],
                     "page": table["structural_metadata"].get("page_number", 0),
-                    "has_html_caption": bool(
-                        table.get("enrichment_metadata", {}).get("table_html_caption")
-                    ),
-                    "has_image_caption": bool(
-                        table.get("enrichment_metadata", {}).get("table_image_caption")
-                    ),
-                    "caption_words": table.get("enrichment_metadata", {}).get(
-                        "caption_word_count", 0
-                    ),
+                    "has_html_caption": bool(table.get("enrichment_metadata", {}).get("table_html_caption")),
+                    "has_image_caption": bool(table.get("enrichment_metadata", {}).get("table_image_caption")),
+                    "caption_words": table.get("enrichment_metadata", {}).get("caption_word_count", 0),
                 }
                 for table in enriched_data.get("table_elements", [])
                 if "enrichment_metadata" in table
@@ -363,14 +312,8 @@ class EnrichmentStep(PipelineStep):
             sample_images = [
                 {
                     "page": page_info["structural_metadata"].get("page_number", 0),
-                    "has_caption": bool(
-                        page_info.get("enrichment_metadata", {}).get(
-                            "full_page_image_caption"
-                        )
-                    ),
-                    "caption_words": page_info.get("enrichment_metadata", {}).get(
-                        "caption_word_count", 0
-                    ),
+                    "has_caption": bool(page_info.get("enrichment_metadata", {}).get("full_page_image_caption")),
+                    "caption_words": page_info.get("enrichment_metadata", {}).get("caption_word_count", 0),
                 }
                 for page_info in enriched_data.get("extracted_pages", {}).values()
                 if "enrichment_metadata" in page_info
@@ -405,16 +348,12 @@ class EnrichmentStep(PipelineStep):
         """Validate enrichment step prerequisites"""
         try:
             # Debug logging to see what we're receiving
-            logger.info(
-                f"🔍 EnrichmentStep validate_prerequisites_async received input_data type: {type(input_data)}"
-            )
+            logger.info(f"🔍 EnrichmentStep validate_prerequisites_async received input_data type: {type(input_data)}")
 
             # Handle StepResult objects (from unified processing)
             if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
                 # This is a StepResult from a previous step
-                logger.info(
-                    f"EnrichmentStep received StepResult from {input_data.step}"
-                )
+                logger.info(f"EnrichmentStep received StepResult from {input_data.step}")
 
                 # Extract metadata data from StepResult - check both data and sample_outputs
                 metadata_data = (
@@ -430,29 +369,21 @@ class EnrichmentStep(PipelineStep):
                     "extracted_pages",
                     "page_sections",
                 ]
-                missing_keys = [
-                    key for key in required_keys if key not in metadata_data
-                ]
+                missing_keys = [key for key in required_keys if key not in metadata_data]
 
                 if missing_keys:
-                    logger.error(
-                        f"Missing required keys in metadata output: {missing_keys}"
-                    )
+                    logger.error(f"Missing required keys in metadata output: {missing_keys}")
                     return False
 
                 # Check that elements have structural_metadata (added by metadata step)
                 for element in metadata_data.get("text_elements", []):
                     if "structural_metadata" not in element:
-                        logger.error(
-                            f"Text element missing structural_metadata: {element.get('id', 'unknown')}"
-                        )
+                        logger.error(f"Text element missing structural_metadata: {element.get('id', 'unknown')}")
                         return False
 
                 for element in metadata_data.get("table_elements", []):
                     if "structural_metadata" not in element:
-                        logger.error(
-                            f"Table element missing structural_metadata: {element.get('id', 'unknown')}"
-                        )
+                        logger.error(f"Table element missing structural_metadata: {element.get('id', 'unknown')}")
                         return False
 
                 for page_info in metadata_data.get("extracted_pages", {}).values():
@@ -475,24 +406,18 @@ class EnrichmentStep(PipelineStep):
                 missing_keys = [key for key in required_keys if key not in input_data]
 
                 if missing_keys:
-                    logger.error(
-                        f"Missing required keys in metadata output: {missing_keys}"
-                    )
+                    logger.error(f"Missing required keys in metadata output: {missing_keys}")
                     return False
 
                 # Check that elements have structural_metadata (added by metadata step)
                 for element in input_data.get("text_elements", []):
                     if "structural_metadata" not in element:
-                        logger.error(
-                            f"Text element missing structural_metadata: {element.get('id', 'unknown')}"
-                        )
+                        logger.error(f"Text element missing structural_metadata: {element.get('id', 'unknown')}")
                         return False
 
                 for element in input_data.get("table_elements", []):
                     if "structural_metadata" not in element:
-                        logger.error(
-                            f"Table element missing structural_metadata: {element.get('id', 'unknown')}"
-                        )
+                        logger.error(f"Table element missing structural_metadata: {element.get('id', 'unknown')}")
                         return False
 
                 for page_info in input_data.get("extracted_pages", {}).values():
@@ -515,9 +440,7 @@ class EnrichmentStep(PipelineStep):
         """Estimate enrichment step duration in seconds"""
         try:
             # Estimate based on number of elements to process
-            total_elements = len(input_data.get("table_elements", [])) + len(
-                input_data.get("extracted_pages", {})
-            )
+            total_elements = len(input_data.get("table_elements", [])) + len(input_data.get("extracted_pages", {}))
 
             # Rough estimate: 10-15 seconds per element (VLM processing)
             estimated_seconds = total_elements * 12
@@ -528,9 +451,7 @@ class EnrichmentStep(PipelineStep):
             logger.error(f"Duration estimation failed: {e}")
             return 300  # Default 5 minutes
 
-    async def _enrich_with_vlm_async(
-        self, metadata_output: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _enrich_with_vlm_async(self, metadata_output: Dict[str, Any]) -> Dict[str, Any]:
         """Execute VLM enrichment asynchronously"""
 
         logger.info("Starting VLM enrichment...")
@@ -541,29 +462,33 @@ class EnrichmentStep(PipelineStep):
         # Process tables (but skip VLM if full-page extraction exists for the same page)
         table_elements = enriched_data.get("table_elements", [])
         extracted_pages = enriched_data.get("extracted_pages", {})
-        
+
         print(f"🤖 BEAM: VLM processing decision - {len(table_elements)} table elements found")
         logger.info(f"Processing {len(table_elements)} table elements...")
-        
+
         # Debug the data types to fix the comparison issue
         extracted_page_keys = list(extracted_pages.keys())
         print(f"🤖 BEAM: Full page extractions available for pages: {extracted_page_keys}")
-        
+
         # Separate tables that need VLM processing from those that don't
         tables_to_process = []
         tables_skipped = 0
-        
+
         for i, table_element in enumerate(table_elements):
             table_page = table_element.get("page")
             table_id = table_element.get("id", f"table_{i}")
-            
+
             # Fix data type comparison - try both int and str versions
             has_full_page = table_page in extracted_pages or str(table_page) in extracted_pages
-            
+
             if has_full_page:
                 if tables_skipped < 3:  # Only log first 3 skips in detail
-                    print(f"🤖 BEAM: SKIPPING table VLM {i+1}/{len(table_elements)} (ID: {table_id}, page {table_page}) - full-page extraction exists")
-                logger.info(f"Skipping VLM for table {i+1}/{len(table_elements)} on page {table_page} - full-page extraction exists")
+                    print(
+                        f"🤖 BEAM: SKIPPING table VLM {i + 1}/{len(table_elements)} (ID: {table_id}, page {table_page}) - full-page extraction exists"
+                    )
+                logger.info(
+                    f"Skipping VLM for table {i + 1}/{len(table_elements)} on page {table_page} - full-page extraction exists"
+                )
                 tables_skipped += 1
                 # Still add basic metadata but skip VLM processing
                 table_element["enrichment_metadata"] = {
@@ -573,31 +498,33 @@ class EnrichmentStep(PipelineStep):
                 }
             else:
                 tables_to_process.append(table_element)
-        
+
         # Process tables in parallel batches
         if tables_to_process:
             print(f"🤖 BEAM: Processing {len(tables_to_process)} tables in parallel batches")
             logger.info(f"Processing {len(tables_to_process)} tables with VLM in parallel batches...")
-            
+
             # Create tasks for parallel processing
             tasks = []
             for table_element in tables_to_process:
                 tasks.append(self._enrich_table(table_element))
-            
+
             # Process in batches of 5 to avoid overwhelming the API
             batch_size = 5
             for i in range(0, len(tasks), batch_size):
-                batch = tasks[i:i+batch_size]
-                batch_end = min(i+batch_size, len(tasks))
-                print(f"🤖 BEAM: Processing table batch {i//batch_size + 1} (tables {i+1}-{batch_end} of {len(tasks)})")
-                
+                batch = tasks[i : i + batch_size]
+                batch_end = min(i + batch_size, len(tasks))
+                print(
+                    f"🤖 BEAM: Processing table batch {i // batch_size + 1} (tables {i + 1}-{batch_end} of {len(tasks)})"
+                )
+
                 # Process batch in parallel
                 batch_results = await asyncio.gather(*batch)
-                
+
                 # Update table elements with results
                 for j, enrichment_metadata in enumerate(batch_results):
-                    tables_to_process[i+j]["enrichment_metadata"] = enrichment_metadata
-        
+                    tables_to_process[i + j]["enrichment_metadata"] = enrichment_metadata
+
         tables_processed_with_vlm = len(tables_to_process)
 
         print(f"🤖 BEAM: Table VLM summary - {tables_processed_with_vlm} processed, {tables_skipped} skipped")
@@ -612,32 +539,36 @@ class EnrichmentStep(PipelineStep):
             # Prepare tasks for parallel processing
             page_tasks = []
             page_nums = []
-            
+
             for page_num, page_info in extracted_pages.items():
                 complexity = page_info.get("complexity", "unknown")
                 logger.info(f"Preparing page {page_num} (complexity: {complexity}) for VLM processing...")
                 page_tasks.append(self._enrich_full_page_image(page_info, enriched_data))
                 page_nums.append(page_num)
-            
+
             # Process pages in parallel batches
             batch_size = 5
             for i in range(0, len(page_tasks), batch_size):
-                batch = page_tasks[i:i+batch_size]
-                batch_nums = page_nums[i:i+batch_size]
-                batch_end = min(i+batch_size, len(page_tasks))
-                
-                print(f"🖼️  BEAM: Processing page batch {i//batch_size + 1} (pages {i+1}-{batch_end} of {len(page_tasks)})")
+                batch = page_tasks[i : i + batch_size]
+                batch_nums = page_nums[i : i + batch_size]
+                batch_end = min(i + batch_size, len(page_tasks))
+
+                print(
+                    f"🖼️  BEAM: Processing page batch {i // batch_size + 1} (pages {i + 1}-{batch_end} of {len(page_tasks)})"
+                )
                 logger.info(f"Processing pages {batch_nums} in parallel...")
-                
+
                 # Process batch in parallel
                 batch_results = await asyncio.gather(*batch)
-                
+
                 # Update page_info with results
                 for j, enrichment_metadata in enumerate(batch_results):
                     extracted_pages[batch_nums[j]]["enrichment_metadata"] = enrichment_metadata
                     pages_processed += 1
 
-        print(f"🤖 BEAM: VLM enrichment complete! {pages_processed} full-page images processed, {tables_processed_with_vlm} individual tables processed")
+        print(
+            f"🤖 BEAM: VLM enrichment complete! {pages_processed} full-page images processed, {tables_processed_with_vlm} individual tables processed"
+        )
         logger.info("VLM enrichment complete!")
         return enriched_data
 
@@ -657,12 +588,8 @@ class EnrichmentStep(PipelineStep):
             "prompt_used": None,
             "prompt_template": None,
             "input_context": {
-                "page_number": table_element["structural_metadata"].get(
-                    "page_number", "unknown"
-                ),
-                "source_filename": table_element["structural_metadata"].get(
-                    "source_filename", "unknown"
-                ),
+                "page_number": table_element["structural_metadata"].get("page_number", "unknown"),
+                "source_filename": table_element["structural_metadata"].get("source_filename", "unknown"),
                 "element_type": "table",
             },
         }
@@ -680,9 +607,7 @@ class EnrichmentStep(PipelineStep):
                 enrichment_metadata["table_html_caption"] = vlm_result["caption"]
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]
                 enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
-                logger.debug(
-                    f"HTML caption generated ({len(enrichment_metadata['table_html_caption'])} chars)"
-                )
+                logger.debug(f"HTML caption generated ({len(enrichment_metadata['table_html_caption'])} chars)")
 
             # Get table image (Supabase URL or local path)
             image_url_data = table_element.get("metadata", {}).get("image_url")
@@ -696,30 +621,22 @@ class EnrichmentStep(PipelineStep):
                 context = table_element["structural_metadata"].copy()
                 if "bbox" in table_element.get("metadata", {}):
                     context["bbox"] = table_element["metadata"]["bbox"]
-                
-                vlm_result = await self.vlm_captioner.caption_table_image_async(
-                    image_url, context
-                )
+
+                vlm_result = await self.vlm_captioner.caption_table_image_async(image_url, context)
                 enrichment_metadata["table_image_caption"] = vlm_result["caption"]
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]
                 enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
                 enrichment_metadata["table_image_filepath"] = image_url
-                logger.debug(
-                    f"Image caption generated ({len(enrichment_metadata['table_image_caption'])} chars)"
-                )
+                logger.debug(f"Image caption generated ({len(enrichment_metadata['table_image_caption'])} chars)")
             else:
                 logger.warning(f"No valid image URL extracted from: {image_url_data}")
 
             # Calculate caption statistics
             total_caption_length = 0
             if enrichment_metadata["table_html_caption"]:
-                total_caption_length += len(
-                    enrichment_metadata["table_html_caption"].split()
-                )
+                total_caption_length += len(enrichment_metadata["table_html_caption"].split())
             if enrichment_metadata["table_image_caption"]:
-                total_caption_length += len(
-                    enrichment_metadata["table_image_caption"].split()
-                )
+                total_caption_length += len(enrichment_metadata["table_image_caption"].split())
 
             enrichment_metadata["caption_word_count"] = total_caption_length
 
@@ -729,15 +646,11 @@ class EnrichmentStep(PipelineStep):
             enrichment_metadata["vlm_processed"] = False
 
         # Calculate processing duration
-        enrichment_metadata["processing_duration_seconds"] = (
-            datetime.utcnow() - start_time
-        ).total_seconds()
+        enrichment_metadata["processing_duration_seconds"] = (datetime.utcnow() - start_time).total_seconds()
 
         return enrichment_metadata
 
-    async def _enrich_full_page_image(
-        self, page_info: dict, metadata_output: dict
-    ) -> dict:
+    async def _enrich_full_page_image(self, page_info: dict, metadata_output: dict) -> dict:
         """Enrich full-page image with VLM caption"""
 
         enrichment_metadata = {
@@ -753,12 +666,8 @@ class EnrichmentStep(PipelineStep):
             "prompt_used": None,
             "prompt_template": None,
             "input_context": {
-                "page_number": page_info["structural_metadata"].get(
-                    "page_number", "unknown"
-                ),
-                "source_filename": page_info["structural_metadata"].get(
-                    "source_filename", "unknown"
-                ),
+                "page_number": page_info["structural_metadata"].get("page_number", "unknown"),
+                "source_filename": page_info["structural_metadata"].get("source_filename", "unknown"),
                 "element_type": "image",
             },
         }
@@ -786,16 +695,10 @@ class EnrichmentStep(PipelineStep):
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]
                 enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
                 enrichment_metadata["full_page_image_filepath"] = image_url
-                enrichment_metadata["caption_word_count"] = len(
-                    enrichment_metadata["full_page_image_caption"].split()
-                )
-                logger.debug(
-                    f"Full-page caption generated ({enrichment_metadata['caption_word_count']} words)"
-                )
+                enrichment_metadata["caption_word_count"] = len(enrichment_metadata["full_page_image_caption"].split())
+                logger.debug(f"Full-page caption generated ({enrichment_metadata['caption_word_count']} words)")
             else:
-                logger.warning(
-                    f"No valid image URL extracted for page {page_num} from: {image_url_data}"
-                )
+                logger.warning(f"No valid image URL extracted for page {page_num} from: {image_url_data}")
 
         except Exception as e:
             logger.error(f"Error processing full-page image: {e}")
@@ -803,9 +706,7 @@ class EnrichmentStep(PipelineStep):
             enrichment_metadata["vlm_processed"] = False
 
         # Calculate processing duration
-        enrichment_metadata["processing_duration_seconds"] = (
-            datetime.utcnow() - start_time
-        ).total_seconds()
+        enrichment_metadata["processing_duration_seconds"] = (datetime.utcnow() - start_time).total_seconds()
 
         return enrichment_metadata
 
