@@ -1,0 +1,71 @@
+{
+  "metadata": {
+    "indexing_run_id": "269ef936-1e91-435b-a4f5-d185cd681ffb",
+    "analysis_timestamp": "2025-09-01T10:23:39.723572",
+    "description": "\u201csmall-complicated-project\u201d",
+    "version": "1.0"
+  },
+  "summary": {
+    "total_documents": 4,
+    "total_pages": 0,
+    "wall_clock_seconds": 234.1,
+    "wall_clock_minutes": 3.9,
+    "sequential_sum_seconds": 428.3,
+    "parallelization_factor": 1.83,
+    "parallelization_savings_seconds": 194.2
+  },
+  "step_timings": {
+    "partition_seconds": 147.1,
+    "metadata_seconds": 11.9,
+    "enrichment_seconds": 238.5,
+    "chunking_seconds": 0.0,
+    "embedding_seconds": 30.8
+  },
+  "step_percentages": {
+    "partition_pct": 34.3,
+    "metadata_pct": 2.8,
+    "enrichment_pct": 55.7,
+    "chunking_pct": 0.0,
+    "embedding_pct": 7.2
+  },
+  "vlm_metrics": {
+    "total_images": 5,
+    "total_tables": 4,
+    "total_items": 9,
+    "total_vlm_seconds": 238.5,
+    "avg_seconds_per_item": 26.5,
+    "items_per_second": 0.04,
+    "docs_with_vlm": 4
+  },
+  "wiki_generation": {
+    "duration_seconds": 56.6,
+    "duration_minutes": 0.9
+  },
+  "performance_rates": {
+    "pages_per_second": 0,
+    "docs_per_minute": 1.0,
+    "avg_seconds_per_doc": 58.5
+  },
+  "top_slowest_docs": [
+    {
+      "filename": "mole-scannable.pdf",
+      "pages": null,
+      "total_seconds": 164.108394
+    },
+    {
+      "filename": "MOL_K07_C08_ARB_EL_EL_arbejdsbeskrivelse_copy.pdf",
+      "pages": null,
+      "total_seconds": 155.580167
+    },
+    {
+      "filename": "I12727-01_K07_C08.01_Appendiks_EL_copy.pdf",
+      "pages": null,
+      "total_seconds": 43.112599
+    },
+    {
+      "filename": "Tegninger_samlet_copy.pdf",
+      "pages": null,
+      "total_seconds": 34.65124
+    }
+  ]
+}

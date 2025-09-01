@@ -59,7 +59,7 @@
       "validation_sample_size": 50
     },
     "orchestration": {
-      "max_concurrent_documents": 5,
+      "max_concurrent_documents": 10,
       "step_timeout_minutes": 30,
       "retry_attempts": 3,
       "fail_fast": true

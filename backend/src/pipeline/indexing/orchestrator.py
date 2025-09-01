@@ -542,10 +542,10 @@ class IndexingOrchestrator:
         """
         results = {}
 
-        # Conservative parallel processing - process documents in small batches
+        # Optimized parallel processing - increased batch size for better throughput
         max_concurrent = min(
-            3, len(document_inputs)
-        )  # Start with max 3 concurrent documents
+            5, len(document_inputs)
+        )  # Process up to 5 concurrent documents per worker
 
         for i in range(0, len(document_inputs), max_concurrent):
             batch = document_inputs[i : i + max_concurrent]

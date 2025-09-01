@@ -107,8 +107,13 @@ IMPORTANT: Please provide your detailed, technical caption in {self.caption_lang
 
         page_num = element_context.get("page_number", "unknown")
         source_file = element_context.get("source_filename", "unknown")
+        
+        # Add optional bbox focus hint if available
+        focus_hint = ""
+        if bbox := element_context.get("bbox"):
+            focus_hint = f"\n\nNote: The table is located at coordinates {bbox} on the page (x0, y0, x1, y1)."
 
-        prompt = f"""You are analyzing a table image extracted from page {page_num} of a construction/technical document ({source_file}).
+        prompt = f"""You are analyzing a table image extracted from page {page_num} of a construction/technical document ({source_file}).{focus_hint}
 
 Please provide a comprehensive description that captures:
 
@@ -543,21 +548,17 @@ class EnrichmentStep(PipelineStep):
         # Debug the data types to fix the comparison issue
         extracted_page_keys = list(extracted_pages.keys())
         print(f"🤖 BEAM: Full page extractions available for pages: {extracted_page_keys}")
-        print(f"🤖 BEAM: Debug - extracted_pages key types: {[type(k).__name__ for k in extracted_page_keys[:3]]}")
-
-        tables_processed_with_vlm = 0
+        
+        # Separate tables that need VLM processing from those that don't
+        tables_to_process = []
         tables_skipped = 0
-
+        
         for i, table_element in enumerate(table_elements):
             table_page = table_element.get("page")
             table_id = table_element.get("id", f"table_{i}")
             
             # Fix data type comparison - try both int and str versions
             has_full_page = table_page in extracted_pages or str(table_page) in extracted_pages
-            
-            if i == 0:  # Debug first element
-                print(f"🤖 BEAM: Debug - table_page: {table_page} (type: {type(table_page).__name__})")
-                print(f"🤖 BEAM: Debug - has_full_page: {has_full_page}")
             
             if has_full_page:
                 if tables_skipped < 3:  # Only log first 3 skips in detail
@@ -571,13 +572,33 @@ class EnrichmentStep(PipelineStep):
                     "vlm_processing_timestamp": datetime.now().isoformat(),
                 }
             else:
-                if tables_processed_with_vlm < 3:  # Only log first 3 processes in detail
-                    print(f"🤖 BEAM: PROCESSING table VLM {i+1}/{len(table_elements)} (ID: {table_id}, page {table_page}) - no full-page coverage")
-                logger.info(f"Processing table {i+1}/{len(table_elements)} with VLM...")
-                tables_processed_with_vlm += 1
-                table_element["enrichment_metadata"] = await self._enrich_table(
-                    table_element
-                )
+                tables_to_process.append(table_element)
+        
+        # Process tables in parallel batches
+        if tables_to_process:
+            print(f"🤖 BEAM: Processing {len(tables_to_process)} tables in parallel batches")
+            logger.info(f"Processing {len(tables_to_process)} tables with VLM in parallel batches...")
+            
+            # Create tasks for parallel processing
+            tasks = []
+            for table_element in tables_to_process:
+                tasks.append(self._enrich_table(table_element))
+            
+            # Process in batches of 5 to avoid overwhelming the API
+            batch_size = 5
+            for i in range(0, len(tasks), batch_size):
+                batch = tasks[i:i+batch_size]
+                batch_end = min(i+batch_size, len(tasks))
+                print(f"🤖 BEAM: Processing table batch {i//batch_size + 1} (tables {i+1}-{batch_end} of {len(tasks)})")
+                
+                # Process batch in parallel
+                batch_results = await asyncio.gather(*batch)
+                
+                # Update table elements with results
+                for j, enrichment_metadata in enumerate(batch_results):
+                    tables_to_process[i+j]["enrichment_metadata"] = enrichment_metadata
+        
+        tables_processed_with_vlm = len(tables_to_process)
 
         print(f"🤖 BEAM: Table VLM summary - {tables_processed_with_vlm} processed, {tables_skipped} skipped")
 
@@ -587,14 +608,34 @@ class EnrichmentStep(PipelineStep):
         logger.info(f"Processing {len(extracted_pages)} full-page images...")
 
         pages_processed = 0
-        for page_num, page_info in extracted_pages.items():
-            complexity = page_info.get("complexity", "unknown")
-            print(f"🖼️  BEAM: Processing full-page VLM {pages_processed+1}/{len(extracted_pages)} (page {page_num}, complexity: {complexity})")
-            logger.info(f"Processing image page {page_num}...")
-            pages_processed += 1
-            page_info["enrichment_metadata"] = await self._enrich_full_page_image(
-                page_info, enriched_data
-            )
+        if extracted_pages:
+            # Prepare tasks for parallel processing
+            page_tasks = []
+            page_nums = []
+            
+            for page_num, page_info in extracted_pages.items():
+                complexity = page_info.get("complexity", "unknown")
+                logger.info(f"Preparing page {page_num} (complexity: {complexity}) for VLM processing...")
+                page_tasks.append(self._enrich_full_page_image(page_info, enriched_data))
+                page_nums.append(page_num)
+            
+            # Process pages in parallel batches
+            batch_size = 5
+            for i in range(0, len(page_tasks), batch_size):
+                batch = page_tasks[i:i+batch_size]
+                batch_nums = page_nums[i:i+batch_size]
+                batch_end = min(i+batch_size, len(page_tasks))
+                
+                print(f"🖼️  BEAM: Processing page batch {i//batch_size + 1} (pages {i+1}-{batch_end} of {len(page_tasks)})")
+                logger.info(f"Processing pages {batch_nums} in parallel...")
+                
+                # Process batch in parallel
+                batch_results = await asyncio.gather(*batch)
+                
+                # Update page_info with results
+                for j, enrichment_metadata in enumerate(batch_results):
+                    extracted_pages[batch_nums[j]]["enrichment_metadata"] = enrichment_metadata
+                    pages_processed += 1
 
         print(f"🤖 BEAM: VLM enrichment complete! {pages_processed} full-page images processed, {tables_processed_with_vlm} individual tables processed")
         logger.info("VLM enrichment complete!")
@@ -651,8 +692,13 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning table image: {image_url}")
+                # Include bbox in context if available
+                context = table_element["structural_metadata"].copy()
+                if "bbox" in table_element.get("metadata", {}):
+                    context["bbox"] = table_element["metadata"]["bbox"]
+                
                 vlm_result = await self.vlm_captioner.caption_table_image_async(
-                    image_url, table_element["structural_metadata"]
+                    image_url, context
                 )
                 enrichment_metadata["table_image_caption"] = vlm_result["caption"]
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]

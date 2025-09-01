@@ -728,7 +728,34 @@ class PartitionStep(PipelineStep):
     ) -> Dict[str, Any]:
         """Execute hybrid partitioning: detect document type and choose optimal strategy"""
         try:
-            # Step 1: Detect document type
+            # Check if we have an explicit OCR strategy configured
+            if self.ocr_strategy != "auto":
+                # Use the explicitly configured strategy
+                logger.info(f"Using explicitly configured OCR strategy: {self.ocr_strategy}")
+                print(f"🎯 Using explicitly configured OCR strategy: {self.ocr_strategy}")
+                
+                if self.ocr_strategy == "hybrid_ocr_images":
+                    if UNSTRUCTURED_AVAILABLE:
+                        try:
+                            result = await self._process_with_unstructured(filepath, document_input)
+                            result["metadata"]["processing_strategy"] = "hybrid_ocr_images"
+                            result["metadata"]["forced_strategy"] = True
+                            return result
+                        except Exception as e:
+                            logger.warning(f"Hybrid processing failed: {e} - falling back to PyMuPDF only")
+                            # Fall through to PyMuPDF processing
+                    else:
+                        logger.warning("hybrid_ocr_images strategy requested but Unstructured not available - falling back to PyMuPDF")
+                        
+                elif self.ocr_strategy == "pymupdf_only":
+                    result = await self._partition_document_async(filepath, document_input)
+                    result["metadata"]["processing_strategy"] = "pymupdf_only"
+                    result["metadata"]["forced_strategy"] = True
+                    return result
+                    
+                # If unknown strategy or fallback needed, continue to auto-detection
+            
+            # Step 1: Detect document type (for auto mode or fallback)
             doc_analysis = self._detect_document_type(filepath)
 
             # Step 2: Choose processing strategy based on detection

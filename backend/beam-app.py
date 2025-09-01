@@ -15,9 +15,12 @@ import httpx
 from beam import Image, task_queue, env
 
 # Version tracking for debugging deployments
-BEAM_VERSION = "2.1.0"  # Update this when making changes
-DEPLOYMENT_DATE = "2025-08-18"
-CHANGES = "Added table validation to prevent malformed table extraction"
+BEAM_VERSION = "2.2.0"  # Update this when making changes
+DEPLOYMENT_DATE = "2025-09-01"
+CHANGES = "Added resource monitoring and removed GPU to optimize costs"
+
+# Resource monitoring
+from src.utils.resource_monitor import get_monitor, log_resources
 
 # Import our existing pipeline components
 from src.pipeline.indexing.orchestrator import IndexingOrchestrator
@@ -106,7 +109,10 @@ async def run_indexing_pipeline_on_beam(
         print(f"🚀 Starting Beam indexing pipeline for run: {indexing_run_id}")
         print(f"📄 Processing {len(document_ids)} documents")
         print(f"⚙️ BEAM VERSION: v{BEAM_VERSION} ({DEPLOYMENT_DATE})")
-        print(f"📝 TABLE VALIDATION: Enabled - will reject malformed tables")
+        print(f"📝 Changes: {CHANGES}")
+        
+        # Log initial resources
+        log_resources("Pipeline Start")
 
         # Initialize services
         print("🔧 Initializing services...")
@@ -193,6 +199,8 @@ async def run_indexing_pipeline_on_beam(
 
         # Process documents using the unified method
         print(f"🔄 Starting document processing...")
+        log_resources("Before Document Processing")
+        
         try:
             success = await orchestrator.process_documents(
                 document_inputs, existing_indexing_run_id=UUID(indexing_run_id)
@@ -200,6 +208,7 @@ async def run_indexing_pipeline_on_beam(
             print(
                 f"🔄 Processing completed: {'✅ Success' if success else '❌ Failed'}"
             )
+            log_resources("After Document Processing")
         except Exception as orchestrator_error:
             print(f"❌ Orchestrator error: {orchestrator_error}")
             return {
@@ -210,6 +219,13 @@ async def run_indexing_pipeline_on_beam(
 
         if success:
             print(f"✅ Indexing pipeline completed successfully")
+            
+            # Log final resource usage
+            monitor = get_monitor()
+            summary = monitor.get_summary()
+            print(f"\n📊 RESOURCE USAGE SUMMARY:")
+            print(f"  Peak CPU: {summary['peak_cpu_percent']:.1f}%")
+            print(f"  Peak RAM: {summary['peak_ram_percent']:.1f}%")
             
             # Trigger wiki generation via webhook
             if webhook_url and webhook_api_key:
@@ -222,6 +238,10 @@ async def run_indexing_pipeline_on_beam(
                 "indexing_run_id": indexing_run_id,
                 "document_count": len(document_inputs),
                 "message": "Indexing pipeline completed successfully",
+                "resource_usage": {
+                    "peak_cpu_percent": summary['peak_cpu_percent'],
+                    "peak_ram_percent": summary['peak_ram_percent'],
+                }
             }
         else:
             print(f"❌ Indexing pipeline failed")
@@ -243,9 +263,10 @@ async def run_indexing_pipeline_on_beam(
 
 @task_queue(
     name="construction-rag-indexing",
-    cpu=4,
-    memory="8Gi",
-    gpu="T4",
+    cpu=10,  # Optimized: 10 cores for 5 workers (2 cores each)
+    memory="20Gi",  # Optimized: 20GB for 5 workers (4GB each)
+    # gpu="T4",  # REMOVED: Not used, saves $0.54/hour
+    workers=5,  # Increased to 5 for better throughput
     image=Image(
         python_version="python3.11",  # Changed from 3.12 for Unstructured compatibility
         python_packages="beam_requirements.txt",
