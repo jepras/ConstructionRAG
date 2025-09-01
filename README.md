@@ -54,7 +54,7 @@ ConstructionRAG is a production-ready RAG (Retrieval-Augmented Generation) syste
    ```
 
 4. **Access the application**
-   - Frontend: http://localhost:8501
+   - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
    - Health Check: http://localhost:8000/health
@@ -67,11 +67,11 @@ ConstructionRAG is a production-ready RAG (Retrieval-Augmented Generation) syste
 3. Add environment variables in Railway dashboard
 4. Deploy - Live at: https://constructionrag-production.up.railway.app/
 
-#### Frontend (Streamlit Cloud)
-1. Connect your GitHub repository to Streamlit Cloud
-2. Streamlit Cloud will automatically detect `frontend/streamlit_app/main.py`
-3. Add environment variables in Streamlit Cloud dashboard
-4. Deploy - Live at: https://constructionrag.streamlit.app/
+#### Frontend (Railway)
+1. Connect your GitHub repository to Railway
+2. Railway will automatically detect the `frontend/Dockerfile`
+3. Add environment variables in Railway dashboard
+4. Deploy
 
 ## 📁 Project Structure
 
@@ -95,12 +95,18 @@ ConstructionRAG/
 │   ├── tests/                 # Integration and unit tests
 │   ├── Dockerfile             # Backend Docker configuration
 │   └── requirements.txt       # Backend dependencies
-├── frontend/                  # Streamlit Application (Streamlit Cloud)
-│   ├── streamlit_app/
-│   │   ├── main.py            # Main Streamlit application
-│   │   ├── components/        # Authentication, upload, query components
-│   │   └── utils/             # Frontend utilities
-│   └── requirements.txt       # Frontend dependencies
+├── frontend/                  # Next.js Application (Railway)
+│   ├── src/
+│   │   ├── app/               # Next.js App Router
+│   │   │   ├── layout.tsx     # Root layout
+│   │   │   ├── page.tsx       # Home page
+│   │   │   ├── projects/      # Public projects (anonymous access)
+│   │   │   └── (app)/         # Authenticated app routes
+│   │   │       └── dashboard/ # Private projects and user management
+│   │   ├── components/        # Reusable UI components
+│   │   └── lib/               # Utilities and helpers
+│   ├── package.json           # Node.js dependencies
+│   └── Dockerfile             # Frontend Docker configuration
 ├── own/                       # Project documentation and learning
 │   ├── ARCHITECTURE_OVERVIEW.md
 │   ├── PIPELINE_CONFIGURATION.md
@@ -115,10 +121,9 @@ ConstructionRAG/
 ## 🔧 Configuration
 
 ### Pipeline Configuration
-The system uses YAML configuration files for pipeline parameters:
+The system uses JSON configuration files for pipeline parameters:
 
-- `backend/src/pipeline/indexing/config/indexing_config.yaml` - Document processing pipeline
-- `backend/src/pipeline/querying/config/query_config.yaml` - Query processing pipeline
+- `backend/src/config/pipeline/pipeline_config.json` - Unified pipeline configuration
 
 ### Configuration Features
 - **Hot Reloading**: Changes take effect immediately for new jobs
@@ -148,11 +153,11 @@ LOG_LEVEL=DEBUG
 #### Frontend (.env)
 ```bash
 # Backend connection
-BACKEND_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000
 
 # Authentication
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Application
 ENVIRONMENT=development
@@ -171,7 +176,7 @@ pytest tests/integration/
 
 # Frontend tests
 cd frontend
-streamlit run streamlit_app/main.py
+npm run dev
 ```
 
 ### End-to-End Testing
@@ -187,7 +192,7 @@ pytest backend/tests/integration/
 
 - **Supabase**: Database metrics, logs, and Row Level Security
 - **Railway**: Application metrics, logs, and health checks
-- **Streamlit Cloud**: Frontend metrics and logs
+- **Railway Frontend**: Frontend metrics and logs
 - **Structured Logging**: Comprehensive logging with correlation IDs
 - **Health Checks**: `/health` endpoint for monitoring
 
@@ -199,58 +204,8 @@ pytest backend/tests/integration/
 - Environment variable management
 - Health checks and monitoring
 
-### Streamlit Cloud (Frontend)
+### Railway (Frontend)
 - Automatic deployment from GitHub
-- Git-based deployment
+- Docker-based deployment
 - Environment variable management
 - Custom domain support
-
-## 📈 Performance
-
-### Targets
-- PDF processing: <30 minutes for 200-page document
-- Query response: <5 seconds for typical queries
-- System uptime: >99.5%
-- Concurrent users: Support 10+ simultaneous users
-
-### Cost Optimization
-- Free tier usage (Railway, Streamlit Cloud, Supabase)
-- Efficient embedding batching (voyage-multilingual-2)
-- Background processing for heavy tasks
-- Danish language optimization for better accuracy
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue in the GitHub repository
-- Check the documentation in the `own/` folder
-- Review the implementation task list in `IMPLEMENTATION_TASK_LIST.md`
-
-## 📚 Documentation
-
-For detailed system understanding, see the documentation in the `own/` folder:
-- **`ARCHITECTURE_OVERVIEW.md`** - High-level system architecture and workflows
-- **`PIPELINE_CONFIGURATION.md`** - Detailed pipeline configuration guide
-- **`DATABASE_DESIGN.md`** - Database schema and data flow patterns
-- **`SYSTEM_INTEGRATION.md`** - Component integration and communication
-
-## 🔮 Roadmap
-
-See `PRODUCTION_ARCHITECTURE.md` for the complete roadmap and future features including:
-- Project overview generation
-- Construction-specific structuring
-- Advanced analytics
-- Enterprise features
-- Next.js migration
