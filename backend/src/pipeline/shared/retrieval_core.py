@@ -66,7 +66,7 @@ class RetrievalCore:
         query_embedding: List[float],
         indexing_run_id: Optional[str] = None,
         allowed_document_ids: Optional[List[str]] = None,
-        similarity_threshold: float = 0.1
+        similarity_threshold: float = 0.0
     ) -> List[Dict[str, Any]]:
         """
         Search using pgvector HNSW optimization with match_chunks function.
@@ -80,14 +80,14 @@ class RetrievalCore:
         Returns:
             List of matching chunks with similarity scores
         """
-        logger.info(f"🔍 HNSW search with threshold={similarity_threshold}, count={self.config.top_k * 2}")
+        logger.info(f"🔍 HNSW search with threshold={similarity_threshold}, count={self.config.top_k * 2}, top_k={self.config.top_k}")
         
         try:
-            # Prepare RPC parameters
+            # Prepare RPC parameters - use 0.0 threshold and 15 results like test file
             rpc_params = {
                 'query_embedding': query_embedding,
-                'match_threshold': similarity_threshold,
-                'match_count': self.config.top_k * 2,  # Get extra for deduplication
+                'match_threshold': 0.0,  # No threshold filtering, like test file
+                'match_count': 15,  # Fixed 15 results like test file
             }
             
             # Add optional filters
@@ -99,6 +99,11 @@ class RetrievalCore:
             hnsw_start = datetime.utcnow()
             response = self.db.rpc('match_chunks', rpc_params).execute()
             hnsw_duration = (datetime.utcnow() - hnsw_start).total_seconds() * 1000
+            
+            # Debug response
+            logger.info(f"🔍 HNSW response type: {type(response.data)}, has data: {response.data is not None}")
+            if response.data is not None:
+                logger.info(f"🔍 HNSW raw response count: {len(response.data)}")
             
             # Filter by document IDs if specified (post-query filtering)
             results = response.data if response.data else []
@@ -173,8 +178,8 @@ class RetrievalCore:
         # Sort by similarity (highest first)
         results_with_scores.sort(key=lambda x: x["similarity_score"], reverse=True)
         
-        # Return top results
-        return results_with_scores[:self.config.top_k * 2]
+        # Return top 15 results like HNSW
+        return results_with_scores[:15]
     
     async def search_with_fallback(
         self,
@@ -184,7 +189,8 @@ class RetrievalCore:
         language: str = "danish"
     ) -> List[Dict[str, Any]]:
         """
-        Search with HNSW optimization and Python fallback.
+        Search using Python similarity calculation as primary method.
+        HNSW is commented out due to production issues.
         
         Args:
             query_embedding: Query vector
@@ -195,34 +201,32 @@ class RetrievalCore:
         Returns:
             List of matching chunks with similarity scores
         """
-        # Use very low threshold since function ignores it anyway and we want all results
-        min_threshold = -999.0  # Function ignores this, but set low to be safe
+        # Skip HNSW and go directly to Python similarity calculation
+        logger.info("🐍 Using Python similarity as primary search method (HNSW disabled)")
         
+        # Commented out HNSW attempt - not working in production
+        # try:
+        #     # Try HNSW search first
+        #     results = await self.search_pgvector_hnsw(
+        #         query_embedding, indexing_run_id, allowed_document_ids, 0.0
+        #     )
+        #     
+        #     if results:
+        #         return self._post_process_results(results, language)
+        # except Exception as e:
+        #     logger.error(f"HNSW search failed: {e}")
+        
+        # Use Python similarity as primary method
         try:
-            # Try HNSW search first
-            results = await self.search_pgvector_hnsw(
-                query_embedding, indexing_run_id, allowed_document_ids, min_threshold
-            )
-            
-            if results:
-                return self._post_process_results(results, language)
-            
-            # Fallback to Python similarity
-            logger.warning("🚨 HNSW found no results, trying Python fallback")
-            fallback_results = await self.search_pgvector_fallback(
+            python_results = await self.search_pgvector_fallback(
                 query_embedding, indexing_run_id, allowed_document_ids
             )
             
-            return self._post_process_results(fallback_results, language)
+            return self._post_process_results(python_results, language)
             
         except Exception as e:
-            logger.error(f"Search failed: {e}")
-            # Final fallback to Python similarity
-            logger.warning("🚨 HNSW failed, using Python fallback")
-            fallback_results = await self.search_pgvector_fallback(
-                query_embedding, indexing_run_id, allowed_document_ids
-            )
-            return self._post_process_results(fallback_results, language)
+            logger.error(f"Python similarity search failed: {e}")
+            raise
     
     def _format_hnsw_results(self, results: List[Dict], query_embedding: List[float]) -> List[Dict[str, Any]]:
         """Format results from HNSW search with calculated similarity scores"""
@@ -264,8 +268,8 @@ class RetrievalCore:
         # Sort by similarity (highest first)
         sorted_results = self.similarity_service.sort_by_similarity(deduplicated, descending=True)
         
-        # Limit to top_k (should be 15 for better context)
-        return sorted_results[:self.config.top_k]
+        # Return top 15 results like test file
+        return sorted_results[:15]
     
     def _parse_embedding(self, embedding_str: str) -> Optional[List[float]]:
         """Parse embedding string to list of floats"""

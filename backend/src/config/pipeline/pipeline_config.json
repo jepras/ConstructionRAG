@@ -85,8 +85,8 @@
       "dimensions": 1024,
       "similarity_metric": "cosine",
       "top_k": 5,
-      "similarity_thresholds": { "excellent": 0.75, "good": 0.60, "acceptable": 0.40, "minimum": 0.25 },
-      "danish_thresholds": { "excellent": 0.60, "good": 0.45, "acceptable": 0.30, "minimum": 0.15 }
+      "similarity_thresholds": { "excellent": 0.05, "good": 0.04, "acceptable": 0.03, "minimum": 0.01 },
+      "danish_thresholds": { "excellent": 0.05, "good": 0.04, "acceptable": 0.03, "minimum": 0.01 }
     },
     "generation": {
       "provider": "openrouter",

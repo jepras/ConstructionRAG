@@ -22,14 +22,15 @@ class RetrievalConfig:
         self.embedding_model = config.get("embedding_model", "voyage-multilingual-2")
         self.dimensions = config.get("dimensions", 1024)
         self.similarity_metric = config.get("similarity_metric", "cosine")
-        self.top_k = config.get("top_k", 5)
+        self.top_k = config.get("top_k", 15)  # Changed from 5 to 15 like test file
+        # Set all thresholds to 0.0 for no filtering
         self.similarity_thresholds = config.get(
             "similarity_thresholds",
-            {"excellent": 0.75, "good": 0.60, "acceptable": 0.40, "minimum": 0.25},
+            {"excellent": 0.0, "good": 0.0, "acceptable": 0.0, "minimum": 0.0},
         )
         self.danish_thresholds = config.get(
             "danish_thresholds",
-            {"excellent": 0.70, "good": 0.55, "acceptable": 0.35, "minimum": 0.20},
+            {"excellent": 0.0, "good": 0.0, "acceptable": 0.0, "minimum": 0.0},
         )
 
 
@@ -162,12 +163,25 @@ class DocumentRetriever(PipelineStep):
         result_objects = []
         
         for result in search_results:
+            # Try to get source_filename from top level first (HNSW path),
+            # then fall back to metadata (fallback path)
+            source_filename = result.get("source_filename")
+            if not source_filename or source_filename == "unknown":
+                metadata = result.get("metadata", {})
+                source_filename = metadata.get("source_filename", "unknown")
+            
+            # Similarly for page_number
+            page_number = result.get("page_number")
+            if page_number is None:
+                metadata = result.get("metadata", {})
+                page_number = metadata.get("page_number")
+            
             search_result = SearchResult(
                 content=result["content"],
                 metadata=result.get("metadata", {}),
                 similarity_score=result["similarity_score"],
-                source_filename=result.get("source_filename", "unknown"),
-                page_number=result.get("page_number"),
+                source_filename=source_filename,
+                page_number=page_number,
                 chunk_id=str(result["id"]),
             )
             result_objects.append(search_result)

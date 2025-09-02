@@ -162,9 +162,6 @@ class ResponseGenerator(PipelineStep):
             logger.info(
                 f"📄 Result {i}: filename='{result.source_filename}', page={result.page_number}, similarity={result.similarity_score:.3f}"
             )
-            logger.info(f"📄 Result {i} metadata keys: {list(result.metadata.keys()) if result.metadata else 'None'}")
-            if result.metadata:
-                logger.info(f"📄 Result {i} metadata content: {result.metadata}")
 
             context_parts.append(
                 f"Kilde {i} (side {result.page_number}, {result.source_filename}):\n{result.content}\n"
