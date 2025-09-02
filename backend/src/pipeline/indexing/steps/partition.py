@@ -223,7 +223,7 @@ class PartitionStep(PipelineStep):
                 "metadata": {
                     "processing_strategy": "unstructured_hi_res",
                     "timestamp": datetime.now().isoformat(),
-                    "source_file": os.path.basename(filepath),
+                    "source_file": document_input.filename if document_input else os.path.basename(filepath),
                 },
             }
 
@@ -243,7 +243,7 @@ class PartitionStep(PipelineStep):
                     "text": str(element),
                     "metadata": {
                         "page_number": page_number,
-                        "filename": getattr(element.metadata, "filename", None),
+                        "filename": document_input.filename if document_input else getattr(element.metadata, "filename", None),
                         "extraction_method": "unstructured_ocr",
                     },
                 }
@@ -986,7 +986,7 @@ class PartitionStep(PipelineStep):
             metadata = {
                 "processing_strategy": "pymupdf_only",
                 "timestamp": datetime.now().isoformat(),
-                "source_file": os.path.basename(filepath),
+                "source_file": document_input.filename if document_input else os.path.basename(filepath),
                 "text_count": len(filtered_text_elements),
                 "enhanced_tables": len(enhanced_tables),
                 "extracted_pages": len(extracted_pages),
