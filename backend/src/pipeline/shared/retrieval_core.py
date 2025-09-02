@@ -195,8 +195,8 @@ class RetrievalCore:
         Returns:
             List of matching chunks with similarity scores
         """
-        # Get language-appropriate threshold
-        min_threshold = self.config.get_minimum_threshold(language)
+        # Use very low threshold since function ignores it anyway and we want all results
+        min_threshold = -999.0  # Function ignores this, but set low to be safe
         
         try:
             # Try HNSW search first
@@ -251,20 +251,20 @@ class RetrievalCore:
         return formatted_results
     
     def _post_process_results(self, results: List[Dict[str, Any]], language: str) -> List[Dict[str, Any]]:
-        """Post-process results with filtering, deduplication, and sorting"""
+        """Post-process results with deduplication and sorting (no threshold filtering)"""
         if not results:
             return []
         
-        # Filter by similarity threshold
-        filtered = self.similarity_service.filter_by_similarity_threshold(results, language)
+        # Skip threshold filtering - let LLM decide relevance
+        # filtered = self.similarity_service.filter_by_similarity_threshold(results, language)
         
         # Deduplicate by content
-        deduplicated = self.similarity_service.deduplicate_by_content(filtered)
+        deduplicated = self.similarity_service.deduplicate_by_content(results)
         
         # Sort by similarity (highest first)
         sorted_results = self.similarity_service.sort_by_similarity(deduplicated, descending=True)
         
-        # Limit to top_k
+        # Limit to top_k (should be 15 for better context)
         return sorted_results[:self.config.top_k]
     
     def _parse_embedding(self, embedding_str: str) -> Optional[List[float]]:

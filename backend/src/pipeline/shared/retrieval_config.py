@@ -34,7 +34,7 @@ class SharedRetrievalConfig(BaseModel):
     
     # Search configuration  
     similarity_metric: str = "cosine"
-    top_k: int = 5
+    top_k: int = 15  # Increased to provide more context to LLM
     
     # Similarity thresholds
     similarity_thresholds: RetrievalThresholds = RetrievalThresholds()
