@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { X, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
-import { Document, pdfjs } from 'react-pdf';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,10 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import PDFPageViewer from './PDFPageViewer';
-
-// Set up the worker for react-pdf
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+import { PDFPageViewer } from './PDFViewerWrapper';
 
 interface PDFFullViewerProps {
   isOpen: boolean;
@@ -27,6 +23,7 @@ interface PDFFullViewerProps {
     bbox: number[];
     chunk_id?: string;
   }>;
+  selectedChunkId?: string;
 }
 
 export default function PDFFullViewer({
@@ -37,11 +34,10 @@ export default function PDFFullViewer({
   initialPage = 1,
   totalPages,
   highlights = [],
+  selectedChunkId,
 }: PDFFullViewerProps) {
   const [currentPage, setCurrentPage] = useState(initialPage);
-  const [pageCount, setPageCount] = useState(totalPages || 1);
-  const [loadingPageCount, setLoadingPageCount] = useState(!totalPages);
-  const mountedRef = useRef(true);
+  const [pageCount, setPageCount] = useState(totalPages || 50); // Default to 50 pages if not provided
 
   // Get highlights for current page
   const currentPageHighlights = highlights
@@ -49,30 +45,6 @@ export default function PDFFullViewer({
         .filter(h => h && h.page_number === currentPage)
         .map(h => ({ bbox: h.bbox, chunk_id: h.chunk_id }))
     : [];
-
-  // Cleanup on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  // Handle document load success to get page count
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    if (mountedRef.current) {
-      console.log('PDFFullViewer: Document loaded with', numPages, 'pages');
-      setPageCount(numPages);
-      setLoadingPageCount(false);
-    }
-  };
-
-  const onDocumentLoadError = (error: Error) => {
-    console.error('PDFFullViewer: Failed to load document:', error);
-    if (mountedRef.current) {
-      setLoadingPageCount(false);
-    }
-  };
 
   // Reset to initial page when modal opens
   React.useEffect(() => {
@@ -103,7 +75,7 @@ export default function PDFFullViewer({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="!max-w-[900px] w-[90vw] max-h-[90vh] flex flex-col p-0 sm:!max-w-[900px]" showCloseButton={false}>
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center justify-between">
@@ -126,31 +98,13 @@ export default function PDFFullViewer({
 
         {/* PDF Viewer */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {!totalPages && isOpen ? (
-            // Use Document component to load page count
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={null}
-            >
-              <PDFPageViewer
-                pdfUrl={pdfUrl}
-                pageNumber={currentPage}
-                highlights={currentPageHighlights}
-                scale={1.2}
-                className="h-full"
-              />
-            </Document>
-          ) : (
-            <PDFPageViewer
-              pdfUrl={pdfUrl}
-              pageNumber={currentPage}
-              highlights={currentPageHighlights}
-              scale={1.2}
-              className="h-full"
-            />
-          )}
+          <PDFPageViewer
+            pdfUrl={pdfUrl}
+            pageNumber={currentPage}
+            highlights={currentPageHighlights}
+            scale={1.2}
+            className="h-full"
+          />
         </div>
 
         {/* Footer with navigation */}
@@ -178,7 +132,7 @@ export default function PDFFullViewer({
                   max={pageCount}
                 />
                 <span className="text-sm text-muted-foreground">
-                  of {loadingPageCount ? '...' : pageCount}
+                  of {pageCount}
                 </span>
               </div>
               

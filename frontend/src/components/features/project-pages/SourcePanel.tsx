@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Search, Download, Info, Maximize2, Loader2 } from 'lucide-react';
+import { FileText, Maximize2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchResult } from '@/lib/api-client';
 import { PDFPageViewer, PDFFullViewer } from './PDFViewerWrapper';
@@ -105,20 +105,30 @@ export default function SourcePanel({
     }
   }, [selectedSource, indexingRunId]);
 
-  // Prepare highlights for the current source
-  const currentHighlights = selectedSource?.bbox 
-    ? [{ bbox: selectedSource.bbox, chunk_id: selectedSource.chunk_id }]
-    : selectedSource?.metadata?.bbox
-    ? [{ bbox: selectedSource.metadata.bbox, chunk_id: selectedSource.chunk_id }]
+  // Prepare highlights for all sources on the same page and document as the selected source
+  const currentHighlights = selectedSource && allSources
+    ? allSources
+        .filter(source => 
+          // Only include sources from the same page and document
+          (source?.page_number || source?.metadata?.page_number) === 
+            (selectedSource?.page_number || selectedSource?.metadata?.page_number) &&
+          (source?.document_id || source?.metadata?.document_id) === 
+            (selectedSource?.document_id || selectedSource?.metadata?.document_id)
+        )
+        .map(source => ({
+          bbox: source?.bbox || source?.metadata?.bbox,
+          chunk_id: source?.chunk_id,
+        }))
+        .filter(h => h?.bbox && h.bbox.length === 4)
     : [];
   
   // Debug logging for bbox
-  console.log('SourcePanel: selectedSource bbox check:', {
-    hasBbox: !!selectedSource?.bbox,
-    hasMetadataBbox: !!selectedSource?.metadata?.bbox,
-    bbox: selectedSource?.bbox || selectedSource?.metadata?.bbox || 'none',
+  console.log('SourcePanel: highlights check:', {
+    selectedSourcePage: selectedSource?.page_number || selectedSource?.metadata?.page_number,
+    selectedSourceDoc: selectedSource?.document_id || selectedSource?.metadata?.document_id,
+    totalSources: allSources?.length || 0,
+    highlightsOnPage: currentHighlights.length,
     currentHighlights: currentHighlights,
-    selectedSource: selectedSource
   });
 
   // Get all highlights for full viewer (from all sources for the same document)
@@ -139,47 +149,28 @@ export default function SourcePanel({
   return (
     <>
       <div className="h-full flex flex-col bg-card border-l border-border">
-        {/* Header */}
-        <div className="bg-secondary p-3 flex items-center justify-between border-b border-border">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-secondary-foreground">
-              Source Documents
-            </span>
-          </div>
-          <div className="flex items-center space-x-1">
-            {selectedSource && pdfUrl && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="p-1"
-                onClick={() => setShowFullViewer(true)}
-                title="View full document"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" className="p-1">
-              <Info className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="p-1">
-              <Search className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="p-1">
-              <Download className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-
         {/* Content */}
         <div className="flex-1 overflow-hidden">
           {selectedSource ? (
             <div className="h-full flex flex-col">
               {/* Source info */}
               <div className="px-4 py-3 border-b border-border bg-background">
-                <h3 className="text-sm font-semibold text-foreground truncate">
-                  {selectedSource.source_filename}
-                </h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-foreground truncate">
+                    {selectedSource.source_filename}
+                  </h3>
+                  {pdfUrl && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="p-1 ml-2"
+                      onClick={() => setShowFullViewer(true)}
+                      title="View full document"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 mt-1">
                   {(selectedSource.page_number || selectedSource.metadata?.page_number) && (
                     <span className="text-xs text-muted-foreground">
@@ -189,6 +180,11 @@ export default function SourcePanel({
                   <span className="text-xs text-muted-foreground">
                     {Math.round(selectedSource.similarity_score * 100)}% match
                   </span>
+                  {currentHighlights.length > 1 && (
+                    <span className="text-xs text-muted-foreground">
+                      • {currentHighlights.length} sources on this page
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -216,6 +212,7 @@ export default function SourcePanel({
                     pdfUrl={pdfUrl}
                     pageNumber={selectedSource.page_number || selectedSource.metadata?.page_number || 1}
                     highlights={currentHighlights}
+                    selectedChunkId={selectedSource.chunk_id}
                     scale={1.2}
                     onPageClick={() => setShowFullViewer(true)}
                     className="h-full"
@@ -231,20 +228,6 @@ export default function SourcePanel({
                 )}
               </div>
 
-              {/* View full document button */}
-              {pdfUrl && !loadingPdf && !pdfError && (
-                <div className="p-3 border-t border-border">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowFullViewer(true)}
-                    className="w-full"
-                  >
-                    <Maximize2 className="w-4 h-4 mr-2" />
-                    View Full Document
-                  </Button>
-                </div>
-              )}
             </div>
           ) : (
             <div className="h-full flex items-center justify-center p-6">
@@ -275,6 +258,7 @@ export default function SourcePanel({
           filename={selectedSource.source_filename}
           initialPage={selectedSource.page_number || selectedSource.metadata?.page_number || 1}
           highlights={allHighlights}
+          selectedChunkId={selectedSource.chunk_id}
         />
       )}
     </>

@@ -1,6 +1,16 @@
 import os
+from pathlib import Path
 
 import pytest
+
+# Load .env file before checking for environment variables
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    pass
 
 # Skip entire module if Supabase env is not configured to avoid import-time client initialization
 if not (os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY")):

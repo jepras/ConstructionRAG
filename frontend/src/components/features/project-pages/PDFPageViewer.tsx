@@ -11,6 +11,7 @@ interface PDFPageViewerProps {
     bbox: number[];
     chunk_id?: string;
   }>;
+  selectedChunkId?: string;  // ID of the selected chunk to highlight differently
   scale?: number;
   onPageClick?: () => void;
   className?: string;
@@ -20,6 +21,7 @@ export default function PDFPageViewer({
   pdfUrl,
   pageNumber,
   highlights = [],
+  selectedChunkId,
   scale: initialScale = 1.5,
   onPageClick,
   className = '',
@@ -60,21 +62,36 @@ export default function PDFPageViewer({
       // Clear previous highlights
       ctx.clearRect(0, 0, highlightCanvas.width, highlightCanvas.height);
 
-      // Set highlight style - using primary color with opacity
-      ctx.fillStyle = 'rgba(251, 146, 60, 0.3)'; // Orange with 30% opacity
-
       // Draw each highlight
       highlights.forEach((highlight) => {
         if (!highlight || !highlight.bbox || highlight.bbox.length !== 4) return;
+        
+        // Use different styles for selected vs other highlights
+        const isSelected = selectedChunkId && highlight.chunk_id === selectedChunkId;
+        
+        if (isSelected) {
+          // Selected chunk: More prominent orange with higher opacity
+          ctx.fillStyle = 'rgba(251, 146, 60, 0.5)'; // Orange with 50% opacity
+        } else {
+          // Other chunks: Lighter yellow with lower opacity
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.2)'; // Yellow with 20% opacity
+        }
         
         const [x0, y0, x1, y1] = transformBboxToCanvas(highlight.bbox, pageHeight, scale);
         const width = x1 - x0;
         const height = y1 - y0;
         
         ctx.fillRect(x0, y0, width, height);
+        
+        // Add a border for the selected highlight
+        if (isSelected) {
+          ctx.strokeStyle = 'rgba(251, 146, 60, 0.8)'; // Orange border
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, y0, width, height);
+        }
       });
     },
-    [highlights, transformBboxToCanvas]
+    [highlights, selectedChunkId, transformBboxToCanvas]
   );
 
   // Load and render PDF page
@@ -247,12 +264,12 @@ export default function PDFPageViewer({
     };
   }, [pdfUrl, pageNumber, scale, drawHighlights]);
 
-  // Redraw highlights when scale changes
+  // Redraw highlights when scale or selection changes
   useEffect(() => {
     if (pageHeight > 0) {
       drawHighlights(pageHeight, scale);
     }
-  }, [scale, pageHeight, drawHighlights]);
+  }, [scale, pageHeight, drawHighlights, selectedChunkId]);
 
   const handleZoomIn = () => {
     setScale(prev => Math.min(prev + 0.25, 3));

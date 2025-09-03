@@ -70,7 +70,7 @@ class OverviewGenerationStep(PipelineStep):
         defaults_cfg = ConfigService().get_effective_config("defaults")
         global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
         self.model = wiki_cfg.get("generation", {}).get("model", global_default_model)
-        self.similarity_threshold = config.get("similarity_threshold", 0.3)
+        self.similarity_threshold = config.get("similarity_threshold", 0.15)
         self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
         self.overview_query_count = config.get("overview_query_count", 12)
         self.max_chunks_in_prompt = config.get("max_chunks_in_prompt", 10)  # Reduced from 15
