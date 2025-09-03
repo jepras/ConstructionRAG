@@ -25,6 +25,7 @@ class SearchResult(BaseModel):
     source_filename: str
     page_number: int | None = None
     chunk_id: str | None = None
+    document_id: str | None = None
 
 
 class QualityMetrics(BaseModel):

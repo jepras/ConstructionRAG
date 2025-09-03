@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import QueryInterface from './QueryInterface';
 import SourcePanel from './SourcePanel';
+import { SearchResult } from '@/lib/api-client';
 
 interface ProjectQueryContentProps {
   projectSlug: string;
@@ -28,10 +29,23 @@ export default function ProjectQueryContent({
   isAuthenticated, 
   user 
 }: ProjectQueryContentProps) {
-  const [selectedSource, setSelectedSource] = useState<any>(null);
+  const [selectedSource, setSelectedSource] = useState<SearchResult | undefined>(undefined);
+  const [allSources, setAllSources] = useState<SearchResult[]>([]);
   
   // Extract the actual indexing run ID from the runId parameter
   const indexingRunId = extractUUIDFromSlug(runId);
+
+  const handleNewQueryResponse = (searchResults: SearchResult[]) => {
+    setAllSources(searchResults);
+    // Automatically select the first (most relevant) source
+    if (searchResults.length > 0) {
+      setSelectedSource(searchResults[0]);
+    }
+  };
+
+  const handleSourceChange = (source: SearchResult) => {
+    setSelectedSource(source);
+  };
 
   return (
     <div className="h-full flex">
@@ -48,13 +62,21 @@ export default function ProjectQueryContent({
           <QueryInterface 
             indexingRunId={indexingRunId}
             isAuthenticated={isAuthenticated}
+            onQueryResponse={handleNewQueryResponse}
+            onSourceSelect={handleSourceChange}
+            selectedSource={selectedSource}
           />
         </div>
       </div>
 
       {/* Right Side - Source Panel */}
       <div className="hidden lg:block w-96">
-        <SourcePanel selectedSource={selectedSource} />
+        <SourcePanel 
+          selectedSource={selectedSource}
+          allSources={allSources}
+          onSourceChange={handleSourceChange}
+          indexingRunId={indexingRunId}
+        />
       </div>
     </div>
   );

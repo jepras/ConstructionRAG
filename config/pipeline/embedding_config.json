@@ -1,7 +1,0 @@
-{
-  "model": "voyage-large-2",
-  "dimensions": 1536,
-  "batch_size": 32,
-  "max_retries": 3,
-  "timeout": 30
-} 

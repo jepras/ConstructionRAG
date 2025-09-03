@@ -17,17 +17,25 @@ interface QueryMessageProps {
     isLoading?: boolean;
   };
   isTyping?: boolean;
+  onSourceSelect?: (source: QueryResponse['search_results'][0]) => void;
+  selectedSourceId?: string;
 }
 
-export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
+export default function QueryMessage({ message, isTyping, onSourceSelect, selectedSourceId }: QueryMessageProps) {
   const isUser = message.type === 'user';
   const [selectedSource, setSelectedSource] = useState<QueryResponse['search_results'][0] | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSourcesExpanded, setIsSourcesExpanded] = useState(false);
+  const [isSourcesExpanded, setIsSourcesExpanded] = useState(true); // Expanded by default to show sources immediately
 
   const handleSourceClick = (source: QueryResponse['search_results'][0]) => {
-    setSelectedSource(source);
-    setIsModalOpen(true);
+    // If onSourceSelect is provided, use it for the source panel
+    if (onSourceSelect) {
+      onSourceSelect(source);
+    } else {
+      // Otherwise show the modal (fallback behavior)
+      setSelectedSource(source);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -35,25 +43,42 @@ export default function QueryMessage({ message, isTyping }: QueryMessageProps) {
     setSelectedSource(null);
   };
 
-  const renderSourceButton = (result: QueryResponse['search_results'][0], index: number) => (
-    <button
-      key={index}
-      className="block w-full text-left px-2 py-1 rounded hover:bg-muted/50 transition-colors group cursor-pointer border border-transparent hover:border-border"
-      onClick={() => handleSourceClick(result)}
-      title="Click to view full source text"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground group-hover:text-foreground flex items-center gap-1">
-          <FileText className="w-3 h-3" />
-          {result.source_filename}
-          {result.page_number && ` • Page ${result.page_number}`}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {Math.round(result.similarity_score * 100)}% match
-        </span>
-      </div>
-    </button>
-  );
+  const renderSourceButton = (result: QueryResponse['search_results'][0], index: number) => {
+    const isSelected = selectedSourceId === result.chunk_id;
+    
+    return (
+      <button
+        key={index}
+        className={cn(
+          "block w-full text-left px-2 py-1 rounded transition-colors group cursor-pointer border",
+          isSelected
+            ? "bg-primary/10 border-primary hover:bg-primary/20"
+            : "hover:bg-muted/50 border-transparent hover:border-border"
+        )}
+        onClick={() => handleSourceClick(result)}
+        title={onSourceSelect ? "Click to view in source panel" : "Click to view full source text"}
+      >
+        <div className="flex items-center justify-between">
+          <span className={cn(
+            "text-xs flex items-center gap-1",
+            isSelected
+              ? "text-primary font-medium"
+              : "text-muted-foreground group-hover:text-foreground"
+          )}>
+            <FileText className="w-3 h-3" />
+            {result.source_filename}
+            {result.page_number && ` • Page ${result.page_number}`}
+          </span>
+          <span className={cn(
+            "text-xs",
+            isSelected ? "text-primary" : "text-muted-foreground"
+          )}>
+            {Math.round(result.similarity_score * 100)}% match
+          </span>
+        </div>
+      </button>
+    );
+  };
 
   if (isUser) {
     return (

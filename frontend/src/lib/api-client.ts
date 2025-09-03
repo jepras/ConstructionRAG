@@ -201,12 +201,15 @@ export interface SearchResult {
     filename: string
     page_number?: number
     section_title?: string
+    bbox?: number[]
     [key: string]: any
   }
   similarity_score: number
   source_filename: string
   page_number?: number
   chunk_id: string
+  bbox?: number[]
+  document_id?: string
 }
 
 export interface QueryResponse {

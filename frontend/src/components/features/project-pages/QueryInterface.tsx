@@ -19,9 +19,18 @@ interface Message {
 interface QueryInterfaceProps {
   indexingRunId: string;
   isAuthenticated?: boolean;
+  onQueryResponse?: (searchResults: QueryResponse['search_results']) => void;
+  onSourceSelect?: (source: QueryResponse['search_results'][0]) => void;
+  selectedSource?: QueryResponse['search_results'][0];
 }
 
-export default function QueryInterface({ indexingRunId, isAuthenticated }: QueryInterfaceProps) {
+export default function QueryInterface({ 
+  indexingRunId, 
+  isAuthenticated,
+  onQueryResponse,
+  onSourceSelect,
+  selectedSource
+}: QueryInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -49,6 +58,20 @@ export default function QueryInterface({ indexingRunId, isAuthenticated }: Query
         return newMessages;
       });
       setIsTyping(false);
+      
+      // Notify parent component of new search results
+      if (onQueryResponse && response.search_results) {
+        console.log('QueryInterface: Search results received:', {
+          count: response.search_results.length,
+          firstResult: response.search_results[0] ? {
+            hasDocumentId: !!response.search_results[0].document_id,
+            hasMetadataDocumentId: !!response.search_results[0].metadata?.document_id,
+            metadata: response.search_results[0].metadata,
+            chunk_id: response.search_results[0].chunk_id
+          } : null
+        });
+        onQueryResponse(response.search_results);
+      }
     },
     onError: (error: any) => {
       // Update the assistant message with error
@@ -141,6 +164,8 @@ export default function QueryInterface({ indexingRunId, isAuthenticated }: Query
               key={message.id}
               message={message}
               isTyping={isTyping && message.isLoading}
+              onSourceSelect={onSourceSelect}
+              selectedSourceId={selectedSource?.chunk_id}
             />
           ))
         )}

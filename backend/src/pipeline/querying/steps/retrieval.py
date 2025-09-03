@@ -176,6 +176,12 @@ class DocumentRetriever(PipelineStep):
                 metadata = result.get("metadata", {})
                 page_number = metadata.get("page_number")
             
+            # Get document_id from result or metadata
+            document_id = result.get("document_id")
+            if not document_id:
+                metadata = result.get("metadata", {})
+                document_id = metadata.get("document_id")
+            
             search_result = SearchResult(
                 content=result["content"],
                 metadata=result.get("metadata", {}),
@@ -183,6 +189,7 @@ class DocumentRetriever(PipelineStep):
                 source_filename=source_filename,
                 page_number=page_number,
                 chunk_id=str(result["id"]),
+                document_id=str(document_id) if document_id else None,
             )
             result_objects.append(search_result)
         

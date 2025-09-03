@@ -699,35 +699,50 @@ async def get_document_pdf(
         # Generate signed URL for the PDF
         storage_path = doc.get("storage_path")
         if not storage_path:
+            logger.error(f"No storage path found for document {document_id}")
             raise AppError(
                 "Document PDF not found",
                 error_code=ErrorCode.NOT_FOUND,
-                details={"reason": "No storage path for document"},
+                details={"reason": "No storage path for document", "document_id": str(document_id)},
                 request_id=get_request_id(),
             )
+        
+        logger.info(f"Generating signed URL for document {document_id} with path: {storage_path}")
         
         # Use admin client to create signed URL
         admin_db = get_supabase_admin_client()
         
         # Generate a signed URL valid for 1 hour
-        response = admin_db.storage.from_("documents").create_signed_url(
-            path=storage_path,
-            expires_in=3600  # 1 hour
-        )
-        
-        if not response or "signedURL" not in response:
+        try:
+            response = admin_db.storage.from_("documents").create_signed_url(
+                path=storage_path,
+                expires_in=3600  # 1 hour
+            )
+            
+            logger.info(f"Supabase storage response: {response}")
+            
+            if not response or "signedURL" not in response:
+                logger.error(f"Invalid response from Supabase storage: {response}")
+                raise AppError(
+                    "Failed to generate PDF URL",
+                    error_code=ErrorCode.INTERNAL_ERROR,
+                    details={"reason": "Could not create signed URL", "storage_path": storage_path},
+                    request_id=get_request_id(),
+                )
+            
+            return {
+                "url": response["signedURL"],
+                "filename": doc.get("filename", "document.pdf"),
+                "expires_in": 3600
+            }
+        except Exception as storage_error:
+            logger.error(f"Storage error for document {document_id}: {storage_error}")
             raise AppError(
                 "Failed to generate PDF URL",
                 error_code=ErrorCode.INTERNAL_ERROR,
-                details={"reason": "Could not create signed URL"},
+                details={"reason": str(storage_error), "storage_path": storage_path},
                 request_id=get_request_id(),
-            )
-        
-        return {
-            "url": response["signedURL"],
-            "filename": doc.get("filename", "document.pdf"),
-            "expires_in": 3600
-        }
+            ) from storage_error
         
     except (AppError, ValidationError):
         raise

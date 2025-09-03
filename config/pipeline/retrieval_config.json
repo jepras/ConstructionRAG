@@ -1,7 +1,0 @@
-{
-  "method": "hybrid",
-  "top_k": 5,
-  "similarity_threshold": 0.7,
-  "rerank": true,
-  "diversity_penalty": 0.1
-} 

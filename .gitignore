@@ -6,6 +6,7 @@ chroma_db/
 .cursor/
 /own/
 /data/internal/
+/frontend-streamlit/
 
 # Python
 __pycache__/

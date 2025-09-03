@@ -1,5 +1,5 @@
 Run:
-git add .
+git add {the files you have edited in the current session}
 git commit -m "{insert latet changes here. Follow best practice for gh message}" 
 git push
 
