@@ -1,16 +1,17 @@
-from __future__ import annotations
+"""
+Integration tests for the indexing pipeline.
 
-import os
+This test suite verifies the complete pipeline flow and uses the new test helpers.
+"""
+
+from __future__ import annotations
 
 import pytest
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    not (os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY")),
-    reason="Supabase env not configured",
-)
 async def test_get_recent_indexing_runs_filters_to_user_projects(async_client, auth_headers):
+    """Test that indexing runs are properly filtered to user's projects."""
     # Smoke: just call the endpoint and assert 200 and list response shape
     r = await async_client.get("/api/indexing-runs", headers=auth_headers)
     assert r.status_code == 200
