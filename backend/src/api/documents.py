@@ -582,6 +582,165 @@ async def get_document(
 ## Background processing helpers for project uploads removed in v2
 
 
+@router.get("/documents/{document_id}/pdf")
+async def get_document_pdf(
+    document_id: UUID,
+    index_run_id: UUID | None = None,
+    current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
+    db_client=DB_CLIENT_DEP,
+):
+    """Get signed URL for document PDF.
+    
+    Returns a signed URL to access the PDF file directly from Supabase storage.
+    Access control follows the same rules as get_document endpoint.
+    """
+    try:
+        from src.config.database import get_supabase_admin_client, get_supabase_client
+        
+        # First, verify access to the document using same logic as get_document
+        if current_user:
+            # Authenticated user - check project ownership
+            db = get_supabase_client()
+            doc_result = (
+                db.table("documents")
+                .select("storage_path, filename, project_id")
+                .eq("id", str(document_id))
+                .limit(1)
+                .execute()
+            )
+            
+            if not doc_result.data:
+                raise AppError(
+                    "Document not found",
+                    error_code=ErrorCode.NOT_FOUND,
+                    request_id=get_request_id(),
+                )
+            
+            doc = doc_result.data[0]
+            
+            # Verify project ownership if document has project_id
+            if doc.get("project_id"):
+                proj = (
+                    db.table("projects")
+                    .select("id")
+                    .eq("id", doc["project_id"])
+                    .eq("user_id", current_user["id"])
+                    .limit(1)
+                    .execute()
+                )
+                if not proj.data:
+                    raise AppError(
+                        "Access denied",
+                        error_code=ErrorCode.UNAUTHORIZED,
+                        request_id=get_request_id(),
+                    )
+        
+        elif index_run_id:
+            # Anonymous access - verify document belongs to email indexing run
+            db = get_supabase_admin_client()
+            
+            # Check that run is email type
+            run_res = db.table("indexing_runs").select("upload_type").eq("id", str(index_run_id)).limit(1).execute()
+            if not run_res.data or run_res.data[0].get("upload_type") != "email":
+                raise AppError(
+                    "Access denied: Authentication required",
+                    error_code=ErrorCode.UNAUTHORIZED,
+                    request_id=get_request_id(),
+                )
+            
+            # Verify document is linked to the run
+            j = (
+                db.table("indexing_run_documents")
+                .select("document_id")
+                .eq("indexing_run_id", str(index_run_id))
+                .eq("document_id", str(document_id))
+                .limit(1)
+                .execute()
+            )
+            if not j.data:
+                raise AppError(
+                    "Document not found or access denied",
+                    error_code=ErrorCode.NOT_FOUND,
+                    request_id=get_request_id(),
+                )
+            
+            # Get document details
+            doc_result = (
+                db.table("documents")
+                .select("storage_path, filename")
+                .eq("id", str(document_id))
+                .limit(1)
+                .execute()
+            )
+            
+            if not doc_result.data:
+                raise AppError(
+                    "Document not found",
+                    error_code=ErrorCode.NOT_FOUND,
+                    request_id=get_request_id(),
+                )
+            
+            doc = doc_result.data[0]
+        
+        else:
+            raise ValidationError(
+                "Invalid parameters",
+                details={
+                    "field_errors": [
+                        {
+                            "field": "index_run_id",
+                            "message": "Either authentication or index_run_id required",
+                        }
+                    ]
+                },
+                request_id=get_request_id(),
+            )
+        
+        # Generate signed URL for the PDF
+        storage_path = doc.get("storage_path")
+        if not storage_path:
+            raise AppError(
+                "Document PDF not found",
+                error_code=ErrorCode.NOT_FOUND,
+                details={"reason": "No storage path for document"},
+                request_id=get_request_id(),
+            )
+        
+        # Use admin client to create signed URL
+        admin_db = get_supabase_admin_client()
+        
+        # Generate a signed URL valid for 1 hour
+        response = admin_db.storage.from_("documents").create_signed_url(
+            path=storage_path,
+            expires_in=3600  # 1 hour
+        )
+        
+        if not response or "signedURL" not in response:
+            raise AppError(
+                "Failed to generate PDF URL",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                details={"reason": "Could not create signed URL"},
+                request_id=get_request_id(),
+            )
+        
+        return {
+            "url": response["signedURL"],
+            "filename": doc.get("filename", "document.pdf"),
+            "expires_in": 3600
+        }
+        
+    except (AppError, ValidationError):
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Error getting document PDF: {e}")
+        raise AppError(
+            "Failed to get document PDF",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            details={"reason": str(e)},
+            request_id=get_request_id(),
+        ) from e
+
+
 async def process_upload_async(
     index_run_id: str,
     email: str | None = None,

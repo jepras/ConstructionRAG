@@ -206,7 +206,7 @@ class PartitionStep(PipelineStep):
             infer_table_structure=True,
             languages=self.ocr_languages,
             include_page_breaks=True,
-            coordinates=True,  # Include bounding box coordinates
+            # coordinates removed - included automatically with hi_res strategy
         )
 
     async def _normalize_unstructured_output(
@@ -1522,7 +1522,11 @@ class UnifiedPartitionerV2:
                 pixmap.save(str(save_path))
 
                 # Extract table text only (no HTML needed)
-                table_text = table_data.to_markdown()
+                try:
+                    table_text = table_data.to_markdown()
+                except AttributeError:
+                    # Fallback if to_markdown not available
+                    table_text = str(table_data) if table_data else ""
 
                 # Create enhanced table element
                 enhanced_table = {
@@ -1592,7 +1596,11 @@ class UnifiedPartitionerV2:
                     continue
                 
                 # Extract table text only (no HTML, no image)
-                table_text = table_data.to_markdown()
+                try:
+                    table_text = table_data.to_markdown()
+                except AttributeError:
+                    # Fallback if to_markdown not available
+                    table_text = str(table_data) if table_data else ""
                 
                 # Create table element with metadata only
                 table_id = f"table_{i+1}"
