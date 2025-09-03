@@ -42,6 +42,14 @@ export default function QueryInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+  
+  // Debug: Log when component mounts/unmounts
+  useEffect(() => {
+    console.log('[QueryInterface] Component mounted with indexingRunId:', indexingRunId);
+    return () => {
+      console.log('[QueryInterface] Component unmounting, messages lost:', messages.length);
+    };
+  }, []);
 
   const queryMutation = useMutation({
     mutationFn: (request: CreateQueryRequest) => apiClient.createQuery(request),
