@@ -19,21 +19,21 @@ export default function Home() {
     if (query.trim() && !isLoading) {
       const submittedQuery = query;
       setIsLoading(true);
-      
+
       // Show user message immediately
       setTimeout(() => {
         setShowTyping(true);
-        
+
         // Start PDF loading during typing
         setTimeout(() => {
           setPdfLoading(true);
         }, 800); // Start PDF loading 0.8s into typing
-        
+
         // Show AI response after typing simulation
         setTimeout(() => {
           setShowTyping(false);
           setShowResponse(true);
-          
+
           // Complete PDF loading shortly after response
           setTimeout(() => {
             setPdfLoading(false);
@@ -100,7 +100,7 @@ export default function Home() {
                         What are the key requirements for concrete curing?
                       </div>
                     </div>
-                    
+
                     {/* Typing indicator */}
                     {showTyping && (
                       <div>
@@ -111,14 +111,14 @@ export default function Home() {
                           <div className="bg-secondary p-4 rounded-lg max-w-md">
                             <div className="flex space-x-1">
                               <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                             </div>
                           </div>
                         </div>
                       </div>
                     )}
-                    
+
                     {/* AI Response */}
                     {showResponse && (
                       <div>
@@ -156,11 +156,10 @@ export default function Home() {
                     size="sm"
                     variant="ghost"
                     disabled={isLoading}
-                    className={`p-2 transition-all duration-300 ${
-                      !showResponse && !isLoading 
-                        ? 'border-2 border-primary animate-pulse bg-primary/10 hover:bg-primary/20' 
+                    className={`p-2 transition-all duration-300 ${!showResponse && !isLoading
+                        ? 'border-2 border-primary animate-pulse bg-primary/10 hover:bg-primary/20'
                         : 'border border-transparent'
-                    }`}
+                      }`}
                   >
                     <ArrowUp className="w-4 h-4" />
                   </Button>
@@ -230,15 +229,15 @@ export default function Home() {
                         </p>
 
                         <p>
-                          Phase 1 construction includes the 32-story residential tower with 280 units, 
-                          ground-level retail spaces, and a 4-level underground parking structure. 
-                          The project requires specialized construction techniques due to the proximity 
+                          Phase 1 construction includes the 32-story residential tower with 280 units,
+                          ground-level retail spaces, and a 4-level underground parking structure.
+                          The project requires specialized construction techniques due to the proximity
                           to existing infrastructure and the challenging urban site conditions.
                         </p>
 
                         <p>
-                          All construction activities must comply with municipal building codes, 
-                          environmental regulations, and the established project timeline spanning 
+                          All construction activities must comply with municipal building codes,
+                          environmental regulations, and the established project timeline spanning
                           36 months from groundbreaking to occupancy permits.
                         </p>
                       </div>
@@ -262,8 +261,8 @@ export default function Home() {
 
                       <div className="text-sm leading-relaxed space-y-3">
                         <p>
-                          All structural concrete for the Meridian Heights project must meet or exceed 
-                          4000 PSI compressive strength requirements. 
+                          All structural concrete for the Meridian Heights project must meet or exceed
+                          4000 PSI compressive strength requirements.
                           <mark className="bg-primary/30 text-primary-foreground px-1 py-0.5 rounded">
                             Standard concrete curing time is 28 days for full strength development
                           </mark>
@@ -271,16 +270,16 @@ export default function Home() {
                         </p>
 
                         <p>
-                          Temperature control during curing is critical, maintaining concrete between 
-                          50°F and 90°F throughout the initial 7-day period. Hot weather concreting 
-                          procedures must be implemented when ambient temperatures exceed 85°F, 
+                          Temperature control during curing is critical, maintaining concrete between
+                          50°F and 90°F throughout the initial 7-day period. Hot weather concreting
+                          procedures must be implemented when ambient temperatures exceed 85°F,
                           including pre-cooling aggregates and limiting pour times to early morning hours.
                         </p>
 
                         <p>
-                          Quality control testing includes slump tests every 100 cubic yards, 
-                          compression testing at 7, 14, and 28 days, and continuous monitoring 
-                          of aggregate moisture content and cement-to-water ratios throughout 
+                          Quality control testing includes slump tests every 100 cubic yards,
+                          compression testing at 7, 14, and 28 days, and continuous monitoring
+                          of aggregate moisture content and cement-to-water ratios throughout
                           the pouring process.
                         </p>
                       </div>
@@ -294,7 +293,7 @@ export default function Home() {
           {/* CTA Button */}
           <div className="flex justify-center mt-12">
             <Link href="/projects">
-              <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{animation: 'scale-pulse 2s ease-in-out infinite'}}>
+              <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{ animation: 'scale-pulse 2s ease-in-out infinite' }}>
                 Try search on a real project
               </Button>
             </Link>
@@ -325,7 +324,7 @@ export default function Home() {
               </div>
               <p className="text-lg font-semibold mb-2 text-card-foreground">Drag & Drop Your Project</p>
               <p className="text-muted-foreground text-sm">
-                Drag and drop your project folder. We process PDFs, spreadsheets, and CAD files to build a complete picture.
+                Drag and drop your project folder. We process PDFs, spreadsheets and BIM files to build a complete picture.
               </p>
             </div>
           </div>

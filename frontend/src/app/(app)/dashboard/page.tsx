@@ -15,11 +15,11 @@ function transformUserProject(backendProject: any) {
   const projectName = backendProject.project_name || 'Unnamed Project'
   const projectId = backendProject.id
   const indexingRunId = backendProject.indexing_run_id
-  
+
   // Generate nested slug: project-name-{project_id}/{indexing_run_id}
   const projectSlug = `${projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${projectId}`
   const slug = `${projectSlug}/${indexingRunId}`
-  
+
   // Map backend status to frontend status
   let status: 'processing' | 'wiki_generated' | 'failed' | 'no_documents' = 'no_documents'
   if (backendProject.wiki_status === 'completed') {
@@ -29,7 +29,7 @@ function transformUserProject(backendProject: any) {
   } else if (backendProject.wiki_status === 'failed') {
     status = 'failed'
   }
-  
+
   return {
     id: projectId,
     name: projectName,
@@ -41,61 +41,15 @@ function transformUserProject(backendProject: any) {
   }
 }
 
-// Mock data - replace with real API call later
-const mockProjects = [
-  {
-    id: 'downtown-tower',
-    name: 'Downtown Tower',
-    slug: 'downtown-tower-abc123-def4-5678-9abc-def123456789/run-ghi789',
-    status: 'wiki_generated' as const,
-    documentCount: 3,
-    createdAt: '2024-01-15T10:00:00Z',
-    lastUpdated: '2024-01-16T14:30:00Z'
-  },
-  {
-    id: 'suburban-mall',
-    name: 'Suburban Mall Extension',
-    slug: 'suburban-mall-def456-abc7-8901-2def-abc456789012/run-jkl012',
-    status: 'wiki_generated' as const,
-    documentCount: 1,
-    createdAt: '2024-01-10T09:00:00Z',
-    lastUpdated: '2024-01-11T16:45:00Z'
-  },
-  {
-    id: 'new-bridge',
-    name: 'New Bridge Construction',
-    status: 'no_documents' as const,
-    documentCount: 0,
-    createdAt: '2024-01-20T11:00:00Z'
-  },
-  {
-    id: 'meridian-heights',
-    name: 'Meridian Heights Development',
-    slug: 'meridian-heights-ghi789-def0-1234-5ghi-def789012345/run-mno345',
-    status: 'wiki_generated' as const,
-    documentCount: 3,
-    createdAt: '2024-01-05T08:00:00Z',
-    lastUpdated: '2024-01-06T12:20:00Z'
-  },
-  {
-    id: 'heerup-skole',
-    name: 'Heerup Skole',
-    slug: 'heerup-skole-jkl012-ghi3-4567-8jkl-ghi012345678/run-pqr678',
-    status: 'wiki_generated' as const,
-    documentCount: 3,
-    createdAt: '2024-01-01T07:00:00Z',
-    lastUpdated: '2024-01-02T13:15:00Z'
-  }
-]
+// Demo mock data removed
 
 function DashboardContent() {
   const { isLoading: authLoading } = useAuth()
-  const [showMockData, setShowMockData] = useState(false) // Toggle for demo
   const [refreshKey, setRefreshKey] = useState(0) // Force refresh on delete
-  
+
   // Fetch user projects with wikis from API - only when authenticated
-  const { 
-    data: backendProjects = [], 
+  const {
+    data: backendProjects = [],
     isLoading: projectsLoading,
     error: projectsError,
     refetch
@@ -113,8 +67,8 @@ function DashboardContent() {
     )
   }
 
-  // Use mock data for demo or transformed real data from API
-  const projects = showMockData ? mockProjects : transformedProjects
+  // Always use transformed real data from API
+  const projects = transformedProjects
 
   // Handle project deletion
   const handleProjectDelete = () => {
@@ -145,15 +99,7 @@ function DashboardContent() {
           </Link>
         </div>
 
-        {/* Demo toggle button - remove in production */}
         <div className="mb-6 flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowMockData(!showMockData)}
-            className="text-xs"
-          >
-            {showMockData ? 'Hide Demo Projects' : 'Show Demo Projects'}
-          </Button>
           {projectsLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
@@ -172,9 +118,9 @@ function DashboardContent() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {projects.map((project) => (
-              <ProjectCard 
-                key={project.id} 
-                project={project} 
+              <ProjectCard
+                key={project.id}
+                project={project}
                 onDelete={handleProjectDelete}
               />
             ))}

@@ -13,6 +13,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useUserProjectsWithWikis } from "@/hooks/useApiQueries";
 import { Settings, Store, HelpCircle, LogOut } from "lucide-react";
 
 interface HeaderProps {
@@ -22,6 +23,27 @@ interface HeaderProps {
 export function Header({ variant }: HeaderProps) {
   const { user, isAuthenticated, signOut } = useAuth();
   const router = useRouter();
+  const { data: backendProjects = [], isLoading: projectsLoading } = useUserProjectsWithWikis(50);
+
+  function transformUserProject(backendProject: any) {
+    const projectName = backendProject.project_name || "Unnamed Project";
+    const projectId = backendProject.id;
+    const indexingRunId = backendProject.indexing_run_id;
+
+    const projectSlug = `${projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")}-${projectId}`;
+    const slug = `${projectSlug}/${indexingRunId}`;
+
+    return {
+      id: projectId,
+      name: projectName,
+      slug,
+    };
+  }
+
+  const projects = backendProjects.map(transformUserProject);
 
   const handleSignOut = async () => {
     try {
@@ -112,12 +134,47 @@ export function Header({ variant }: HeaderProps) {
         {/* Project Selector */}
         <div className="flex-1 flex justify-center">
           <div className="relative">
-            <Button variant="secondary" className="min-w-48">
-              Select a Project
-              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" className="min-w-48">
+                  {projectsLoading ? "Loading projects..." : "Select a Project"}
+                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-64">
+                {projectsLoading ? (
+                  <DropdownMenuItem disabled>
+                    Loading projects...
+                  </DropdownMenuItem>
+                ) : projects.length === 0 ? (
+                  <>
+                    <DropdownMenuLabel>No projects found</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/new-project" className="cursor-pointer">
+                        Create a new project
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuLabel>Your Projects</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {projects.map((project) => (
+                      <DropdownMenuItem
+                        key={project.id}
+                        onClick={() => router.push(`/dashboard/projects/${project.slug}`)}
+                        className="cursor-pointer"
+                      >
+                        {project.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

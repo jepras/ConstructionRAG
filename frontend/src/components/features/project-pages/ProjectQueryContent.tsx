@@ -23,15 +23,15 @@ function extractUUIDFromSlug(slug: string): string {
   return slug;
 }
 
-export default function ProjectQueryContent({ 
-  projectSlug, 
-  runId, 
-  isAuthenticated, 
-  user 
+export default function ProjectQueryContent({
+  projectSlug,
+  runId,
+  isAuthenticated,
+  user
 }: ProjectQueryContentProps) {
   const [selectedSource, setSelectedSource] = useState<SearchResult | undefined>(undefined);
   const [allSources, setAllSources] = useState<SearchResult[]>([]);
-  
+
   // Extract the actual indexing run ID from the runId parameter
   const indexingRunId = extractUUIDFromSlug(runId);
 
@@ -48,18 +48,18 @@ export default function ProjectQueryContent({
   };
 
   return (
-    <div className="h-full flex">
+    <div className="h-full grid grid-cols-1 lg:grid-cols-2">
       {/* Left Side - Query Interface */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="min-w-0 flex flex-col col-span-1">
         <div className="px-6 py-4 border-b border-border">
           <h1 className="text-2xl font-bold text-foreground">Project Q&A</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Ask questions about this project's documentation and get AI-powered answers.
           </p>
         </div>
-        
+
         <div className="flex-1 overflow-hidden">
-          <QueryInterface 
+          <QueryInterface
             indexingRunId={indexingRunId}
             isAuthenticated={isAuthenticated}
             onQueryResponse={handleNewQueryResponse}
@@ -70,8 +70,8 @@ export default function ProjectQueryContent({
       </div>
 
       {/* Right Side - Source Panel */}
-      <div className="hidden lg:block w-96">
-        <SourcePanel 
+      <div className="hidden lg:block col-span-1">
+        <SourcePanel
           selectedSource={selectedSource}
           allSources={allSources}
           onSourceChange={handleSourceChange}
