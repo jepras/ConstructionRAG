@@ -94,6 +94,7 @@ class UnifiedElementAnalyzer:
             "content_length": len(text),
             "has_numbers": self._detect_numbers(text),
             "text_complexity": self._assess_text_complexity(text),
+            "bbox": metadata_dict.get("bbox"),  # Preserve bounding box coordinates
             "section_title_inherited": None,  # Will be set by inheritance logic
             "section_title_pattern": None,  # Will be set by pattern detection
             "section_title_category": None,  # Will be set by category detection
@@ -135,6 +136,7 @@ class UnifiedElementAnalyzer:
             "has_numbers": self._detect_numbers(text),
             "has_tables_on_page": True,
             "text_complexity": "complex",  # Tables are typically complex
+            "bbox": metadata_dict.get("bbox"),  # Preserve bounding box coordinates
             "section_title_inherited": None,
             "section_title_pattern": None,
             "section_title_category": None,

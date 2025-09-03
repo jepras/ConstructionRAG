@@ -703,6 +703,7 @@ class IntelligentChunker:
                 "metadata": {
                     "source_filename": meta.get("source_filename"),
                     "page_number": meta.get("page_number"),
+                    "bbox": meta.get("bbox"),  # Preserve bounding box coordinates
                     "element_category": meta.get("element_category", "unknown"),
                     "section_title_inherited": section_title,
                     "text_complexity": meta.get("text_complexity", "medium"),

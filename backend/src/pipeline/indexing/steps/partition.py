@@ -206,6 +206,7 @@ class PartitionStep(PipelineStep):
             infer_table_structure=True,
             languages=self.ocr_languages,
             include_page_breaks=True,
+            coordinates=True,  # Include bounding box coordinates
         )
 
     async def _normalize_unstructured_output(
@@ -235,6 +236,14 @@ class PartitionStep(PipelineStep):
                 if page_number is None:
                     page_number = 1  # Default to page 1 if Unstructured doesn't provide page number
 
+                # Extract bbox if available from Unstructured
+                bbox = None
+                if hasattr(element.metadata, 'coordinates') and element.metadata.coordinates:
+                    points = element.metadata.coordinates.points
+                    if points and len(points) == 4:
+                        # Convert from points format [[x0,y0], [x1,y0], [x1,y1], [x0,y1]] to bbox format (x0, y0, x1, y1)
+                        bbox = [points[0][0], points[0][1], points[2][0], points[2][1]]
+
                 normalized_element = {
                     "id": getattr(element, "id", None)
                     or f"element_{len(result['text_elements']) + len(result['table_elements'])}",
@@ -245,6 +254,7 @@ class PartitionStep(PipelineStep):
                         "page_number": page_number,
                         "filename": document_input.filename if document_input else getattr(element.metadata, "filename", None),
                         "extraction_method": "unstructured_ocr",
+                        "bbox": bbox,  # Include bounding box coordinates
                     },
                 }
 
@@ -1079,7 +1089,19 @@ class PartitionStep(PipelineStep):
         cleaned = {}
 
         # Keep only essential metadata fields
-        essential_fields = ["page_number", "filename", "image_path"]
+        essential_fields = [
+            "page_number", 
+            "filename", 
+            "image_path", 
+            "bbox",
+            "font_size",
+            "font_name",
+            "is_bold",
+            "extraction_method",
+            "processing_strategy",
+            "table_id",
+            "text_as_html"
+        ]
 
         for field in essential_fields:
             if field in metadata:
@@ -1422,9 +1444,10 @@ class UnifiedPartitionerV2:
                     # Determine category based on text characteristics
                     category = self._determine_text_category(block_text, block)
 
-                    # Create metadata similar to unstructured format (without coordinates)
+                    # Create metadata with bbox coordinates
                     metadata = {
                         "page_number": page_index,
+                        "bbox": block_bbox,  # Preserve bounding box coordinates
                         "font_size": self._get_font_size(block),
                         "font_name": self._get_font_name(block),
                         "is_bold": self._is_bold_text(block),
