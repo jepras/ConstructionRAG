@@ -204,7 +204,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // First check current session
         const { data: { session } } = await supabase.auth.getSession()
-        console.log('[AuthProvider] Initial auth check, session:', !!session)
         
         if (session?.user && mounted) {
           try {
@@ -240,19 +239,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AuthProvider] Auth state change event:', event, 'Session:', !!session, 'isInitialLoad:', isInitialLoad);
       if (!mounted) return
       
       // Skip SIGNED_IN events after initial load (these shouldn't happen on tab switch)
       if (event === 'SIGNED_IN' && !isInitialLoad) {
-        console.log('[AuthProvider] Ignoring SIGNED_IN event after initial load - likely spurious');
         return
       }
       
       // Only process auth changes after initial load
       // Don't trigger loading state for TOKEN_REFRESHED to prevent UI resets when switching browser tabs
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        console.log('[AuthProvider] Processing auth change, setting loading to true');
         setIsLoading(true)
         
         if (session?.user) {
@@ -282,7 +278,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Handle token refresh separately without affecting UI state
       if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('[AuthProvider] TOKEN_REFRESHED event - updating profile silently');
         // Silently update user profile if needed, without loading states
         try {
           const userProfile = await apiClient.getCurrentUser()
@@ -301,7 +296,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Mark initial load as complete after a short delay to catch any immediate auth events
       setTimeout(() => {
         isInitialLoad = false
-        console.log('[AuthProvider] Initial load complete, future SIGNED_IN events will be ignored')
       }, 1000)
     })
 

@@ -81,7 +81,7 @@ const pricingTiers: PricingTier[] = [
     price: "Custom",
     buttonText: "Contact sales",
     buttonVariant: "outline",
-    href: "mailto:hello@constructionrag.com?subject=Enterprise%20Pricing",
+    href: "mailto:hello@specfinder.io?subject=Enterprise%20Pricing",
     features: [
       "Everything in Team, and:",
       "Unlimited Storage",
@@ -113,11 +113,10 @@ export default function PricingPage() {
           {pricingTiers.map((tier) => (
             <Card
               key={tier.name}
-              className={`relative flex flex-col p-8 ${
-                tier.highlighted
+              className={`relative flex flex-col p-8 ${tier.highlighted
                   ? "border-2 border-primary shadow-lg"
                   : "border border-border"
-              }`}
+                }`}
             >
               {/* Tier Header */}
               <div className="mb-6">
@@ -125,7 +124,7 @@ export default function PricingPage() {
                 <p className="text-sm text-muted-foreground mb-4">
                   {tier.description}
                 </p>
-                
+
                 {/* Price */}
                 <div className="mb-4">
                   <span className="text-4xl font-bold">{tier.price}</span>
@@ -154,11 +153,10 @@ export default function PricingPage() {
                   {tier.features.map((feature, index) => (
                     <li
                       key={index}
-                      className={`flex items-start text-sm ${
-                        feature.startsWith("Everything")
+                      className={`flex items-start text-sm ${feature.startsWith("Everything")
                           ? "font-semibold mb-2"
                           : ""
-                      }`}
+                        }`}
                     >
                       <Check className="w-4 h-4 text-primary mr-2 mt-0.5 flex-shrink-0" />
                       <span className="text-muted-foreground">{feature}</span>

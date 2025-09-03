@@ -1,18 +1,17 @@
 """
-Beam v2 application for ConstructionRAG indexing pipeline.
+Beam v2 application for Specfinder indexing pipeline.
 
 This file defines the Beam task queue that will handle the document processing pipeline
 on GPU-accelerated instances, while keeping the Railway backend responsive.
 """
 
 import asyncio
-import os
-from typing import List, Dict, Any, Optional
-from uuid import UUID
 from datetime import datetime
+from typing import Any
+from uuid import UUID
 
 import httpx
-from beam import Image, task_queue, env
+from beam import Image, env, task_queue
 
 # Version tracking for debugging deployments
 BEAM_VERSION = "2.2.0"  # Update this when making changes
@@ -20,20 +19,20 @@ DEPLOYMENT_DATE = "2025-09-01"
 CHANGES = "Added resource monitoring and removed GPU to optimize costs"
 
 # Resource monitoring
-from src.utils.resource_monitor import get_monitor, log_resources
+from src.config.database import get_supabase_admin_client
+from src.models.pipeline import UploadType
 
 # Import our existing pipeline components
 from src.pipeline.indexing.orchestrator import IndexingOrchestrator
 from src.pipeline.shared.models import DocumentInput
-from src.models.pipeline import UploadType
-from src.config.database import get_supabase_admin_client
 from src.services.storage_service import StorageService
+from src.utils.resource_monitor import get_monitor, log_resources
 
 
 async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhook_api_key: str):
     """
     Trigger wiki generation for a completed indexing run via webhook.
-    
+
     Args:
         indexing_run_id: The completed indexing run ID
         webhook_url: The webhook URL to call for wiki generation
@@ -43,38 +42,34 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
         if not webhook_url:
             print("⚠️ Webhook URL not provided, skipping wiki generation")
             return
-        
+
         if not webhook_api_key:
             print("⚠️ Webhook API key not provided, skipping wiki generation")
             return
-        
+
         payload = {"indexing_run_id": indexing_run_id}
-        
+
         print(f"🔄 Triggering wiki generation via webhook for run: {indexing_run_id}")
-        
+
         # Set up headers with API key authentication
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": webhook_api_key
-        }
-        
-        
+        headers = {"Content-Type": "application/json", "X-API-Key": webhook_api_key}
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(webhook_url, json=payload, headers=headers)
-                
+
                 if response.status_code == 200:
-                    print(f"✅ Wiki generation triggered successfully via webhook")
+                    print("✅ Wiki generation triggered successfully via webhook")
                 else:
                     print(f"⚠️ Wiki generation webhook trigger failed: {response.status_code}")
-                    
+
             except httpx.TimeoutException as timeout_error:
                 print(f"⏰ Request timed out: {timeout_error}")
             except httpx.RequestError as req_error:
                 print(f"🌐 Request error: {req_error}")
             except Exception as http_error:
                 print(f"💥 Unexpected HTTP error: {http_error}")
-                
+
     except Exception as e:
         print(f"⚠️ Error triggering wiki generation: {type(e).__name__}: {e}")
         # Don't fail the indexing pipeline if wiki generation fails
@@ -82,12 +77,12 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
 
 async def run_indexing_pipeline_on_beam(
     indexing_run_id: str,
-    document_ids: List[str],
+    document_ids: list[str],
     user_id: str = None,
     project_id: str = None,
     webhook_url: str = None,
     webhook_api_key: str = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Main Beam worker function for document indexing pipeline.
 
@@ -110,7 +105,7 @@ async def run_indexing_pipeline_on_beam(
         print(f"📄 Processing {len(document_ids)} documents")
         print(f"⚙️ BEAM VERSION: v{BEAM_VERSION} ({DEPLOYMENT_DATE})")
         print(f"📝 Changes: {CHANGES}")
-        
+
         # Log initial resources
         log_resources("Pipeline Start")
 
@@ -122,12 +117,7 @@ async def run_indexing_pipeline_on_beam(
 
         # Quick database connectivity test
         try:
-            test_run = (
-                db.table("indexing_runs")
-                .select("id")
-                .eq("id", str(indexing_run_id))
-                .execute()
-            )
+            test_run = db.table("indexing_runs").select("id").eq("id", str(indexing_run_id)).execute()
             if not test_run.data:
                 print(f"❌ Indexing run {indexing_run_id} not found in database")
                 return {
@@ -150,9 +140,7 @@ async def run_indexing_pipeline_on_beam(
 
         for i, doc_id in enumerate(document_ids):
             try:
-                doc_result = (
-                    db.table("documents").select("*").eq("id", doc_id).execute()
-                )
+                doc_result = db.table("documents").select("*").eq("id", doc_id).execute()
                 if not doc_result.data:
                     print(f"❌ Document {doc_id} not found")
                     continue
@@ -164,9 +152,7 @@ async def run_indexing_pipeline_on_beam(
                     user_id=UUID(user_id) if user_id else None,
                     file_path=doc_data.get("file_path", ""),
                     filename=doc_data.get("filename", ""),
-                    upload_type=(
-                        UploadType.EMAIL if not user_id else UploadType.USER_PROJECT
-                    ),
+                    upload_type=(UploadType.EMAIL if not user_id else UploadType.USER_PROJECT),
                     project_id=UUID(project_id) if project_id else None,
                     index_run_id=UUID(indexing_run_id),
                     metadata={"project_id": str(project_id)} if project_id else {},
@@ -198,16 +184,14 @@ async def run_indexing_pipeline_on_beam(
         print("✅ Orchestrator ready")
 
         # Process documents using the unified method
-        print(f"🔄 Starting document processing...")
+        print("🔄 Starting document processing...")
         log_resources("Before Document Processing")
-        
+
         try:
             success = await orchestrator.process_documents(
                 document_inputs, existing_indexing_run_id=UUID(indexing_run_id)
             )
-            print(
-                f"🔄 Processing completed: {'✅ Success' if success else '❌ Failed'}"
-            )
+            print(f"🔄 Processing completed: {'✅ Success' if success else '❌ Failed'}")
             log_resources("After Document Processing")
         except Exception as orchestrator_error:
             print(f"❌ Orchestrator error: {orchestrator_error}")
@@ -218,33 +202,33 @@ async def run_indexing_pipeline_on_beam(
             }
 
         if success:
-            print(f"✅ Indexing pipeline completed successfully")
-            
+            print("✅ Indexing pipeline completed successfully")
+
             # Log final resource usage
             monitor = get_monitor()
             summary = monitor.get_summary()
-            print(f"\n📊 RESOURCE USAGE SUMMARY:")
+            print("\n📊 RESOURCE USAGE SUMMARY:")
             print(f"  Peak CPU: {summary['peak_cpu_percent']:.1f}%")
             print(f"  Peak RAM: {summary['peak_ram_percent']:.1f}%")
-            
+
             # Trigger wiki generation via webhook
             if webhook_url and webhook_api_key:
                 await trigger_wiki_generation(indexing_run_id, webhook_url, webhook_api_key)
             else:
                 print("⚠️ Webhook URL or API key not provided, skipping wiki generation")
-            
+
             return {
                 "status": "completed",
                 "indexing_run_id": indexing_run_id,
                 "document_count": len(document_inputs),
                 "message": "Indexing pipeline completed successfully",
                 "resource_usage": {
-                    "peak_cpu_percent": summary['peak_cpu_percent'],
-                    "peak_ram_percent": summary['peak_ram_percent'],
-                }
+                    "peak_cpu_percent": summary["peak_cpu_percent"],
+                    "peak_ram_percent": summary["peak_ram_percent"],
+                },
             }
         else:
-            print(f"❌ Indexing pipeline failed")
+            print("❌ Indexing pipeline failed")
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
@@ -308,7 +292,7 @@ def process_documents(
     print(f"📦 Indexing Run ID: {indexing_run_id}")
     print(f"📄 Documents to process: {len(document_ids)}")
     print("=" * 60)
-    
+
     if env.is_remote():
         # Run the async function in an event loop
         return asyncio.run(

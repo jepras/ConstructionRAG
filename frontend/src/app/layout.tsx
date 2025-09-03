@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ConstructionRAG",
+  title: "specfinder.io",
   description: "AI-powered construction document processing and Q&A system",
 };
 

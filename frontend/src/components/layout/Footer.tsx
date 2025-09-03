@@ -12,11 +12,11 @@ export function Footer() {
           {/* Brand and Contact */}
           <div className="space-y-4">
             <div className="text-xl font-bold text-foreground">
-              ConstructionRAG
+              specfinder.io
             </div>
             <div className="text-sm text-muted-foreground space-y-1">
               <p>Made in Copenhagen</p>
-              <p>hello@constructionrag.com</p>
+              <p>hello@specfinder.io</p>
             </div>
           </div>
 
@@ -27,24 +27,24 @@ export function Footer() {
             </h3>
             <div className="space-y-3 text-sm">
               <div>
-                <Link 
-                  href="/projects" 
+                <Link
+                  href="/projects"
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Public Projects
                 </Link>
               </div>
               <div>
-                <Link 
-                  href="/pricing" 
+                <Link
+                  href="/pricing"
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Pricing
                 </Link>
               </div>
               <div>
-                <Link 
-                  href="/upload" 
+                <Link
+                  href="/upload"
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Upload Project
@@ -60,7 +60,7 @@ export function Footer() {
             </h3>
             <div className="space-y-3">
               <div className="flex space-x-2">
-                <Input 
+                <Input
                   type="email"
                   placeholder="Enter your email"
                   className="flex-1"
@@ -81,7 +81,7 @@ export function Footer() {
         {/* Copyright */}
         <div className="border-t border-border mt-8 pt-4">
           <p className="text-sm text-muted-foreground text-center">
-            © 2025 ConstructionRAG. All rights reserved.
+            © 2025 specfinder.io. All rights reserved.
           </p>
         </div>
       </div>

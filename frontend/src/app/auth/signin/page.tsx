@@ -18,6 +18,6 @@ export default function SignInPage() {
 }
 
 export const metadata = {
-  title: 'Sign In - ConstructionRAG',
-  description: 'Sign in to your ConstructionRAG account',
+  title: 'Sign In - specfinder.io',
+  description: 'Sign in to your specfinder.io account',
 }

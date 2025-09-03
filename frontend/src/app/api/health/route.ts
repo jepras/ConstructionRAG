@@ -1,7 +1,7 @@
 export async function GET() {
-  return Response.json({ 
-    status: 'healthy', 
+  return Response.json({
+    status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'constructionrag-frontend'
+    service: 'specfinder-frontend'
   });
 }

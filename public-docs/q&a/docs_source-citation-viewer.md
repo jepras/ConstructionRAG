@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Source Citation Viewer System in ConstructionRAG enables precise highlighting of source content within PDF documents by extracting, storing, and visualizing bounding box coordinates throughout the entire pipeline. This system provides users with exact visual citations that link AI-generated responses back to specific locations in the original construction documents.
+The Source Citation Viewer System in Specfinder enables precise highlighting of source content within PDF documents by extracting, storing, and visualizing bounding box coordinates throughout the entire pipeline. This system provides users with exact visual citations that link AI-generated responses back to specific locations in the original construction documents.
 
 ## System Architecture
 

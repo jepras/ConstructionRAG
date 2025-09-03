@@ -74,10 +74,10 @@
       "max_tokens": 200,
       "temperature": 0.1,
       "variations": {
-        "semantic_expansion": true,
-        "hyde_document": true,
-        "formal_variation": true,
-        "parallel_generation": true
+        "semantic_expansion": false,
+        "hyde_document": false,
+        "formal_variation": false,
+        "parallel_generation": false
       }
     },
     "retrieval": {

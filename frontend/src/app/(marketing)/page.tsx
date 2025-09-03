@@ -14,11 +14,13 @@ export default function Home() {
   const [showTyping, setShowTyping] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [hasAsked, setHasAsked] = useState(false);
 
   const handleQuerySubmit = () => {
-    if (query.trim() && !isLoading) {
+    if (query.trim() && !isLoading && !hasAsked) {
       const submittedQuery = query;
       setIsLoading(true);
+      setHasAsked(true);
 
       // Show user message immediately
       setTimeout(() => {
@@ -139,27 +141,28 @@ export default function Home() {
               </div>
 
               {/* Input Area */}
-              <div className="relative mt-6">
+              <div className="relative mt-6 opacity-100">
                 <Input
-                  value={query}
+                  value={hasAsked ? "" : query}
                   readOnly
+                  disabled={hasAsked}
                   onKeyPress={handleKeyPress}
-                  placeholder="Ask anything"
-                  className="bg-input border-border text-foreground placeholder-muted-foreground pr-24 cursor-pointer"
+                  placeholder={hasAsked ? "Ask anything about the project..." : "Ask anything"}
+                  className={`bg-input border-border text-foreground placeholder-muted-foreground pr-24 ${hasAsked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                 />
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
-                  <Button size="sm" variant="ghost" className="p-2">
+                  <Button size="sm" variant="ghost" className="p-2" disabled={hasAsked} aria-disabled={hasAsked}>
                     <Mic className="w-4 h-4" />
                   </Button>
                   <Button
                     onClick={handleQuerySubmit}
                     size="sm"
                     variant="ghost"
-                    disabled={isLoading}
-                    className={`p-2 transition-all duration-300 ${!showResponse && !isLoading
-                        ? 'border-2 border-primary animate-pulse bg-primary/10 hover:bg-primary/20'
-                        : 'border border-transparent'
-                      }`}
+                    disabled={isLoading || hasAsked}
+                    aria-disabled={isLoading || hasAsked}
+                    className={`p-2 transition-all duration-300 ${!showResponse && !isLoading && !hasAsked
+                      ? 'border-2 border-primary animate-pulse bg-primary/10 hover:bg-primary/20'
+                      : 'border border-transparent'} ${hasAsked ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <ArrowUp className="w-4 h-4" />
                   </Button>
@@ -306,7 +309,7 @@ export default function Home() {
         <div className="text-center mb-16">
           <h2 className="text-5xl font-bold mb-4">
             From <span className="text-foreground">Piles of PDFs</span><br />
-            <span className="text-primary">To Instant Answers</span>
+            <span className="text-primary">To instant answers</span>
           </h2>
         </div>
 
@@ -317,12 +320,12 @@ export default function Home() {
               <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
                 1
               </div>
-              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Upload Your Documents</h3>
+              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Upload or sync your documents</h3>
               <div className="flex justify-center items-center space-x-4 mb-6">
                 <Upload className="w-8 h-8 text-muted-foreground" />
                 <ArrowUp className="w-6 h-6 text-muted-foreground" />
               </div>
-              <p className="text-lg font-semibold mb-2 text-card-foreground">Drag & Drop Your Project</p>
+
               <p className="text-muted-foreground text-sm">
                 Drag and drop your project folder. We process PDFs, spreadsheets and BIM files to build a complete picture.
               </p>
@@ -335,7 +338,7 @@ export default function Home() {
               <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
                 2
               </div>
-              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Get a Personalised Overview</h3>
+              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Get a personalised overview</h3>
               <div className="bg-secondary border border-border rounded p-4 mb-6">
                 <div className="text-left">
                   <div className="flex items-center space-x-2 mb-2">
@@ -359,7 +362,7 @@ export default function Home() {
               <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
                 3
               </div>
-              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Ask Critical Questions</h3>
+              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Ask critical questions</h3>
               <div className="bg-secondary border border-border rounded-lg p-4 mb-6 space-y-2">
                 {/* Chat-like interface */}
                 <div>
@@ -385,7 +388,7 @@ export default function Home() {
                     <MessageSquare className="w-3 h-3 text-primary-foreground" />
                   </div>
                   <div className="bg-card border border-border p-2 rounded-lg text-xs text-card-foreground max-w-md text-left">
-                    Yes, a duct clashes with a cable tray on Floor 5. [coordination.pdf, p.9]
+                    Yes, a duct clashes with a cable tray on Floor 5. [coordination.pdf, p.9]<br /> <br /> You really don't bother searching through pdfs anymore, do you?
                   </div>
                 </div>
               </div>

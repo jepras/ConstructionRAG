@@ -61,7 +61,7 @@ export function Header({ variant }: HeaderProps) {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="text-xl font-bold text-white">
-            ConstructionRAG
+            specfinder.io
           </Link>
 
           {/* Navigation */}
@@ -128,7 +128,7 @@ export function Header({ variant }: HeaderProps) {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/dashboard" className="text-xl font-bold text-white">
-          ConstructionRAG
+          specfinder.io
         </Link>
 
         {/* Project Selector */}
@@ -206,7 +206,7 @@ export function Header({ variant }: HeaderProps) {
                 <DropdownMenuShortcut>Soon</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <a href="mailto:support@constructionrag.com" className="cursor-pointer">
+                <a href="mailto:support@specfinder.io" className="cursor-pointer">
                   <HelpCircle className="mr-2 h-4 w-4" />
                   Support
                 </a>

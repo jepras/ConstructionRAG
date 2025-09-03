@@ -6,19 +6,14 @@
 source venv/bin/activate
 cd backend
 python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-
 or
-
-  docker-compose up backend
+docker-compose up backend
 
 ### Frontend
 # From project root (in a new terminal)
 source venv/bin/activate
 cd frontend
-streamlit run streamlit_app/main.py --server.port 8501
-
 or 
-
 npm run dev
 
 ## Pre production
