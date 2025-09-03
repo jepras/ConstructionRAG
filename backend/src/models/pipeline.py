@@ -422,7 +422,7 @@ class WikiGenerationRunCreate(BaseModel):
     project_id: UUID | None = None
     upload_id: str | None = None
     language: str = "danish"
-    model: str = "google/gemini-2.5-flash"
+    model: str = "google/gemini-2.5-flash-lite"
     status: WikiGenerationStatus = WikiGenerationStatus.PENDING
 
 

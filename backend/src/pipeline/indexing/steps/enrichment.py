@@ -1,29 +1,28 @@
 """Production enrichment step for document processing pipeline."""
 
-import os
 import asyncio
-import base64
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 import logging
-from pathlib import Path
+from datetime import datetime
+from typing import Any
+
+from langchain_core.messages import HumanMessage
 
 # VLM Components
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+
+from src.models import StepResult
+from src.services.storage_service import StorageService
+from src.shared.errors import ErrorCode
+from src.utils.exceptions import AppError
 
 # Pipeline components
 from ...shared.base_step import PipelineStep
-from src.models import StepResult
 from ...shared.models import PipelineError
-from src.shared.errors import ErrorCode
-from src.utils.exceptions import AppError
-from src.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 
 
-def extract_url_string(url_data: Any) -> Optional[str]:
+def extract_url_string(url_data: Any) -> str | None:
     """Extract URL string from various URL formats"""
     if isinstance(url_data, str):
         return url_data
@@ -172,7 +171,7 @@ class EnrichmentStep(PipelineStep):
 
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         storage_client=None,
         progress_tracker=None,
         storage_service=None,
@@ -181,8 +180,16 @@ class EnrichmentStep(PipelineStep):
         self.storage_client = storage_client
         self.storage_service = storage_service or StorageService()
 
-        # Extract configuration
-        self.vlm_model = config.get("vlm_model", "google/gemini-2.5-flash")
+        # Extract configuration from SoT defaults if not provided
+        try:
+            from src.services.config_service import ConfigService
+
+            defaults_cfg = ConfigService().get_effective_config("defaults")
+            default_generation_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
+        except Exception:
+            default_generation_model = "google/gemini-2.5-flash-lite"
+
+        self.vlm_model = config.get("vlm_model", default_generation_model)
         self.caption_language = config.get("caption_language", "Danish")
         self.max_text_context_length = config.get("max_text_context_length", 1500)
         self.max_page_text_elements = config.get("max_page_text_elements", 5)
@@ -416,7 +423,7 @@ class EnrichmentStep(PipelineStep):
             logger.error(f"Duration estimation failed: {e}")
             return 300  # Default 5 minutes
 
-    async def _enrich_with_vlm_async(self, metadata_output: Dict[str, Any]) -> Dict[str, Any]:
+    async def _enrich_with_vlm_async(self, metadata_output: dict[str, Any]) -> dict[str, Any]:
         """Execute VLM enrichment asynchronously"""
 
         logger.info("Starting VLM enrichment...")

@@ -42,16 +42,21 @@ class QueryPipelineOrchestrator:
                 "query_processing": {
                     "provider": "openrouter",
                     "model": effective.get("query_processing", {}).get("model", "openai/gpt-3.5-turbo"),
-                    "fallback_models": effective.get("query_processing", {}).get("fallback_models", ["anthropic/claude-3-haiku"]),
+                    "fallback_models": effective.get("query_processing", {}).get(
+                        "fallback_models", ["anthropic/claude-3-haiku"]
+                    ),
                     "timeout_seconds": effective.get("query_processing", {}).get("timeout_seconds", 1.0),
                     "max_tokens": effective.get("query_processing", {}).get("max_tokens", 200),
                     "temperature": effective.get("query_processing", {}).get("temperature", 0.1),
-                    "variations": effective.get("query_processing", {}).get("variations", {
-                        "semantic_expansion": True,
-                        "hyde_document": True,
-                        "formal_variation": True,
-                        "parallel_generation": True,
-                    }),
+                    "variations": effective.get("query_processing", {}).get(
+                        "variations",
+                        {
+                            "semantic_expansion": True,
+                            "hyde_document": True,
+                            "formal_variation": True,
+                            "parallel_generation": True,
+                        },
+                    ),
                 },
                 "retrieval": {
                     "embedding_model": effective["embedding"]["model"],
@@ -74,18 +79,24 @@ class QueryPipelineOrchestrator:
                 "generation": {
                     "provider": effective.get("generation", {}).get("provider", "openrouter"),
                     "model": effective.get("generation", {}).get("model", "google/gemini-2.5-flash-lite"),
-                    "fallback_models": effective.get("generation", {}).get("fallback_models", [
-                        "anthropic/claude-3.5-haiku",
-                        "meta-llama/llama-3.1-8b-instruct",
-                    ]),
+                    "fallback_models": effective.get("generation", {}).get(
+                        "fallback_models",
+                        [
+                            "anthropic/claude-3.5-haiku",
+                            "meta-llama/llama-3.1-8b-instruct",
+                        ],
+                    ),
                     "timeout_seconds": effective.get("generation", {}).get("timeout_seconds", 5.0),
                     "max_tokens": effective.get("generation", {}).get("max_tokens", 1000),
                     "temperature": effective.get("generation", {}).get("temperature", 0.1),
-                    "response_format": effective.get("generation", {}).get("response_format", {
-                        "include_citations": True,
-                        "include_confidence": True,
-                        "language": "danish",
-                    }),
+                    "response_format": effective.get("generation", {}).get(
+                        "response_format",
+                        {
+                            "include_citations": True,
+                            "include_confidence": True,
+                            "language": "danish",
+                        },
+                    ),
                 },
             }
         self.settings = get_settings()
@@ -113,7 +124,7 @@ class QueryPipelineOrchestrator:
         return {
             "query_processing": {
                 "provider": "openrouter",
-                "model": "google/gemini-2.5-flash",
+                "model": "openai/gpt-3.5-turbo",
                 "fallback_models": ["anthropic/claude-3.5-haiku"],
                 "timeout_seconds": 1.0,
                 "max_tokens": 200,
@@ -145,7 +156,7 @@ class QueryPipelineOrchestrator:
             },
             "generation": {
                 "provider": "openrouter",
-                "model": "google/gemini-2.5-flash",
+                "model": "google/gemini-2.5-flash-lite",
                 "fallback_models": [
                     "anthropic/claude-3.5-haiku",
                     "meta-llama/llama-3.1-8b-instruct",
