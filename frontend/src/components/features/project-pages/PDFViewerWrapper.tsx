@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 
 // Dynamically import PDF components with no SSR
 const PDFPageViewer = dynamic(
-  () => import('./PDFPageViewer'),
+  () => import('./PDFPageViewerSimple'),
   { 
     ssr: false,
     loading: () => (

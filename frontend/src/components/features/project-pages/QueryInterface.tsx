@@ -65,11 +65,24 @@ export default function QueryInterface({
           count: response.search_results.length,
           firstResult: response.search_results[0] ? {
             hasDocumentId: !!response.search_results[0].document_id,
-            hasMetadataDocumentId: !!response.search_results[0].metadata?.document_id,
+            hasMetadataDcoumentId: !!response.search_results[0].metadata?.document_id,
+            hasBbox: !!response.search_results[0].bbox,
+            hasMetadataBbox: !!response.search_results[0].metadata?.bbox,
+            bbox: response.search_results[0].bbox || response.search_results[0].metadata?.bbox || 'none',
             metadata: response.search_results[0].metadata,
             chunk_id: response.search_results[0].chunk_id
           } : null
         });
+        
+        // Log all results to check bbox presence
+        response.search_results.forEach((result, index) => {
+          console.log(`QueryInterface: Result ${index} bbox:`, {
+            hasBbox: !!result.bbox,
+            hasMetadataBbox: !!result.metadata?.bbox,
+            bbox: result.bbox || result.metadata?.bbox || 'none'
+          });
+        });
+        
         onQueryResponse(response.search_results);
       }
     },

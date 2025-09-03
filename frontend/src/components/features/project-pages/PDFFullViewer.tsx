@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Document, pdfjs } from 'react-pdf';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,6 +11,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import PDFPageViewer from './PDFPageViewer';
+
+// Set up the worker for react-pdf
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PDFFullViewerProps {
   isOpen: boolean;
@@ -37,6 +41,7 @@ export default function PDFFullViewer({
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [pageCount, setPageCount] = useState(totalPages || 1);
   const [loadingPageCount, setLoadingPageCount] = useState(!totalPages);
+  const mountedRef = useRef(true);
 
   // Get highlights for current page
   const currentPageHighlights = highlights
@@ -45,32 +50,29 @@ export default function PDFFullViewer({
         .map(h => ({ bbox: h.bbox, chunk_id: h.chunk_id }))
     : [];
 
-  // Load total page count if not provided
-  React.useEffect(() => {
-    if (!totalPages && isOpen && typeof window !== 'undefined') {
-      const loadPageCount = async () => {
-        try {
-          setLoadingPageCount(true);
-          const pdfjsLib = await import('pdfjs-dist');
-          
-          // Configure worker
-          if (pdfjsLib.GlobalWorkerOptions) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-          }
-          
-          const loadingTask = pdfjsLib.getDocument(pdfUrl);
-          const pdf = await loadingTask.promise;
-          setPageCount(pdf.numPages);
-        } catch (error) {
-          console.error('Error loading PDF page count:', error);
-        } finally {
-          setLoadingPageCount(false);
-        }
-      };
-      
-      loadPageCount();
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Handle document load success to get page count
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    if (mountedRef.current) {
+      console.log('PDFFullViewer: Document loaded with', numPages, 'pages');
+      setPageCount(numPages);
+      setLoadingPageCount(false);
     }
-  }, [pdfUrl, totalPages, isOpen]);
+  };
+
+  const onDocumentLoadError = (error: Error) => {
+    console.error('PDFFullViewer: Failed to load document:', error);
+    if (mountedRef.current) {
+      setLoadingPageCount(false);
+    }
+  };
 
   // Reset to initial page when modal opens
   React.useEffect(() => {
@@ -124,13 +126,31 @@ export default function PDFFullViewer({
 
         {/* PDF Viewer */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <PDFPageViewer
-            pdfUrl={pdfUrl}
-            pageNumber={currentPage}
-            highlights={currentPageHighlights}
-            scale={1.2}
-            className="h-full"
-          />
+          {!totalPages && isOpen ? (
+            // Use Document component to load page count
+            <Document
+              file={pdfUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading={null}
+            >
+              <PDFPageViewer
+                pdfUrl={pdfUrl}
+                pageNumber={currentPage}
+                highlights={currentPageHighlights}
+                scale={1.2}
+                className="h-full"
+              />
+            </Document>
+          ) : (
+            <PDFPageViewer
+              pdfUrl={pdfUrl}
+              pageNumber={currentPage}
+              highlights={currentPageHighlights}
+              scale={1.2}
+              className="h-full"
+            />
+          )}
         </div>
 
         {/* Footer with navigation */}

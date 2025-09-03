@@ -7,6 +7,8 @@ chroma_db/
 /own/
 /data/internal/
 /frontend-streamlit/
+/notebooks/
+
 
 # Python
 __pycache__/

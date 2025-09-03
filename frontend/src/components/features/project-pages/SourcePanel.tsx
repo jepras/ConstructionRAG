@@ -78,9 +78,16 @@ export default function SourcePanel({
           const data = await response.json();
           console.log('SourcePanel: PDF URL received:', {
             hasUrl: !!data.url,
+            url: data.url, // Log the actual URL for debugging
             filename: data.filename,
-            expiresIn: data.expires_in
+            expiresIn: data.expires_in,
+            fullResponse: data
           });
+          
+          if (!data.url) {
+            console.error('SourcePanel: No URL in response data:', data);
+            throw new Error('No PDF URL in response');
+          }
           
           setPdfUrl(data.url);
         } catch (error) {
@@ -104,6 +111,15 @@ export default function SourcePanel({
     : selectedSource?.metadata?.bbox
     ? [{ bbox: selectedSource.metadata.bbox, chunk_id: selectedSource.chunk_id }]
     : [];
+  
+  // Debug logging for bbox
+  console.log('SourcePanel: selectedSource bbox check:', {
+    hasBbox: !!selectedSource?.bbox,
+    hasMetadataBbox: !!selectedSource?.metadata?.bbox,
+    bbox: selectedSource?.bbox || selectedSource?.metadata?.bbox || 'none',
+    currentHighlights: currentHighlights,
+    selectedSource: selectedSource
+  });
 
   // Get all highlights for full viewer (from all sources for the same document)
   const allHighlights = allSources && selectedSource

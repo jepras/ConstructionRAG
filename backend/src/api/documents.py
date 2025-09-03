@@ -423,7 +423,7 @@ async def list_documents(
             if not run_res.data or run_res.data[0].get("upload_type") != "email":
                 raise AppError(
                     "Access denied: Authentication required",
-                    error_code=ErrorCode.UNAUTHORIZED,
+                    error_code=ErrorCode.ACCESS_DENIED,
                     request_id=get_request_id(),
                 )
             j = (
@@ -511,7 +511,7 @@ async def get_document(
             if not run_res.data or run_res.data[0].get("upload_type") != "email":
                 raise AppError(
                     "Access denied: Authentication required",
-                    error_code=ErrorCode.UNAUTHORIZED,
+                    error_code=ErrorCode.ACCESS_DENIED,
                     request_id=get_request_id(),
                 )
             # Verify document is linked to the run
@@ -603,7 +603,7 @@ async def get_document_pdf(
             db = get_supabase_client()
             doc_result = (
                 db.table("documents")
-                .select("storage_path, filename, project_id")
+                .select("file_path, filename, project_id, index_run_id")
                 .eq("id", str(document_id))
                 .limit(1)
                 .execute()
@@ -631,7 +631,7 @@ async def get_document_pdf(
                 if not proj.data:
                     raise AppError(
                         "Access denied",
-                        error_code=ErrorCode.UNAUTHORIZED,
+                        error_code=ErrorCode.ACCESS_DENIED,
                         request_id=get_request_id(),
                     )
         
@@ -644,7 +644,7 @@ async def get_document_pdf(
             if not run_res.data or run_res.data[0].get("upload_type") != "email":
                 raise AppError(
                     "Access denied: Authentication required",
-                    error_code=ErrorCode.UNAUTHORIZED,
+                    error_code=ErrorCode.ACCESS_DENIED,
                     request_id=get_request_id(),
                 )
             
@@ -667,7 +667,7 @@ async def get_document_pdf(
             # Get document details
             doc_result = (
                 db.table("documents")
-                .select("storage_path, filename")
+                .select("file_path, filename, index_run_id")
                 .eq("id", str(document_id))
                 .limit(1)
                 .execute()
@@ -696,16 +696,30 @@ async def get_document_pdf(
                 request_id=get_request_id(),
             )
         
-        # Generate signed URL for the PDF
-        storage_path = doc.get("storage_path")
-        if not storage_path:
-            logger.error(f"No storage path found for document {document_id}")
+        # Generate storage path based on document type and location
+        # For email uploads: email-uploads/index-runs/{index_run_id}/pdfs/{filename}
+        # For project uploads: users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}
+        
+        filename = doc.get("filename")
+        doc_index_run_id = doc.get("index_run_id")
+        
+        if not filename:
+            logger.error(f"No filename found for document {document_id}")
             raise AppError(
                 "Document PDF not found",
                 error_code=ErrorCode.NOT_FOUND,
-                details={"reason": "No storage path for document", "document_id": str(document_id)},
+                details={"reason": "No filename for document", "document_id": str(document_id)},
                 request_id=get_request_id(),
             )
+            
+        # Construct storage path based on document type
+        if current_user and doc.get("project_id"):
+            # Authenticated user project upload
+            storage_path = f"users/{current_user['id']}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
+        else:
+            # Anonymous email upload - use the index_run_id from parameter or document
+            run_id = index_run_id if index_run_id else doc_index_run_id
+            storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
         
         logger.info(f"Generating signed URL for document {document_id} with path: {storage_path}")
         
@@ -714,7 +728,7 @@ async def get_document_pdf(
         
         # Generate a signed URL valid for 1 hour
         try:
-            response = admin_db.storage.from_("documents").create_signed_url(
+            response = admin_db.storage.from_("pipeline-assets").create_signed_url(
                 path=storage_path,
                 expires_in=3600  # 1 hour
             )

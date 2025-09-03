@@ -1,40 +1,12 @@
 # CLAUDE.md
-
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Important Claude rules
 - Make a plan before coding. Do not code until I have confirmed the plan looks good.
-- Do not use git commands unless explicitly told to 
+- Do not use git commands unless explicitly told to.
 - Before implementing new use of frontend API calls, then make the API calls as curl commands to test they return what you expect them to return before implementing it in the code.
-
-## Authentication & RLS (Row Level Security) Best Practices
-
-### Critical: Backend Authenticated Requests
-When creating backend API endpoints that need to access user-specific data with RLS policies:
-
-**✅ CORRECT Pattern:**
-```python
-@router.get("/user-data")
-async def get_user_data(
-    current_user: dict[str, Any] = Depends(get_current_user),
-    db_client = Depends(get_db_client_for_request),  # ← Use authenticated client
-):
-    db = db_client  # This client includes the user's JWT for RLS
-    result = db.table("user_specific_table").select("*").execute()
-```
-
-**❌ WRONG Pattern:**
-```python
-@router.get("/user-data") 
-async def get_user_data(
-    current_user: dict[str, Any] = Depends(get_current_user),
-):
-    db = get_supabase_client()  # ← This is the anon client - RLS will block queries!
-    result = db.table("user_specific_table").select("*").execute()  # Returns 0 rows
-```
-
-**Why this matters:** Supabase RLS policies require the authenticated user's JWT token to determine data access. The anon client (`get_supabase_client()`) doesn't have this context, so RLS policies will block all queries even if the user is authenticated at the API level. 
-
+- When creating tests to verify assumptions, look to the existing test functions and the test helper functions to see if any code can be reused to check your code and implementation. I want you to be a contributor to my codebase, not a generator of standalone scripts.
+- Never use `rm` command without approval
 
 ## Core development philosophy
 KISS (Keep It Simple, Stupid)
@@ -44,14 +16,14 @@ YAGNI (You Aren't Gonna Need It)
 Avoid building functionality on speculation. Implement features only when they are needed, not when you anticipate they might be useful in the future.
 
 Design Principles
-   Single Responsibility: Each function, class, and module should have one clear purpose.
-   Fail Fast: Check for potential errors early and raise exceptions immediately when issues occur.
+- Single Responsibility: Each function, class, and module should have one clear purpose.
+- Fail Fast: Check for potential errors early and raise exceptions immediately when issues occur.
 
 File and Function Limits
-   Never create a file longer than 500 lines of code. If approaching this limit, refactor by splitting into modules.
-   Functions should be under 50 lines with a single, clear responsibility.
-   Classes should be under 100 lines and represent a single concept or entity.
-   Organize code into clearly separated modules, grouped by feature or responsibility.
+- Never create a file longer than 500 lines of code. If approaching this limit, refactor by splitting into modules.
+- Functions should be under 50 lines with a single, clear responsibility.
+- Classes should be under 100 lines and represent a single concept or entity.
+- Organize code into clearly separated modules, grouped by feature or responsibility.
 
 Python style guide
 - Format with ruff format (faster alternative to Black)
@@ -62,8 +34,7 @@ Python style guide
 - Functional programming preferred over classes
 
 ## Project Overview
-
-ConstructionRAG is a production-ready AI-powered construction document processing and Q&A system. It's a "DeepWiki for Construction Sites" that automatically processes construction documents and enables intelligent Q&A about project requirements, timelines, and specifications.
+Specfinder is a production-ready AI-powered construction document processing and Q&A system. It's a "DeepWiki for Construction Sites" that automatically processes construction documents and enables intelligent Q&A about project requirements, timelines, and specifications.
 
 ### Key Technologies
 - **Backend**: FastAPI (Python) - deployed on Railway
@@ -72,33 +43,6 @@ ConstructionRAG is a production-ready AI-powered construction document processin
 - **Database**: Supabase (PostgreSQL with pgvector)
 - **AI Services**: Voyage AI (embeddings), OpenRouter (generation & VLM)
 - **Language**: Optimized for Danish construction documents currently. To be made multilingual. 
-
-## Development Commands
-
-### Local Development
-```bash
-# Start full stack
-docker-compose up --build
-
-# Backend only (from backend/ directory)
-uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Frontend only (from frontend/ directory)
-npm run dev
-
-# Legacy frontend
-streamlit run streamlit_app/main.py --server.port 8501
-
-# Run tests (from backend/ directory)
-python run_tests.py
-pytest tests/integration/
-pytest tests/unit/
-
-# Code quality (from backend/ directory)
-Code style: ruff format .
-Lint: ruff check .
-Types: mypy .
-```
 
 ### Prod development
 Railway automatically updates on git pushes. Uses Dockerfile from /backend repository.
@@ -159,7 +103,7 @@ frontend/
 ### Pipeline Processing Flow
 
 1. **Indexing Pipeline** (Document → Knowledge Base):
-   - **Partition**: Extract text, tables, images from PDFs (supports PyMuPDF)
+   - **Partition**: Extract text, tables, images from PDFs (supports PyMuPDF & Unstructured)
    - **Metadata**: Extract document structure and metadata
    - **Enrichment**: Generate VLM captions for tables/images using Anthropic
    - **Chunking**: Semantic chunking with 1000 chars, 200 overlap
@@ -190,8 +134,6 @@ The current working webhook path for automatic wiki generation after indexing:
 - Pipeline settings in single JSON SoT: `config/pipeline/pipeline_config.json`
 - ConfigService loads from JSON with environment variable substitution
 - Environment variables in `.env` files (never commit these)
-- Hot reloading: configuration changes take effect immediately
-- YAML-based config deprecated in favor of single source of truth approach
 
 ## Key Development Practices
 
@@ -199,7 +141,7 @@ The current working webhook path for automatic wiki generation after indexing:
 - Uses **production Supabase database** (not local)
 - All database operations via Supabase client
 - Vector operations use pgvector extension
-- Migrations applied directly to production - push after writing
+- Migrations needs to be applied with supabase db push - ask for permission before doing that. 
 
 ### Access Control & Security
 - **Access Levels**: `public` (anonymous), `auth` (any authenticated user), `owner` (policies), `private` (resource owner only)
@@ -208,28 +150,11 @@ The current working webhook path for automatic wiki generation after indexing:
 - All endpoints validate ownership via access levels and database policies
 - Anonymous users can only access `email` upload type resources
 
-
-### Pipeline Development
-- Embedding model consistency: voyage-multilingual-2 (1024 dims) throughout
-- Test basic implementation before full features
-- Configuration-driven design for easy tuning
-- Progress tracking for all long-running operations
-
 ### Environment Management
 - Always activate venv when running tests
 - Never update requirements.txt without verification
 - Never commit to git without explicit instruction
 - Never echo/update .env files
-
-## Testing
-```bash
-backend/tests/
-├── integration/             # Full pipeline tests
-│   ├── test_*_step_orchestrator.py
-│   ├── test_pipeline_integration.py
-│   └── test_query_api_endpoints.py
-└── unit/                   # Unit tests (TODO)
-```
 
 ### Running Tests
 - All tests: `pytest tests/` (standard pytest runner)
@@ -238,29 +163,9 @@ backend/tests/
 - All tests use production database with proper isolation
 - Tests are organized by type: integration (full pipelines), unit (service/component tests)
 
-## Configuration Files
-
-### Pipeline Configuration
-- Environment variable substitution supported
-- Validation and optimization guides included
-
-### Key Settings
-- Chunk size: 1000 chars, overlap: 200
-- Embedding: voyage-multilingual-2 (1024 dims)
-- Timeout: 30 minutes per pipeline step
-- Max concurrent documents: 5
-
-## Production Deployment
-
-- **Backend**: Railway (automatic from GitHub)
-- **Frontend**: Streamlit Cloud (automatic from GitHub)
-- **Database**: Supabase (managed PostgreSQL)
-- Health checks and monitoring configured
-- SSL/TLS enabled for all endpoints
-
 ## Project URL Structure
 
-ConstructionRAG uses **dual URL patterns** to support both public and private project access:
+Specfinder uses **dual URL patterns** to support both public and private project access:
 
 ### Public Projects (Anonymous Access)
 **URL Format:** `/projects/{indexingRunId}` (single-slug)
@@ -289,21 +194,25 @@ This dual structure enables:
 ### Authentication (`/api/auth`)
 - **POST** `/api/auth/signup` - Sign up new user
 - **POST** `/api/auth/signin` - Sign in existing user  
-- **POST** `/api/auth/signout` - Sign out current user
+- **POST** `/api/auth/signout` - Sign out current user (requires auth)
 - **POST** `/api/auth/reset-password` - Send password reset email
 - **GET** `/api/auth/me` - Get current user info (requires auth)
 - **POST** `/api/auth/refresh` - Refresh access token
 
 ### Document Management (`/api`)
+- **POST** `/api/uploads/validate` - Validate PDFs before upload (checks file types, sizes)
 - **POST** `/api/uploads` - Upload PDFs (max 10 files, 50MB each) - supports anonymous (email) or authenticated (project)
-- **GET** `/api/documents` - List documents with pagination and filtering
-- **GET** `/api/documents/{document_id}` - Get single document details
+- **GET** `/api/documents` - List documents with pagination and filtering (optional auth)
+- **GET** `/api/documents/{document_id}` - Get single document details (optional auth)
+- **GET** `/api/documents/{document_id}/pdf` - Download PDF file (optional auth, streaming response)
 
 ### Indexing Pipeline (`/api`)
 - **GET** `/api/indexing-runs` - List indexing runs (paginated) - optional auth
 - **GET** `/api/indexing-runs/{run_id}` - Get single indexing run - optional auth
 - **GET** `/api/indexing-runs/{run_id}/progress` - Get detailed progress - optional auth
 - **POST** `/api/indexing-runs` - Create project-based indexing run (requires auth) - use `/api/uploads` for email uploads
+- **GET** `/api/indexing-runs-with-wikis` - List indexing runs that have completed wikis (public email uploads only)
+- **GET** `/api/user-projects-with-wikis` - List user's projects with completed wikis (requires auth)
 
 ### Query System (`/api`)
 - **POST** `/api/queries` - Create and execute query (optional auth)
@@ -313,20 +222,21 @@ This dual structure enables:
 ### Project Management (`/api`)
 - **POST** `/api/projects` - Create project (requires auth)
 - **GET** `/api/projects` - List user projects (requires auth)
-- **GET** `/api/projects/{project_id}` - Get specific project
-- **PATCH** `/api/projects/{project_id}` - Update project
-- **DELETE** `/api/projects/{project_id}` - Delete project
-- **GET** `/api/projects/{project_id}/runs/{indexing_run_id}` - Get project with specific run (unified endpoint for private projects)
-- **GET** `/api/projects/{project_id}/runs` - List all indexing runs for a project (requires authentication)
+- **GET** `/api/projects/{project_id}` - Get specific project with latest indexing run (requires auth)
+- **PATCH** `/api/projects/{project_id}` - Update project (requires auth)
+- **DELETE** `/api/projects/{project_id}` - Soft delete project (requires auth)
+- **GET** `/api/projects/{project_id}/runs/{indexing_run_id}` - Get project with specific indexing run (requires auth)
+- **GET** `/api/projects/{project_id}/runs` - List all indexing runs for a project (requires auth)
 
 ### Wiki Generation (`/api/wiki`)
-- **POST** `/api/wiki/runs` - Create wiki generation run
-- **GET** `/api/wiki/runs/{index_run_id}` - List wiki runs for indexing run
-- **GET** `/api/wiki/runs/{wiki_run_id}/pages` - Get wiki pages metadata
-- **GET** `/api/wiki/runs/{wiki_run_id}/pages/{page_name}` - Get wiki page content
-- **GET** `/api/wiki/runs/{wiki_run_id}/metadata` - Get wiki metadata
-- **DELETE** `/api/wiki/runs/{wiki_run_id}` - Delete wiki run
-- **GET** `/api/wiki/runs/{wiki_run_id}/status` - Get wiki run status
+- **POST** `/api/wiki/internal/webhook` - Internal webhook endpoint for Beam integration (requires API key)
+- **POST** `/api/wiki/runs` - Create wiki generation run (optional auth)
+- **GET** `/api/wiki/runs/{index_run_id}` - List wiki runs for indexing run (optional auth)
+- **GET** `/api/wiki/runs/{wiki_run_id}/pages` - Get wiki pages metadata (optional auth)
+- **GET** `/api/wiki/runs/{wiki_run_id}/pages/{page_name}` - Get wiki page content (optional auth)
+- **GET** `/api/wiki/runs/{wiki_run_id}/metadata` - Get wiki metadata (optional auth)
+- **DELETE** `/api/wiki/runs/{wiki_run_id}` - Delete wiki run (requires auth)
+- **GET** `/api/wiki/runs/{wiki_run_id}/status` - Get wiki run status (optional auth)
 
 ### System Endpoints
 - **GET** `/` - API status message
@@ -334,10 +244,3 @@ This dual structure enables:
 - **GET** `/api/health` - API-specific health check
 - **GET** `/api/debug/env` - Environment debug (development only)
 
-## Important Notes
-
-- Never use `rm` command without approval
-- Clean up test files after use (propose, don't auto-delete)
-- Construction-specific optimizations for Danish language
-- Pipeline processing can take up to 30 minutes for large documents
-- All AI service calls include retry logic and error handling

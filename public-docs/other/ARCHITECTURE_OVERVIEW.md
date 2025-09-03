@@ -142,11 +142,11 @@ graph TD
     STORE --> TRIGGER["Trigger Beam<br/>Indexing"]
     
     subgraph "Beam Processing - 5 Steps"
-        PARTITION["1. Partition<br/>PyMuPDF extraction"]
-        METADATA["2. Metadata<br/>Extract structure"]
-        ENRICHMENT["3. Enrichment<br/>VLM captions"]
-        CHUNKING["4. Chunking<br/>1000 chars, 200 overlap"]
-        EMBEDDING["5. Embedding<br/>Voyage multilingual"]
+        PARTITION["1 Partition<br/>PyMuPDF extraction"]
+        METADATA["2 Metadata<br/>Extract structure"]
+        ENRICHMENT["3 Enrichment<br/>VLM captions"]
+        CHUNKING["4 Chunking<br/>1000 chars, 200 overlap"]
+        EMBEDDING["5 Embedding<br/>Voyage multilingual"]
         
         PARTITION --> METADATA
         METADATA --> ENRICHMENT
@@ -208,12 +208,12 @@ graph TD
     TRIGGER["Indexing Complete<br/>Webhook"] --> START["Start Wiki Generation"]
     
     subgraph "Wiki Generation Steps"
-        META_COLLECT["1. Metadata Collection<br/>Gather doc info"]
-        OVERVIEW["2. Overview Generation<br/>Project summary"]
-        CLUSTER["3. Semantic Clustering<br/>Group related content"]
-        STRUCTURE["4. Structure Generation<br/>Define hierarchy"]
-        CONTENT["5. Page Content Retrieval<br/>Gather page data"]
-        MARKDOWN["6. Markdown Generation<br/>Create wiki pages"]
+        META_COLLECT["1 Metadata Collection<br/>Gather doc info"]
+        OVERVIEW["2 Overview Generation<br/>Project summary"]
+        CLUSTER["3 Semantic Clustering<br/>Group related content"]
+        STRUCTURE["4 Structure Generation<br/>Define hierarchy"]
+        CONTENT["5 Page Content Retrieval<br/>Gather page data"]
+        MARKDOWN["6 Markdown Generation<br/>Create wiki pages"]
         
         META_COLLECT --> OVERVIEW
         OVERVIEW --> CLUSTER
@@ -1009,7 +1009,7 @@ CREATE TABLE document_chunks (
 
 -- Indexes for Performance
 CREATE INDEX idx_chunks_embedding ON document_chunks 
-    USING hnsw (embedding vector_cosine_ops);  -- HNSW for 26x faster search
+    USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX idx_chunks_document ON document_chunks(document_id);
 CREATE INDEX idx_documents_run ON documents(indexing_run_id);
 ```
@@ -1027,7 +1027,7 @@ graph LR
     
     subgraph "Storage"
         PGVECTOR[pgvector Extension]
-        INDEX[HNSW Index]
+        INDEX[IVFFlat Index]
         SIMILARITY[Cosine Similarity]
     end
     

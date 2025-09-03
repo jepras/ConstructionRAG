@@ -26,6 +26,7 @@ class SearchResult(BaseModel):
     page_number: int | None = None
     chunk_id: str | None = None
     document_id: str | None = None
+    bbox: list[float] | None = None  # Bounding box coordinates for PDF highlighting
 
 
 class QualityMetrics(BaseModel):

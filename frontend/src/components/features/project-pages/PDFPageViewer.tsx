@@ -98,21 +98,87 @@ export default function PDFPageViewer({
 
         console.log('PDFPageViewer: Starting to load PDF from:', pdfUrl);
 
-        // Dynamically import PDF.js
-        const pdfjsLib = await import('pdfjs-dist');
-        console.log('PDFPageViewer: PDF.js loaded');
+        // Dynamically import PDF.js with proper error handling
+        let pdfjsLib;
+        try {
+          pdfjsLib = await import('pdfjs-dist');
+          console.log('PDFPageViewer: PDF.js loaded successfully');
+        } catch (importError) {
+          console.error('PDFPageViewer: Failed to import PDF.js:', importError);
+          setError('Failed to load PDF viewer library');
+          setLoading(false);
+          return;
+        }
         
-        // Configure worker
-        if (pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-          console.log('PDFPageViewer: Worker configured');
+        // Configure worker - use the correct path for the worker
+        try {
+          if (!pdfjsLib.GlobalWorkerOptions) {
+            console.error('PDFPageViewer: GlobalWorkerOptions not found in pdfjsLib');
+            // Try alternative import method
+            const pdfjs = pdfjsLib.default || pdfjsLib;
+            if (pdfjs.GlobalWorkerOptions) {
+              pdfjs.GlobalWorkerOptions.workerSrc = `//cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version || '4.0.379'}/build/pdf.worker.min.js`;
+              console.log('PDFPageViewer: Worker configured using default export');
+              pdfjsLib = pdfjs;
+            } else {
+              console.error('PDFPageViewer: Could not find GlobalWorkerOptions');
+              setError('PDF viewer configuration error');
+              setLoading(false);
+              return;
+            }
+          } else {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.0.379'}/build/pdf.worker.min.js`;
+            console.log('PDFPageViewer: Worker configured');
+          }
+        } catch (workerError) {
+          console.error('PDFPageViewer: Failed to configure worker:', workerError);
+          setError('Failed to configure PDF viewer');
+          setLoading(false);
+          return;
         }
 
         // Load the PDF document
         console.log('PDFPageViewer: Creating loading task for URL:', pdfUrl);
-        const loadingTask = pdfjsLib.getDocument(pdfUrl);
-        const pdf = await loadingTask.promise;
-        console.log('PDFPageViewer: PDF loaded successfully, pages:', pdf.numPages);
+        
+        // Create loading task with error handling
+        let loadingTask;
+        try {
+          loadingTask = pdfjsLib.getDocument({
+            url: pdfUrl,
+            withCredentials: false, // Don't send cookies with cross-origin request
+            disableAutoFetch: false,
+            disableStream: false,
+          });
+        } catch (taskError) {
+          console.error('PDFPageViewer: Failed to create loading task:', taskError);
+          setError('Failed to start PDF loading');
+          setLoading(false);
+          return;
+        }
+        
+        // Add error handler for loading task
+        loadingTask.onProgress = (progress: any) => {
+          console.log('PDFPageViewer: Loading progress:', {
+            loaded: progress.loaded,
+            total: progress.total
+          });
+        };
+        
+        let pdf;
+        try {
+          pdf = await loadingTask.promise;
+          console.log('PDFPageViewer: PDF loaded successfully, pages:', pdf.numPages);
+        } catch (pdfError: any) {
+          console.error('PDFPageViewer: Failed to load PDF document:', {
+            error: pdfError,
+            message: pdfError?.message,
+            name: pdfError?.name,
+            url: pdfUrl
+          });
+          setError(`Failed to load PDF: ${pdfError?.message || 'Unknown error'}`);
+          setLoading(false);
+          return;
+        }
 
         if (cancelled) return;
 

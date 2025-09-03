@@ -241,8 +241,58 @@ class PartitionStep(PipelineStep):
                 if hasattr(element.metadata, 'coordinates') and element.metadata.coordinates:
                     points = element.metadata.coordinates.points
                     if points and len(points) == 4:
-                        # Convert from points format [[x0,y0], [x1,y0], [x1,y1], [x0,y1]] to bbox format (x0, y0, x1, y1)
-                        bbox = [points[0][0], points[0][1], points[2][0], points[2][1]]
+                        # Get raw pixel coordinates
+                        pixel_bbox = [points[0][0], points[0][1], points[2][0], points[2][1]]
+                        print(f"[UNSTRUCTURED BBOX] Page {page_number}, Element {element.category}")
+                        print(f"  Original pixel coordinates: {pixel_bbox}")
+                        
+                        # Try to get coordinate system dimensions
+                        conversion_method = "unknown"
+                        if hasattr(element.metadata.coordinates, 'system'):
+                            system = element.metadata.coordinates.system
+                            if hasattr(system, 'width') and hasattr(system, 'height'):
+                                image_width = system.width
+                                image_height = system.height
+                                print(f"  Image dimensions: {image_width}x{image_height} pixels")
+                                
+                                # Get PDF page dimensions in points
+                                doc = fitz.open(filepath)
+                                page = doc[page_number - 1] if page_number > 0 else doc[0]
+                                pdf_width = page.rect.width  # in points
+                                pdf_height = page.rect.height  # in points
+                                doc.close()
+                                print(f"  PDF dimensions: {pdf_width}x{pdf_height} points")
+                                
+                                # Calculate scale factors
+                                scale_x = pdf_width / image_width
+                                scale_y = pdf_height / image_height
+                                print(f"  Scale factors: x={scale_x:.4f}, y={scale_y:.4f}")
+                                
+                                # Convert pixels to PDF points
+                                bbox = [
+                                    pixel_bbox[0] * scale_x,
+                                    pixel_bbox[1] * scale_y,
+                                    pixel_bbox[2] * scale_x,
+                                    pixel_bbox[3] * scale_y
+                                ]
+                                conversion_method = "coordinate_system_scaling"
+                            else:
+                                # System exists but no dimensions - use DPI fallback
+                                print(f"  Coordinate system found but no dimensions available")
+                                DPI_SCALE = 72.0 / 200.0  # Assume 200 DPI
+                                bbox = [coord * DPI_SCALE for coord in pixel_bbox]
+                                conversion_method = "dpi_fallback_200"
+                                print(f"  Using DPI fallback: 200 DPI (scale={DPI_SCALE:.4f})")
+                        else:
+                            # No system info at all - use DPI assumption
+                            print(f"  No coordinate system info available")
+                            DPI_SCALE = 72.0 / 200.0  # Assume 200 DPI
+                            bbox = [coord * DPI_SCALE for coord in pixel_bbox]
+                            conversion_method = "dpi_fallback_200_no_system"
+                            print(f"  Using DPI fallback: 200 DPI (scale={DPI_SCALE:.4f})")
+                        
+                        print(f"  Converted PDF coordinates: {bbox}")
+                        print(f"  Conversion method: {conversion_method}")
 
                 normalized_element = {
                     "id": getattr(element, "id", None)
