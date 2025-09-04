@@ -169,6 +169,11 @@ class MarkdownGenerationStep(PipelineStep):
         retrieved_chunks = page_content.get("retrieved_chunks", [])
         source_docs = page_content.get("source_documents", {})
 
+        # Log source documents for debugging
+        logger.info(f"📄 [Wiki:Citations] Available source documents: {list(source_docs.keys())}")
+        for doc_id, doc_info in source_docs.items():
+            logger.info(f"   📄 {doc_id}: {doc_info.get('filename', 'unknown')} ({doc_info.get('chunk_count', 0)} chunks)")
+
         # Limit to top chunks to avoid token overflow
         top_chunks = sorted(retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True)[:20]
 
@@ -176,6 +181,7 @@ class MarkdownGenerationStep(PipelineStep):
         document_excerpts = []
         source_counter = 1
         source_map = {}  # Map document_id to footnote number
+        source_documents = page_content.get("source_documents", {})
 
         for chunk in top_chunks:
             content = chunk.get("content", "")
@@ -190,25 +196,29 @@ class MarkdownGenerationStep(PipelineStep):
                 source_counter += 1
 
             source_ref = source_map[doc_id]
+            
+            # Get actual filename from source_documents
+            doc_info = source_documents.get(doc_id, {})
+            filename = doc_info.get("filename", f"document_{doc_id[:8]}")
+            
+            # Log for debugging
+            if len(document_excerpts) < 3:  # Only log first 3 to avoid spam
+                logger.info(f"📋 [Wiki:Citations] Excerpt {len(document_excerpts) + 1}: Using filename '{filename}' for doc_id '{doc_id}'")
 
             excerpt = f"""
 Excerpt {len(document_excerpts) + 1}:
-Source: [Document {source_ref}, page {page_number}]
+Source: [{filename}, page {page_number}]
 Relevance: {similarity:.3f}
 Content: {content[:600]}..."""
             document_excerpts.append(excerpt)
 
-        # Create source footnotes
+        # Create source footnotes using source_documents from page_content
         footnotes = []
+        source_documents = page_content.get("source_documents", {})
         for doc_id, ref_num in source_map.items():
-            # Find document info from metadata
-            doc_info = None
-            for doc in metadata.get("documents", []):
-                if doc.get("id") == doc_id:
-                    doc_info = doc
-                    break
-
-            filename = doc_info.get("filename", f"document_{doc_id[:8]}") if doc_info else f"document_{doc_id[:8]}"
+            # Get filename from source_documents which has correct source_filename from chunks
+            doc_info = source_documents.get(doc_id, {})
+            filename = doc_info.get("filename", f"document_{doc_id[:8]}")
             footnotes.append(f"[{ref_num}] {filename}")
 
         excerpts_text = "\n".join(document_excerpts[:12])  # Limit excerpts to avoid token overflow
@@ -286,7 +296,8 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
 
 6. **Source Citations (EXTREMELY IMPORTANT):**
    * For EVERY piece of significant information, explanation, diagram, table entry, or document excerpt, you MUST cite the specific source document(s) and relevant page numbers or sections from which the information was derived.
-   * Format citations as [document name, page number]. For example: The project budget is €2.5 million[contract.pdf, 5].
+   * Format citations as [actual filename, page number] using the EXACT filenames shown in the document excerpts above. For example: The project budget is €2.5 million[contract.pdf, 5].
+   * DO NOT use generic references like "Document 1" - always use the actual filenames from the Source fields in the excerpts.
 
    For multiple sources supporting one claim, use: Construction will begin in March 2024[contract.pdf, 5][budget.pdf, 26].
    IMPORTANT: You MUST cite AT LEAST 5 different source documents throughout the wiki page to ensure comprehensive coverage when available.

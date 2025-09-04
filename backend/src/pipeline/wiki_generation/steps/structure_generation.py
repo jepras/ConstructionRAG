@@ -181,7 +181,7 @@ IMPORTANT: The wiki content will be generated in Danish language.
 # Return output 
 ## Return output rules
 - Create a maximum of {self.max_pages} wiki pages in total (including the overview page). Only create as many pages as you need to cover the project. 
-- Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language), with the below queries. Do NOT create multiple overview pages with similar names. 
+- Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language), with the below queries (in Danish if the language specified is Danish and English if otherwise). Do NOT create multiple overview pages with similar names. 
 
 project_overview_queries = [
     # Core project identity

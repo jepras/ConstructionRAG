@@ -164,7 +164,7 @@ class ResponseGenerator(PipelineStep):
             )
 
             context_parts.append(
-                f"Kilde {i} (side {result.page_number}, {result.source_filename}):\n{result.content}\n"
+                f"Dokumenter fra {result.source_filename}, side {result.page_number}:\n{result.content}\n"
             )
 
         logger.info(f"📄 Final context length: {len(''.join(context_parts))} characters")
@@ -220,7 +220,8 @@ VIGTIGT!
 INSTRUKTIONER:
 - Svar på dansk
 - Vær præcis og faktuel
-- Citer relevante dele af kilderne når det er relevant (brug citationer som [Dokumentnavn, sidetal])
+- Citer relevante dele af kilderne når det er relevant - brug ALTID det faktiske dokumentnavn og sidetal som [dokumentnavn.pdf, side X]. Eksempel: [projektbeskrivelse.pdf, side 5]
+- VIGTIG: Undgå generiske referencer som "Kilde 1" eller lignende - brug ALTID det virkelige dokumentnavn
 - Hold svaret under 500 ord
 - Lav gerne mange korte afsnit for at gøre det nemt at læse.
 - Formater dit svar i normal tekst format - ikke noget markdown.

@@ -181,18 +181,19 @@ class PageContentRetrievalStep(PipelineStep):
             # Log details about top chunks for debugging
             if similar_chunks:
                 for i, chunk in enumerate(similar_chunks[:3]):
-                    content_type = chunk.get("metadata", {}).get("element_type", "text")
                     content_preview = chunk["content"][:200].replace("\n", " ")
                     logger.info(
-                        f"   Top {i+1} (sim={chunk.get('similarity_score', 0):.3f}, type={content_type}): "
+                        f"   Top {i+1} (sim={chunk.get('similarity_score', 0):.3f}): "
                         f"{content_preview}..."
                     )
             else:
                 logger.warning(f"   ⚠️ No results for query: '{query}'")
 
-            # Add query information to chunks
+            # Add query information to chunks and filter metadata to essentials
             for chunk in similar_chunks:
                 chunk["query"] = query
+                # Filter metadata to only essential fields for wiki generation
+                chunk["metadata"] = self._filter_essential_metadata(chunk.get("metadata", {}))
                 all_retrieved_chunks.append(chunk)
 
                 # Track source documents
@@ -244,3 +245,19 @@ class PageContentRetrievalStep(PipelineStep):
                 unique_chunks.append(chunk)
 
         return unique_chunks
+
+    def _filter_essential_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        """Filter metadata to only essential fields for wiki generation.
+        
+        Essential fields:
+        - page_number: For source citations
+        - source_filename: For document identification 
+        - bbox: For PDF highlighting
+        - document_id: For document grouping
+        """
+        essential_fields = ["page_number", "source_filename", "bbox", "document_id"]
+        return {
+            field: metadata.get(field)
+            for field in essential_fields
+            if metadata.get(field) is not None
+        }

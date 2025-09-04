@@ -164,14 +164,14 @@
   },
   "wiki": {
     "generation": {
-      "model": "google/gemini-2.5-flash",
+      "model": "google/gemini-2.5-flash-lite",
       "temperature": 0.2,
-      "max_pages": 4,
-      "queries_per_page": 4
+      "max_pages": 7,
+      "queries_per_page": 6
     },
     "retrieval": {
-      "top_k": 10,
-      "max_chunks_per_page": 20,
+      "top_k": 8,
+      "max_chunks_per_page": 15,
       "similarity_threshold": 0.15,
       "embedding_model": "voyage-multilingual-2",
       "dimensions": 1024

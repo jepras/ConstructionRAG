@@ -10,7 +10,7 @@ chroma_db/
 /notebooks/
 
 # Analysis and test outputs
-/backend/analysis/wiki-test-output/
+/backend/analysis
 /backend/analysis/wiki-test-*
 /backend/wiki-test*/
 /backend/test_*.py
