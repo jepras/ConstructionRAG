@@ -30,6 +30,9 @@ class IntelligentChunker:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
+        
+        # DEBUG: Print the config to understand what's being passed
+        print(f"DEBUG CHUNKER INIT: Received config = {config}")
 
         # Configuration parameters
         self.min_content_length = config.get("min_content_length", 20)
@@ -38,7 +41,7 @@ class IntelligentChunker:
         )
         self.enable_list_grouping = config.get("enable_list_grouping", True)
         self.max_list_items_per_group = config.get("max_list_items_per_group", 10)
-        self.include_section_titles = config.get("include_section_titles", True)
+        self.include_section_titles = config.get("include_section_titles", False)  # Changed default to False
         self.format_tables_with_context = config.get("format_tables_with_context", True)
         self.format_images_with_context = config.get("format_images_with_context", True)
         self.prioritize_vlm_captions = config.get("prioritize_vlm_captions", True)
