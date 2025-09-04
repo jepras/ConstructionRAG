@@ -9,6 +9,12 @@ chroma_db/
 /frontend-streamlit/
 /notebooks/
 
+# Analysis and test outputs
+/backend/analysis/wiki-test-output/
+/backend/analysis/wiki-test-*
+/backend/wiki-test*/
+/backend/test_*.py
+
 
 # Python
 __pycache__/
@@ -69,6 +75,11 @@ cover/
 *.raw
 *.heic
 *.heif
+
+# Exception for favicon files in frontend/public
+!frontend/public/favicon*.png
+!frontend/public/favicon*.ico
+!frontend/public/apple-touch-icon.png
 
 # Document files
 *.pdf
