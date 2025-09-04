@@ -75,11 +75,15 @@ class ConstructionVLMCaptioner:
 
         prompt = f"""You are analyzing a table image extracted from page {page_num} of a construction/technical document ({source_file}).{focus_hint}
 
-Please provide a comprehensive description that captures:
+Please provide a comprehensive description that captures ALL content on this section of the page:
 
-1. **All Visible Text**: Read and transcribe ALL text visible in the table, including headers, data, footnotes.
-2. **Table Structure**: Number of rows, columns, organization
+1. **All Visible Text in Table**: Read and transcribe ALL text visible in the table, including headers, data, footnotes, cell contents.
+2. **Table Structure**: Number of rows, columns, organization, table borders and layout
 3. **Data Relationships**: How the data is organized and what it represents
+4. **Surrounding Text**: Any text labels, captions, references, or annotations around the table
+5. **Technical Details**: Any measurements, specifications, material references, or technical codes visible
+
+Focus on being extremely thorough - capture every piece of text and technical information visible in this image, as this will be the only source of this content.
 
 IMPORTANT: Please provide your detailed description in {self.caption_language}."""
 
@@ -125,14 +129,28 @@ IMPORTANT: Please provide your detailed description in {self.caption_language}."
 **Text Context from this page:**
 {page_text_context[:1500]}"""  # Configurable context limit
 
-        prompt = f"""You are analyzing a full-page image from page {page_num} of a construction/technical document ({source_file}). This page has {complexity} visual complexity. It may contain diagrams, technical drawings, tables, and text, but you should focus on the area that has the image associated.
+        prompt = f"""You are analyzing a full-page image from page {page_num} of a construction/technical document ({source_file}). This page has {complexity} visual complexity and contains visual content that requires comprehensive text extraction.
 
-Please provide an detailed description that captures:
-1. All the text associated with the image. Any annotation, measurement, label, note, legend, or technical detail.
-2. The technical drawing details - what type of drawing, what elements are shown, dimensions, materials, etc.
-3. The spatial relationships - how different parts relate or connect.
-4. Any pointers or annotations - what specific elements are being highlighted or called out.
-5. Any building materials, construction techniques, or technical standards mentioned.
+This image is the PRIMARY SOURCE for all text content on this page. Please provide an extremely detailed description that captures:
+
+1. **ALL Text Content**: Extract and transcribe ALL visible text including:
+   - Headers, titles, and section headings
+   - Body text, paragraphs, and descriptions  
+   - Table content, data, and headers
+   - Labels, annotations, and callouts
+   - Measurements, dimensions, and specifications
+   - Material references and technical codes
+   - Footnotes, legends, and captions
+
+2. **Technical Drawing Details**: What type of drawing, elements shown, dimensions, materials, construction details
+
+3. **Spatial Relationships**: How different parts relate, connect, or reference each other
+
+4. **Visual Context**: How text relates to diagrams, what the visual elements represent
+
+5. **Construction-Specific Information**: Building materials, techniques, standards, compliance codes
+
+Read this page as if you are digitizing all text content - be extremely thorough as this VLM caption will replace any OCR text extraction.
 
 {context_section}
 

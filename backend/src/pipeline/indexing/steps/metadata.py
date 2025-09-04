@@ -159,6 +159,11 @@ class UnifiedElementAnalyzer:
             logger.debug(f"Page change: {self.current_page} → {page_num_int}")
             self.current_page = page_num_int
 
+        # Create full-page bbox coordinates
+        page_width = page_info.get("width", 595)  # A4 width fallback
+        page_height = page_info.get("height", 842)  # A4 height fallback
+        full_page_bbox = [0, 0, page_width, page_height]
+
         # Create structural metadata
         structural_metadata = {
             "source_filename": self.document_filename,
@@ -171,6 +176,7 @@ class UnifiedElementAnalyzer:
             "has_images_on_page": True,
             "text_complexity": "complex",  # Images are typically complex
             "page_context": "image_page",
+            "bbox": full_page_bbox,  # Full page bounding box
             "section_title_inherited": None,
             "section_title_pattern": None,
             "section_title_category": None,

@@ -228,6 +228,27 @@ class PartitionStep(PipelineStep):
                 },
             }
 
+            # Get page analysis for filtering
+            page_analysis = {}
+            # Try to extract from stage1 if available
+            doc = fitz.open(filepath)
+            # Quick page analysis to identify visual pages
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                page_index = page_num + 1
+                images = page.get_images()
+                try:
+                    table_finder = page.find_tables()
+                    tables = list(table_finder)
+                except:
+                    tables = []
+                
+                # Determine if page has significant visual content
+                meaningful_images = self._count_meaningful_images(doc, page, images)
+                needs_vlm_extraction = meaningful_images >= 2 or len(tables) > 0
+                page_analysis[page_index] = {'needs_extraction': needs_vlm_extraction}
+            doc.close()
+
             # Process each element from Unstructured OCR
             for element in elements:
                 # Create normalized element matching current schema
@@ -235,6 +256,12 @@ class PartitionStep(PipelineStep):
                 page_number = getattr(element.metadata, "page_number", None)
                 if page_number is None:
                     page_number = 1  # Default to page 1 if Unstructured doesn't provide page number
+
+                # CHECK: Skip text elements from pages that will be handled by VLM
+                if (element.category not in ["Table"] and 
+                    page_analysis.get(page_number, {}).get('needs_extraction', False)):
+                    logger.info(f"🔄 SKIPPING Unstructured text element on page {page_number} - will be handled by VLM")
+                    continue
 
                 # Extract bbox if available from Unstructured
                 bbox = None
@@ -1426,12 +1453,17 @@ class UnifiedPartitionerV2:
             f"Stage 1 complete: {len(table_locations)} tables, {len(image_locations)} images"
         )
 
-        return {
+        results = {
             "page_analysis": page_analysis,
             "table_locations": table_locations,
             "image_locations": image_locations,
             "document_metadata": document_metadata,
         }
+        
+        # Store for stage2 access
+        self._stage1_results = results
+        
+        return results
 
     def _extract_document_metadata(self, doc):
         """Extract comprehensive document metadata from PyMuPDF"""
@@ -1454,16 +1486,26 @@ class UnifiedPartitionerV2:
         }
 
     def stage2_fast_text_extraction(self, filepath):
-        """Stage 2: PyMuPDF text extraction (replacing unstructured)"""
+        """Stage 2: PyMuPDF text extraction with visual page skipping"""
         logger.info("Stage 2: PyMuPDF text extraction...")
 
         doc = fitz.open(filepath)
         text_elements = []
         raw_elements = []
+        
+        # Get page analysis from stage1 results (passed as instance variable)
+        page_analysis = getattr(self, '_stage1_results', {}).get('page_analysis', {})
 
         for page_num in range(len(doc)):
             page = doc[page_num]
             page_index = page_num + 1  # 1-indexed
+
+            # CHECK: Skip text extraction if page has visual content that needs VLM processing
+            page_info = page_analysis.get(page_index, {})
+            if page_info.get('needs_extraction', False):
+                logger.info(f"🔄 SKIPPING text extraction on page {page_index} - will be handled by VLM captions")
+                print(f"🔄 BEAM: SKIPPING text extraction on page {page_index} - has visual content")
+                continue
 
             # Get text blocks with detailed metadata
             try:

@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Make a plan before coding. Do not code until I have confirmed the plan looks good.
 - Do not use git commands unless explicitly told to.
 - Before implementing new use of frontend API calls, then make the API calls as curl commands to test they return what you expect them to return before implementing it in the code.
-- When creating tests to verify assumptions, look to the existing test functions and the test helper functions to see if any code can be reused to check your code and implementation. I want you to be a contributor to my codebase, not a generator of standalone scripts.
+- When creating tests to verify new features, look to the existing test functions and the test helper functions to see if any code can be reused to check your code and implementation. I want you to be a contributor to my codebase, not a generator of standalone scripts.
 - Never use `rm` command without approval
 
 ## Core development philosophy

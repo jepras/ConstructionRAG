@@ -35,7 +35,7 @@ from src.pipeline.wiki_generation.models import (
 )
 
 # ==================== CONFIGURATION ====================
-INDEXING_RUN_ID = "163b73e6-637d-4096-a199-dce1122999d5"
+INDEXING_RUN_ID = "b1aa2098-d307-4cbf-94fb-e894c5739222"
 OVERVIEW_QUERY_COUNT = 12
 MAX_WIKI_PAGES = 3
 QUERIES_PER_PAGE = 3

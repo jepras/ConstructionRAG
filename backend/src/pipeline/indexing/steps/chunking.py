@@ -31,8 +31,6 @@ class IntelligentChunker:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         
-        # DEBUG: Print the config to understand what's being passed
-        print(f"DEBUG CHUNKER INIT: Received config = {config}")
 
         # Configuration parameters
         self.min_content_length = config.get("min_content_length", 20)
@@ -48,12 +46,31 @@ class IntelligentChunker:
         self.fallback_to_original_text = config.get("fallback_to_original_text", True)
         
         # Semantic chunking parameters
-        self.strategy = config.get("strategy", "element_based")
+        self.strategy = config.get("strategy", "semantic")  # HARDCODED: Force semantic strategy
         self.chunk_size = config.get("chunk_size", 1000)
         self.overlap = config.get("overlap", 200)
         self.separators = config.get("separators", ["\n\n", "\n", " ", ""])
         self.min_chunk_size = config.get("min_chunk_size", 100)
-        self.max_chunk_size = config.get("max_chunk_size", 2000)
+        self.max_chunk_size = config.get("max_chunk_size", 1200)  # HARDCODED: Force aggressive splitting
+        
+        # BEAM DEBUG: Print configuration as received
+        print(f"🔧 BEAM CHUNKING CONFIG:")
+        print(f"  strategy: {self.strategy} (config value: {config.get('strategy', 'NOT_SET')})")
+        print(f"  max_chunk_size: {self.max_chunk_size} (config value: {config.get('max_chunk_size', 'NOT_SET')})")
+        print(f"  chunk_size: {self.chunk_size}")
+        print(f"  overlap: {self.overlap}")
+        
+        # FORCE HARDCODED VALUES FOR BEAM TESTING
+        self.strategy = "semantic" 
+        self.max_chunk_size = 1000  # Force split anything over 1000 chars
+        self.chunk_size = 800       # Force smaller target chunk size
+        self.overlap = 200          # Ensure good overlap
+        
+        print(f"🔧 BEAM FORCED VALUES:")
+        print(f"  strategy: {self.strategy} (HARDCODED)")
+        print(f"  max_chunk_size: {self.max_chunk_size} (HARDCODED - will split chunks > 1000 chars)")
+        print(f"  chunk_size: {self.chunk_size} (HARDCODED - target chunk size)")
+        print(f"  overlap: {self.overlap} (HARDCODED - overlap size)")
 
     def extract_structural_metadata(self, el: dict) -> dict:
         """Extract structural metadata from element, handling various formats"""
@@ -429,8 +446,6 @@ class IntelligentChunker:
         element_type = el.get("element_type", "text")
         section_title = meta.get("section_title_inherited", "Unknown Section")
         
-        # DEBUG: Print the config value to help diagnose the issue
-        print(f"DEBUG CHUNKING: include_section_titles = {self.include_section_titles}, category = {category}, section_title = {section_title}")
 
         # Check if this is a split element with pre-computed content
         if "split_content" in el:
@@ -529,11 +544,26 @@ class IntelligentChunker:
 
     def apply_semantic_text_splitting_to_chunks(self, chunks: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Apply semantic text splitting to composed chunks that exceed max_chunk_size"""
+        
+        # BEAM DEBUG: Print configuration and chunk analysis
+        print(f"🔍 BEAM CHUNKING: strategy={self.strategy}, max_chunk_size={self.max_chunk_size}, chunk_size={self.chunk_size}")
+        chunk_sizes = [len(chunk["content"]) for chunk in chunks]
+        print(f"🔍 BEAM CHUNKING: {len(chunks)} chunks, sizes: min={min(chunk_sizes) if chunk_sizes else 0}, max={max(chunk_sizes) if chunk_sizes else 0}, avg={sum(chunk_sizes)/len(chunk_sizes) if chunk_sizes else 0:.1f}")
+        
+        # Print details about large chunks
+        large_chunks = [i for i, size in enumerate(chunk_sizes) if size > 1000]
+        if large_chunks:
+            print(f"🔍 BEAM CHUNKING: Found {len(large_chunks)} chunks > 1000 chars at indices: {large_chunks}")
+            for i in large_chunks[:3]:  # Print details for first 3 large chunks
+                chunk = chunks[i]
+                content_preview = chunk["content"][:200] + "..." if len(chunk["content"]) > 200 else chunk["content"]
+                print(f"🔍 BEAM LARGE CHUNK {i}: {len(chunk['content'])} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'")
+        
         if self.strategy != "semantic" or RecursiveCharacterTextSplitter is None:
-            logger.info("Semantic splitting disabled or langchain not available")
+            print(f"🔍 BEAM CHUNKING: Semantic splitting disabled - strategy={self.strategy}, RecursiveCharacterTextSplitter available={RecursiveCharacterTextSplitter is not None}")
             return chunks, {"semantic_splitting_enabled": False}
             
-        logger.info(f"Applying semantic text splitting to chunks larger than {self.max_chunk_size} characters...")
+        print(f"🔍 BEAM CHUNKING: Applying semantic text splitting to chunks larger than {self.max_chunk_size} characters...")
         
         # Initialize text splitter
         text_splitter = RecursiveCharacterTextSplitter(
@@ -543,6 +573,8 @@ class IntelligentChunker:
             length_function=len,
             is_separator_regex=False,
         )
+        
+        print(f"🔍 BEAM CHUNKING: Text splitter initialized with chunk_size={self.chunk_size}, overlap={self.overlap}")
         
         split_chunks = []
         splitting_stats = {
@@ -554,7 +586,7 @@ class IntelligentChunker:
             "largest_chunk_after": 0,
         }
         
-        for chunk in chunks:
+        for chunk_idx, chunk in enumerate(chunks):
             splitting_stats["chunks_processed"] += 1
             content = chunk["content"]
             content_length = len(content)
@@ -563,8 +595,16 @@ class IntelligentChunker:
             if content_length > splitting_stats["largest_chunk_before"]:
                 splitting_stats["largest_chunk_before"] = content_length
             
-            # Skip if content is within acceptable size
-            if content_length <= self.max_chunk_size:
+            # BEAM DEBUG: Print processing of each chunk
+            if content_length > 500:  # Print chunks that might need splitting
+                content_preview = content[:100] + "..." if len(content) > 100 else content
+                print(f"🔍 BEAM PROCESSING CHUNK {chunk_idx}: {content_length} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'")
+            
+            # FORCE SPLIT: Change threshold to 1000 chars instead of max_chunk_size
+            split_threshold = 1000  # HARDCODED: Force split anything over 1000 chars
+            if content_length <= split_threshold:
+                if content_length > 500:  # Print decision for potentially splittable chunks
+                    print(f"🔍 BEAM SKIPPING CHUNK {chunk_idx}: {content_length} <= {split_threshold} (HARDCODED threshold)")
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
                 if content_length > splitting_stats["largest_chunk_after"]:
@@ -572,10 +612,14 @@ class IntelligentChunker:
                 continue
                 
             # Split large content
+            print(f"🔍 BEAM SPLITTING CHUNK {chunk_idx}: {content_length} chars > {split_threshold} (HARDCODED threshold)")
             try:
                 text_chunks = text_splitter.split_text(content)
+                print(f"🔍 BEAM SPLIT RESULT {chunk_idx}: {len(text_chunks)} chunks, sizes: {[len(tc) for tc in text_chunks]}")
+                
                 if len(text_chunks) <= 1:
                     # No splitting occurred
+                    print(f"🔍 BEAM NO SPLITTING OCCURRED for chunk {chunk_idx}: {len(text_chunks)} chunks returned")
                     split_chunks.append(chunk)
                     splitting_stats["chunks_unchanged"] += 1
                     if content_length > splitting_stats["largest_chunk_after"]:
@@ -584,6 +628,7 @@ class IntelligentChunker:
                     
                 splitting_stats["chunks_split"] += 1
                 splitting_stats["total_new_chunks"] += len(text_chunks)
+                print(f"🔍 BEAM SUCCESSFULLY SPLIT chunk {chunk_idx}: {content_length} chars -> {len(text_chunks)} chunks")
                 
                 # Create new chunks from splits
                 for i, chunk_text in enumerate(text_chunks):
@@ -607,13 +652,18 @@ class IntelligentChunker:
                         splitting_stats["largest_chunk_after"] = len(chunk_text)
                     
             except Exception as e:
-                logger.warning(f"Failed to split chunk {chunk['chunk_id']}: {e}")
+                print(f"🔍 BEAM ERROR: Failed to split chunk {chunk.get('chunk_id', 'unknown')}: {e}")
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
                 if content_length > splitting_stats["largest_chunk_after"]:
                     splitting_stats["largest_chunk_after"] = content_length
                 
         splitting_stats["semantic_splitting_enabled"] = True
+        
+        # BEAM DEBUG: Final summary
+        final_sizes = [len(chunk["content"]) for chunk in split_chunks]
+        print(f"🔍 BEAM FINAL CHUNKING SUMMARY: {len(split_chunks)} chunks, sizes: min={min(final_sizes) if final_sizes else 0}, max={max(final_sizes) if final_sizes else 0}, avg={sum(final_sizes)/len(final_sizes) if final_sizes else 0:.1f}")
+        print(f"🔍 BEAM Semantic splitting complete: {splitting_stats}")
         logger.info(f"Semantic splitting complete: {splitting_stats}")
         return split_chunks, splitting_stats
 
@@ -733,6 +783,11 @@ class IntelligentChunker:
 
             # Compose content
             content = self.compose_final_content(el, meta)
+            
+            # BEAM DEBUG: Print content composition for large content
+            if len(content) > 1000:
+                content_preview = content[:200] + "..." if len(content) > 200 else content
+                print(f"🔍 BEAM COMPOSING LARGE CONTENT: {len(content)} chars, type={meta.get('element_category', 'unknown')}, preview='{content_preview}'")
 
             # Create chunk object with composed content
             chunk = {

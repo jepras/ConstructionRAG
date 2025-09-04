@@ -70,7 +70,7 @@
         ""
       ],
       "min_chunk_size": 100,
-      "max_chunk_size": 1200,
+      "max_chunk_size": 1500,
       "include_section_titles": false
     },
     "embedding": {
