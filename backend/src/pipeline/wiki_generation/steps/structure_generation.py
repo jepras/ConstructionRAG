@@ -53,7 +53,7 @@ class StructureGenerationStep(PipelineStep):
         self.max_tokens = config.get("structure_max_tokens", 6000)
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        
+
         # Add new config for testing limits
         self.max_pages = gen_cfg.get("max_pages", 10)  # Default to 10 if not specified
         self.queries_per_page = gen_cfg.get("queries_per_page", 8)  # Default to 8 if not specified
@@ -173,11 +173,6 @@ class StructureGenerationStep(PipelineStep):
 3. Semantic analysis
 {chr(10).join(cluster_list)}
 
-4. Sections detected
-{chr(10).join(section_list) if section_list else "No sections detected"}
-
-Use the project overview & semantic analysis most in your considerations.
-
 ## Section breakdown information
 I want to create a wiki for this construction project. Determine the most logical structure for a wiki based on the project's documentation and content.
 
@@ -210,9 +205,7 @@ project_overview_queries = [
     "square meters floor area size dimensions scope"
 ] 
 
-- OPTIONAL: If a page is closely related to another page, then store that in related_pages.
-
-- Each page should focus on a specific aspect of the construction project (e.g., project phases, safety requirements, material specifications)
+- Each page should focus on a specific aspect of the construction project. 
 
 ## Return output format
 Return your analysis in the following JSON format:
@@ -230,9 +223,6 @@ Return your analysis in the following JSON format:
        "query 2",
        "query 3",
        "query 4"
-     ],
-     "related_pages": [
-       "[]"
      ],
      "relevance_score": "1-10",
      "topic_argumentation": "argumentation for why this was chosen"

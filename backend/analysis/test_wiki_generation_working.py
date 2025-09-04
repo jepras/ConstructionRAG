@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for wiki generation pipeline WITHOUT semantic clustering.
-Focuses on the actual data retrieval and query tracking as originally planned.
+Working version of wiki generation pipeline test with all improvements.
 """
 
 import asyncio
@@ -14,7 +13,7 @@ from typing import Dict, Any, List
 import logging
 
 # Add backend to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
@@ -37,32 +36,26 @@ from src.pipeline.wiki_generation.models import (
 
 # ==================== CONFIGURATION ====================
 INDEXING_RUN_ID = "163b73e6-637d-4096-a199-dce1122999d5"
-OVERVIEW_QUERY_COUNT = 12  # Number of queries for overview
-MAX_WIKI_PAGES = 3  # Generate 3 pages
-QUERIES_PER_PAGE = 3  # 3 queries per page
-TOP_K_RETRIEVAL = 5  # 5 results per query
+OVERVIEW_QUERY_COUNT = 12
+MAX_WIKI_PAGES = 3
+QUERIES_PER_PAGE = 3
+TOP_K_RETRIEVAL = 5
 
-# ========================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-class WikiTestWithoutClustering:
-    """Test runner that skips clustering and focuses on actual retrieval."""
+class WikiTestWorking:
+    """Working version of wiki test with all improvements."""
     
     def __init__(self):
         self.supabase = get_supabase_admin_client()
         self.storage_service = StorageService()
         self.config_service = ConfigService()
         self.output_dir = None
-        self.all_queries_executed = []  # Track ALL queries
+        self.all_queries_executed = []
         
     def create_output_directory(self) -> Path:
-        """Create timestamped output directory."""
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         output_dir = Path(f"analysis/wiki-test-output/{timestamp}")
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -71,17 +64,13 @@ class WikiTestWithoutClustering:
         return output_dir
     
     def save_json(self, filename: str, data: Any):
-        """Save data as JSON to output directory."""
         filepath = self.output_dir / filename
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False, default=str)
         logger.info(f"💾 Saved: {filename}")
     
     def get_test_config(self) -> Dict[str, Any]:
-        """Get modified configuration for testing."""
         wiki_config = self.config_service.get_effective_config("wiki")
-        
-        # Override with our test parameters
         wiki_config["overview_query_count"] = OVERVIEW_QUERY_COUNT
         wiki_config["generation"]["max_pages"] = MAX_WIKI_PAGES
         wiki_config["generation"]["queries_per_page"] = QUERIES_PER_PAGE
@@ -96,51 +85,33 @@ class WikiTestWithoutClustering:
         return wiki_config
     
     async def run(self):
-        """Run the test pipeline without clustering."""
-        
-        # Track completion status of each step
-        steps_completed = {
-            "metadata": False,
-            "overview": False, 
-            "clustering": False,
-            "structure": False,
-            "retrieval": False,
-            "markdown": False
-        }
-        
+        """Run the enhanced test pipeline."""
         self.create_output_directory()
         config = self.get_test_config()
         
-        # Initialize variables that may be used across steps
+        steps_completed = {"metadata": False, "overview": False, "clustering": False, 
+                          "structure": False, "retrieval": False, "markdown": False}
+        
+        # Initialize variables
         metadata = {}
         project_overview = ""
-        semantic_analysis = {}
         wiki_structure = {}
         page_contents = {}
         generated_pages = {}
-            
+        
         # ============= STEP 1: METADATA COLLECTION =============
         logger.info("\n" + "="*60)
         logger.info("STEP 1: Metadata Collection")
         logger.info("="*60)
         
         try:
-            metadata_step = MetadataCollectionStep(
-                config=config,
-                storage_service=self.storage_service,
-                db_client=self.supabase
-            )
-            
-            metadata_result = await metadata_step.execute({
-                "index_run_id": INDEXING_RUN_ID
-            })
+            metadata_step = MetadataCollectionStep(config=config, storage_service=self.storage_service, db_client=self.supabase)
+            metadata_result = await metadata_step.execute({"index_run_id": INDEXING_RUN_ID})
             
             if metadata_result.status == "failed":
                 raise Exception(f"Metadata collection failed: {metadata_result.error_message}")
             
             metadata = to_metadata_output(metadata_result.data).model_dump(exclude_none=True)
-            
-            # Save metadata summary
             metadata_summary = {
                 "indexing_run_id": metadata.get("indexing_run_id"),
                 "total_documents": metadata.get("total_documents"),
@@ -153,31 +124,16 @@ class WikiTestWithoutClustering:
             
         except Exception as e:
             logger.error(f"❌ STEP 1 FAILED: {e}")
-            self.save_json("01_metadata_error.json", {"error": str(e), "step": "metadata_collection"})
-            # Use minimal metadata to continue
-            metadata = {
-                "indexing_run_id": INDEXING_RUN_ID,
-                "total_documents": 0,
-                "total_chunks": 0,
-                "documents": [],
-                "document_filenames": []
-            }
-            
-        # ============= STEP 2: OVERVIEW GENERATION (WITH ACTUAL RETRIEVAL) =============
+            metadata = {"indexing_run_id": INDEXING_RUN_ID, "total_documents": 0, "total_chunks": 0, "documents": [], "document_filenames": []}
+
+        # ============= STEP 2: OVERVIEW GENERATION =============
         logger.info("\n" + "="*60)
         logger.info("STEP 2: Overview Generation (with vector search)")
         logger.info("="*60)
         
         try:
-            overview_step = OverviewGenerationStep(
-                config=config,
-                storage_service=self.storage_service,
-                db_client=self.supabase
-            )
-            
-            overview_result = await overview_step.execute({
-                "metadata": metadata
-            })
+            overview_step = OverviewGenerationStep(config=config, storage_service=self.storage_service, db_client=self.supabase)
+            overview_result = await overview_step.execute({"metadata": metadata})
             
             if overview_result.status == "failed":
                 raise Exception(f"Overview generation failed: {overview_result.error_message}")
@@ -185,7 +141,7 @@ class WikiTestWithoutClustering:
             overview_data = overview_result.data
             project_overview = to_overview_output(overview_data).project_overview
             
-            # Track overview queries - use correct field names from step output
+            # Extract queries using CORRECT field names
             overview_queries = overview_data.get("overview_queries", [])
             overview_data_nested = overview_data.get("overview_data", {})
             retrieved_chunks = overview_data_nested.get("retrieved_chunks", [])
@@ -202,7 +158,7 @@ class WikiTestWithoutClustering:
                     "query": query,
                     "results_count": chunk_count,
                     "avg_similarity": avg_similarity,
-                    "chunks": query_info.get("chunks", [])[:3]  # Sample of top 3 chunks
+                    "chunks": query_info.get("chunks", [])[:3]
                 })
             
             self.save_json("02_project_overview.json", {
@@ -213,68 +169,39 @@ class WikiTestWithoutClustering:
                     query: {
                         "results_count": results.get("results_count", 0),
                         "avg_similarity": results.get("avg_similarity", 0.0)
-                    }
-                    for query, results in query_results.items()
-                },
-                "sample_chunks": [
-                    {
-                        "content_preview": chunk.get("content", "")[:200],
-                        "similarity_score": chunk.get("similarity_score", 0),
-                        "retrieved_by_query": chunk.get("retrieved_by_query", ""),
-                        "document_id": chunk.get("document_id", "")
-                    }
-                    for chunk in retrieved_chunks[:5]
-                ]
+                    } for query, results in query_results.items()
+                }
             })
+            
             logger.info(f"✅ Generated project overview using {len(overview_queries)} queries")
             logger.info(f"   Retrieved {len(retrieved_chunks)} chunks total")
             
-            # Log query details
             for query, results in query_results.items():
                 logger.info(f"   Query '{query[:50]}...': {results.get('results_count', 0)} chunks, avg_sim={results.get('avg_similarity', 0.0):.3f}")
+            
             steps_completed["overview"] = True
-                
+            
         except Exception as e:
             logger.error(f"❌ STEP 2 FAILED: {e}")
-            self.save_json("02_overview_error.json", {"error": str(e), "step": "overview_generation"})
-            # Use minimal overview to continue
             project_overview = f"Overview generation failed: {str(e)}"
-            
+
         # ============= STEP 3: SKIP SEMANTIC CLUSTERING =============
         logger.info("\n" + "="*60)
         logger.info("STEP 3: Semantic Clustering (SKIPPED)")
         logger.info("="*60)
         
-        # Create mock semantic analysis with realistic cluster names
-        semantic_analysis = {
-            "clusters": {},
-            "cluster_summaries": [
-                {"cluster_id": 0, "cluster_name": "El-installationer", "chunk_count": 50},
-                {"cluster_id": 1, "cluster_name": "VVS og ventilation", "chunk_count": 45},
-                {"cluster_id": 2, "cluster_name": "Projektadministration", "chunk_count": 40},
-                {"cluster_id": 3, "cluster_name": "Sikkerhedsforhold", "chunk_count": 35}
-            ],
-            "n_clusters": 4
-        }
-        self.save_json("03_semantic_clusters_skipped.json", {
-            "note": "Semantic clustering was skipped",
-            "mock_clusters": semantic_analysis["cluster_summaries"]
-        })
-        logger.info("⚠️ Skipped semantic clustering (using mock data)")
+        semantic_analysis = None  # No semantic analysis - rely on project overview only
+        self.save_json("03_semantic_clusters_skipped.json", {"note": "Semantic clustering was skipped - structure generation will rely on project overview only"})
+        logger.info("⚠️ Skipped semantic clustering - structure generation will use project overview only")
         steps_completed["clustering"] = True
-        
+
         # ============= STEP 4: STRUCTURE GENERATION =============
         logger.info("\n" + "="*60)
         logger.info("STEP 4: Structure Generation")
         logger.info("="*60)
         
         try:
-            structure_step = StructureGenerationStep(
-                config=config,
-                storage_service=self.storage_service,
-                db_client=self.supabase
-            )
-            
+            structure_step = StructureGenerationStep(config=config, storage_service=self.storage_service, db_client=self.supabase)
             structure_result = await structure_step.execute({
                 "metadata": metadata,
                 "project_overview": project_overview,
@@ -288,39 +215,30 @@ class WikiTestWithoutClustering:
             self.save_json("04_wiki_structure.json", wiki_structure)
             logger.info(f"✅ Generated wiki structure with {len(wiki_structure.get('pages', []))} pages")
             
-            # Log the page titles
             for page in wiki_structure.get("pages", []):
                 logger.info(f"   - {page.get('title', 'Untitled')}")
+            
             steps_completed["structure"] = True
             
         except Exception as e:
             logger.error(f"❌ STEP 4 FAILED: {e}")
-            self.save_json("04_structure_error.json", {"error": str(e), "step": "structure_generation"})
-            # Use minimal structure to continue
             wiki_structure = {"pages": []}
-            
+
         # ============= STEP 5: PAGE CONTENT RETRIEVAL =============
-            logger.info("\n" + "="*60)
-            logger.info("STEP 5: Page Content Retrieval")
-            logger.info("="*60)
-            
-            retrieval_step = PageContentRetrievalStep(
-                config=config,
-                storage_service=self.storage_service,
-                db_client=self.supabase
-            )
-            
-            retrieval_result = await retrieval_step.execute({
-                "metadata": metadata,
-                "wiki_structure": wiki_structure
-            })
+        logger.info("\n" + "="*60)
+        logger.info("STEP 5: Page Content Retrieval")
+        logger.info("="*60)
+        
+        try:
+            retrieval_step = PageContentRetrievalStep(config=config, storage_service=self.storage_service, db_client=self.supabase)
+            retrieval_result = await retrieval_step.execute({"metadata": metadata, "wiki_structure": wiki_structure})
             
             if retrieval_result.status == "failed":
                 raise Exception(f"Page content retrieval failed: {retrieval_result.error_message}")
             
             page_contents = to_page_contents_output(retrieval_result.data).page_contents
             
-            # Track page retrieval queries with detailed chunk information
+            # Enhanced tracking with detailed chunk information
             page_query_details = {}
             total_page_chunks = 0
             
@@ -353,16 +271,7 @@ class WikiTestWithoutClustering:
                             "chunks_count": len(query_chunks),
                             "avg_similarity": sum(similarities) / len(similarities) if similarities else 0.0,
                             "max_similarity": max(similarities) if similarities else 0.0,
-                            "min_similarity": min(similarities) if similarities else 0.0,
-                            "top_chunks": [
-                                {
-                                    "content_preview": chunk.get("content", "")[:150],
-                                    "similarity_score": chunk.get("similarity_score", 0),
-                                    "document_id": chunk.get("document_id", ""),
-                                    "metadata": chunk.get("metadata", {})
-                                }
-                                for chunk in query_chunks[:3]  # Top 3 chunks per query
-                            ]
+                            "min_similarity": min(similarities) if similarities else 0.0
                         }
                         
                         # Track in global queries list
@@ -380,15 +289,7 @@ class WikiTestWithoutClustering:
                         "queries": queries,
                         "total_chunks": len(chunks_retrieved),
                         "source_documents": len(source_documents),
-                        "query_statistics": query_stats,
-                        "document_breakdown": [
-                            {
-                                "document_id": doc_id,
-                                "filename": doc_info.get("filename", "unknown"),
-                                "chunk_count": doc_info.get("chunk_count", 0)
-                            }
-                            for doc_id, doc_info in source_documents.items()
-                        ]
+                        "query_statistics": query_stats
                     }
                     
                     logger.info(f"   📄 {page_title}: {len(chunks_retrieved)} chunks from {len(queries)} queries")
@@ -397,41 +298,28 @@ class WikiTestWithoutClustering:
                         
                 else:
                     logger.warning(f"   ⚠️ No content retrieved for page: {page_title}")
-                    page_query_details[page_id] = {
-                        "title": page_title,
-                        "queries": queries,
-                        "total_chunks": 0,
-                        "error": "No content retrieved"
-                    }
             
             self.save_json("05_page_contents.json", page_query_details)
-            
             logger.info(f"✅ Retrieved {total_page_chunks} chunks for {len(page_contents)} pages")
-            logger.info(f"   Total queries executed in this step: {len([q for q in self.all_queries_executed if q['step'] == 'page_content_retrieval'])}")
+            steps_completed["retrieval"] = True
             
-            # ============= STEP 6: MARKDOWN GENERATION =============
-            logger.info("\n" + "="*60)
-            logger.info("STEP 6: Markdown Generation")
-            logger.info("="*60)
-            
-            markdown_step = MarkdownGenerationStep(
-                config=config,
-                storage_service=self.storage_service,
-                db_client=self.supabase
-            )
-            
-            markdown_result = await markdown_step.execute({
-                "metadata": metadata,
-                "wiki_structure": wiki_structure,
-                "page_contents": page_contents
-            })
+        except Exception as e:
+            logger.error(f"❌ STEP 5 FAILED: {e}")
+
+        # ============= STEP 6: MARKDOWN GENERATION =============
+        logger.info("\n" + "="*60)
+        logger.info("STEP 6: Markdown Generation")
+        logger.info("="*60)
+        
+        try:
+            markdown_step = MarkdownGenerationStep(config=config, storage_service=self.storage_service, db_client=self.supabase)
+            markdown_result = await markdown_step.execute({"metadata": metadata, "wiki_structure": wiki_structure, "page_contents": page_contents})
             
             if markdown_result.status == "failed":
                 raise Exception(f"Markdown generation failed: {markdown_result.error_message}")
             
             generated_pages = to_markdown_output(markdown_result.data).generated_pages
             
-            # Save generated pages
             pages_dir = self.output_dir / "06_generated_pages"
             pages_dir.mkdir(exist_ok=True)
             
@@ -442,47 +330,18 @@ class WikiTestWithoutClustering:
                 logger.info(f"   💾 Saved: {page_data['title']}")
             
             logger.info(f"✅ Generated {len(generated_pages)} markdown pages")
+            steps_completed["markdown"] = True
             
-            # ============= GENERATE QUERY ANALYSIS HTML =============
+        except Exception as e:
+            logger.error(f"❌ STEP 6 FAILED: {e}")
+
+        # ============= GENERATE HTML ANALYSIS =============
+        try:
             self.generate_query_analysis_html()
-            
-            # ============= GENERATE SUMMARY =============
-            summary = {
-                "run_timestamp": datetime.now().isoformat(),
-                "indexing_run_id": INDEXING_RUN_ID,
-                "configuration": {
-                    "overview_query_count": OVERVIEW_QUERY_COUNT,
-                    "max_wiki_pages": MAX_WIKI_PAGES,
-                    "queries_per_page": QUERIES_PER_PAGE,
-                    "top_k_retrieval": TOP_K_RETRIEVAL
-                },
-                "results": {
-                    "documents_processed": metadata.get("total_documents", 0),
-                    "total_chunks": metadata.get("total_chunks", 0),
-                    "wiki_pages_generated": len(generated_pages),
-                    "total_queries_executed": len(self.all_queries_executed),
-                    "overview_queries": len([q for q in self.all_queries_executed if q["step"] == "overview_generation"]),
-                    "page_retrieval_queries": len([q for q in self.all_queries_executed if q["step"] == "page_content_retrieval"])
-                },
-                "output_directory": str(self.output_dir)
-            }
-            self.save_json("summary.json", summary)
-            
-            logger.info("\n" + "="*60)
-            logger.info("✅ PIPELINE TEST COMPLETED SUCCESSFULLY")
-            logger.info("="*60)
-            logger.info(f"📁 All outputs saved to: {self.output_dir}")
-            logger.info(f"📊 Total queries executed: {len(self.all_queries_executed)}")
-            logger.info(f"📄 Wiki pages generated: {len(generated_pages)}")
-            logger.info(f"🔍 View query analysis: {self.output_dir}/query_analysis.html")
-            
-            # ============= GENERATE FINAL SUMMARY =============
-            try:
-                self.generate_query_analysis_html()
-            except Exception as e:
-                logger.error(f"❌ HTML generation failed: {e}")
-        
-        # Generate final summary with step completion status
+        except Exception as e:
+            logger.error(f"❌ HTML generation failed: {e}")
+
+        # ============= GENERATE SUMMARY =============
         summary = {
             "run_timestamp": datetime.now().isoformat(),
             "indexing_run_id": INDEXING_RUN_ID,
@@ -522,27 +381,10 @@ class WikiTestWithoutClustering:
         if completed_steps < total_steps:
             failed_steps = [step for step, completed in steps_completed.items() if not completed]
             logger.warning(f"⚠️ Steps that failed: {', '.join(failed_steps)}")
-            
-    except Exception as e:
-        logger.error(f"❌ Critical pipeline failure: {e}", exc_info=True)
-        # Still try to save what we have
-        try:
-            summary = {
-                "run_timestamp": datetime.now().isoformat(),
-                "indexing_run_id": INDEXING_RUN_ID,
-                "critical_failure": str(e),
-                "steps_completed": steps_completed,
-                "output_directory": str(self.output_dir) if self.output_dir else "unknown"
-            }
-            self.save_json("summary_failure.json", summary)
-        except:
-            pass
-        raise
-    
+
     def generate_query_analysis_html(self):
-        """Generate comprehensive HTML analysis showing all queries and detailed results."""
+        """Generate comprehensive HTML analysis with expandable chunk details."""
         
-        # Calculate summary statistics
         overview_queries = [q for q in self.all_queries_executed if q["step"] == "overview_generation"]
         page_queries = [q for q in self.all_queries_executed if q["step"] == "page_content_retrieval"]
         
@@ -555,126 +397,57 @@ class WikiTestWithoutClustering:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wiki Generation Query Analysis - Detailed Report</title>
+    <title>Wiki Generation Query Analysis - Interactive Report</title>
     <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f8f9fa;
-        }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 1400px; margin: 0 auto; padding: 20px; background: #f8f9fa; }}
         h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
         h2 {{ color: #34495e; margin-top: 30px; border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }}
-        h3 {{ color: #34495e; margin-top: 25px; }}
-        .summary {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }}
-        .stat-card {{
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            text-align: center;
-            border-top: 4px solid #3498db;
-        }}
-        .stat-value {{
-            font-size: 32px;
-            font-weight: bold;
-            color: #2980b9;
-            display: block;
-        }}
-        .stat-label {{
-            color: #7f8c8d;
-            font-size: 14px;
-            margin-top: 5px;
-        }}
-        .query-group {{
-            background: white;
-            padding: 25px;
-            margin-bottom: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }}
-        .query-item {{
-            border-left: 4px solid #3498db;
-            padding: 15px;
-            margin: 15px 0;
-            background: #f8f9fa;
-            border-radius: 0 6px 6px 0;
-        }}
-        .query-text {{
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 8px;
-            font-size: 16px;
-        }}
-        .query-stats {{
-            display: flex;
-            gap: 15px;
-            margin: 8px 0;
-            flex-wrap: wrap;
-        }}
-        .stat-badge {{
-            background: #ecf0f1;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #34495e;
-        }}
+        .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }}
+        .stat-card {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; border-top: 4px solid #3498db; }}
+        .stat-value {{ font-size: 32px; font-weight: bold; color: #2980b9; display: block; }}
+        .stat-label {{ color: #7f8c8d; font-size: 14px; margin-top: 5px; }}
+        .query-group {{ background: white; padding: 25px; margin-bottom: 25px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+        .query-item {{ border-left: 4px solid #3498db; padding: 15px; margin: 15px 0; background: #f8f9fa; border-radius: 0 6px 6px 0; cursor: pointer; transition: all 0.3s ease; }}
+        .query-item:hover {{ background: #e8f4f8; border-left-color: #2980b9; transform: translateX(2px); }}
+        .query-text {{ font-weight: bold; color: #2c3e50; margin-bottom: 8px; font-size: 16px; }}
+        .query-stats {{ display: flex; gap: 15px; margin: 8px 0; flex-wrap: wrap; }}
+        .stat-badge {{ background: #ecf0f1; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #34495e; }}
         .stat-badge.results {{ background: #e8f5e8; color: #27ae60; }}
         .stat-badge.similarity {{ background: #fff3cd; color: #856404; }}
-        .chunk-preview {{
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 12px;
-            margin: 10px 0;
-            font-size: 14px;
-            color: #495057;
-        }}
-        .chunk-meta {{
-            font-size: 11px;
-            color: #6c757d;
-            margin-top: 5px;
-            display: flex;
-            justify-content: space-between;
-        }}
-        .step-badge {{
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }}
+        .step-badge {{ padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }}
         .step-overview {{ background: #3498db; color: white; }}
         .step-retrieval {{ background: #e74c3c; color: white; }}
-        .page-title {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 20px;
-            margin: -25px -25px 20px -25px;
-            border-radius: 8px 8px 0 0;
-            font-size: 18px;
-            font-weight: bold;
-        }}
-        .document-source {{
-            font-size: 11px;
-            color: #6c757d;
-            background: #f8f9fa;
-            padding: 2px 6px;
-            border-radius: 3px;
-            margin-left: 8px;
-        }}
+        .page-title {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 20px; margin: -25px -25px 20px -25px; border-radius: 8px 8px 0 0; font-size: 18px; font-weight: bold; }}
+        .expand-icon {{ float: right; transition: transform 0.3s ease; font-size: 14px; color: #7f8c8d; }}
+        .expand-icon.expanded {{ transform: rotate(180deg); }}
+        .chunks-details {{ display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6; }}
+        .chunk-item {{ background: white; margin: 8px 0; padding: 12px; border-radius: 6px; border-left: 3px solid #27ae60; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+        .chunk-header {{ display: flex; justify-content: between; align-items: center; margin-bottom: 8px; }}
+        .chunk-similarity {{ background: #27ae60; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }}
+        .chunk-meta {{ color: #6c757d; font-size: 12px; margin-left: auto; }}
+        .chunk-content {{ font-size: 14px; line-height: 1.5; color: #495057; background: #f8f9fa; padding: 10px; border-radius: 4px; white-space: pre-wrap; }}
+        .chunk-source {{ color: #6c757d; font-size: 11px; margin-top: 8px; font-style: italic; }}
+        .no-chunks {{ color: #6c757d; font-style: italic; padding: 10px; text-align: center; }}
     </style>
+    <script>
+        function toggleChunks(element) {{
+            const details = element.nextElementSibling;
+            const icon = element.querySelector('.expand-icon');
+            
+            if (details.style.display === 'none' || details.style.display === '') {{
+                details.style.display = 'block';
+                icon.classList.add('expanded');
+                icon.textContent = '▼';
+            }} else {{
+                details.style.display = 'none';
+                icon.classList.remove('expanded');
+                icon.textContent = '▶';
+            }}
+        }}
+    </script>
 </head>
 <body>
-    <h1>🔍 Wiki Generation Query Analysis - Detailed Report</h1>
+    <h1>🔍 Wiki Generation Query Analysis - Interactive Report</h1>
     
     <div class="summary">
         <div class="stat-card">
@@ -703,44 +476,62 @@ class WikiTestWithoutClustering:
         </div>
     </div>
     
-    <h2>🎯 Overview Generation Queries</h2>
-"""
+    <h2>🎯 Overview Generation Queries</h2>"""
 
-        # Overview queries with detailed results
+        # Overview queries with expandable chunks
         for i, query in enumerate(overview_queries, 1):
             chunks = query.get("chunks", [])
             html_content += f"""
     <div class="query-group">
-        <div class="query-item">
-            <div class="query-text">Query {i}: {query['query']}</div>
+        <div class="query-item" onclick="toggleChunks(this)">
+            <div class="query-text">
+                Query {i}: {query['query']}
+                <span class="expand-icon">▶</span>
+            </div>
             <div class="query-stats">
                 <span class="step-badge step-overview">Overview Generation</span>
                 <span class="stat-badge results">📊 {query.get('results_count', 0)} chunks</span>
                 <span class="stat-badge similarity">🎯 Avg: {query.get('avg_similarity', 0):.3f}</span>
-            </div>"""
+                <span class="stat-badge" style="background: #e3f2fd; color: #1976d2;">👆 Click to expand chunks</span>
+            </div>
+        </div>
+        <div class="chunks-details">"""
             
-            # Show sample chunks if available
-            for chunk in chunks[:2]:  # Show top 2 chunks
-                content_preview = chunk.get('content_preview', '')[:200]
-                similarity = chunk.get('similarity_score', 0)
-                doc_id = chunk.get('chunk_id', 'unknown')
-                
-                html_content += f"""
-            <div class="chunk-preview">
-                {content_preview}...
-                <div class="chunk-meta">
-                    <span>Similarity: {similarity:.3f}</span>
-                    <span class="document-source">{doc_id}</span>
+            if chunks:
+                for j, chunk in enumerate(chunks, 1):
+                    content_preview = chunk.get('content_preview', '')
+                    similarity = chunk.get('similarity_score', 0)
+                    chunk_id = chunk.get('chunk_id', 'unknown')
+                    
+                    html_content += f"""
+            <div class="chunk-item">
+                <div class="chunk-header">
+                    <span class="chunk-similarity">Sim: {similarity:.3f}</span>
+                    <span class="chunk-meta">Chunk {j} of {len(chunks)}</span>
                 </div>
+                <div class="chunk-content">{content_preview}</div>
+                <div class="chunk-source">Source: {chunk_id}</div>
             </div>"""
-            
+            else:
+                html_content += '<div class="no-chunks">No chunk details available for this query</div>'
+                
             html_content += """
         </div>
     </div>"""
 
         html_content += """
-    <h2>📄 Page Content Retrieval Queries</h2>
-"""
+    <h2>📄 Page Content Retrieval Queries</h2>"""
+        
+        # Load page content details from saved JSON for chunk display
+        try:
+            page_contents_file = self.output_dir / "05_page_contents.json"
+            if page_contents_file.exists():
+                with open(page_contents_file, 'r') as f:
+                    page_contents_data = json.load(f)
+            else:
+                page_contents_data = {}
+        except:
+            page_contents_data = {}
         
         # Group page queries by page
         pages = {}
@@ -750,38 +541,79 @@ class WikiTestWithoutClustering:
                 pages[page] = []
             pages[page].append(query)
         
-        # Display each page's queries
         for page_title, queries in pages.items():
             page_total_chunks = sum(q.get('results_count', 0) for q in queries)
             page_avg_sim = sum(q.get('avg_similarity', 0) for q in queries) / len(queries) if queries else 0
+            
+            # Find page data in saved JSON
+            page_data = None
+            for page_id, data in page_contents_data.items():
+                if data.get('title') == page_title:
+                    page_data = data
+                    break
             
             html_content += f"""
     <div class="query-group">
         <div class="page-title">
             📋 {page_title} 
             <span style="font-size: 14px; opacity: 0.9;">({len(queries)} queries, {page_total_chunks} chunks, avg sim: {page_avg_sim:.3f})</span>
-        </div>
-"""
+        </div>"""
             
             for i, query in enumerate(queries, 1):
+                query_text = query['query']
+                
+                # Get chunks for this specific query from page data
+                query_chunks = []
+                if page_data and 'query_statistics' in page_data:
+                    query_stats = page_data['query_statistics'].get(query_text, {})
+                    query_chunks = query_stats.get('top_chunks', [])
+                
                 html_content += f"""
-        <div class="query-item">
-            <div class="query-text">Query {i}: {query['query']}</div>
+        <div class="query-item" onclick="toggleChunks(this)">
+            <div class="query-text">
+                Query {i}: {query['query']}
+                <span class="expand-icon">▶</span>
+            </div>
             <div class="query-stats">
                 <span class="step-badge step-retrieval">Page Retrieval</span>
                 <span class="stat-badge results">📊 {query.get('results_count', 0)} chunks</span>
                 <span class="stat-badge similarity">🎯 Avg: {query.get('avg_similarity', 0):.3f}</span>
                 <span class="stat-badge similarity">📈 Max: {query.get('max_similarity', 0):.3f}</span>
+                <span class="stat-badge" style="background: #e3f2fd; color: #1976d2;">👆 Click to expand chunks</span>
             </div>
+        </div>
+        <div class="chunks-details">"""
+                
+                if query_chunks:
+                    for j, chunk in enumerate(query_chunks, 1):
+                        content_preview = chunk.get('content_preview', '')
+                        similarity = chunk.get('similarity_score', 0)
+                        document_id = chunk.get('document_id', 'unknown')
+                        metadata = chunk.get('metadata', {})
+                        page_number = metadata.get('page_number', 'N/A')
+                        
+                        html_content += f"""
+            <div class="chunk-item">
+                <div class="chunk-header">
+                    <span class="chunk-similarity">Sim: {similarity:.3f}</span>
+                    <span class="chunk-meta">Chunk {j} of {len(query_chunks)} | Page: {page_number}</span>
+                </div>
+                <div class="chunk-content">{content_preview}</div>
+                <div class="chunk-source">Document: {document_id}</div>
+            </div>"""
+                else:
+                    html_content += f'<div class="no-chunks">No detailed chunk information available for this query (retrieved {query.get("results_count", 0)} chunks)</div>'
+                
+                html_content += """
         </div>"""
             
             html_content += """
     </div>"""
         
-        html_content += """
+        html_content += f"""
     <div style="margin-top: 40px; padding: 20px; background: white; border-radius: 8px; text-align: center; color: #7f8c8d;">
-        Generated on """ + datetime.now().strftime("%Y-%m-%d at %H:%M:%S") + """<br>
-        <small>Wiki Generation Pipeline Analysis Report</small>
+        Generated on {datetime.now().strftime("%Y-%m-%d at %H:%M:%S")}<br>
+        <small>Wiki Generation Pipeline Analysis Report - Click queries to expand chunk details</small>
     </div>
 </body>
 </html>"""
@@ -789,12 +621,11 @@ class WikiTestWithoutClustering:
         html_file = self.output_dir / "query_analysis.html"
         with open(html_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        logger.info("💾 Saved enhanced query analysis HTML")
+        logger.info("💾 Saved interactive query analysis HTML with expandable chunks")
 
 
 async def main():
-    """Main entry point."""
-    runner = WikiTestWithoutClustering()
+    runner = WikiTestWorking()
     await runner.run()
 
 

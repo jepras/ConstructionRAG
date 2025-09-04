@@ -31,7 +31,8 @@ Run from root:
 python backend/tests/integration/test_pipeline_integration.py
 
 ### Beam deploy command
-cd backend && beam deploy beam-app.py:process_documents
+cd backend && 
+beam deploy beam-app.py:process_documents
 
 ### 
 supabase db push

@@ -422,17 +422,28 @@ class IntelligentChunker:
 
     def compose_final_content(self, el: Dict[str, Any], meta: dict) -> str:
         """Compose final content based on element type and category"""
-        # Check if this is a split element with pre-computed content
-        if "split_content" in el:
-            return el["split_content"]
-            
-        # Check if this is a merged element
-        if "merged_content" in el:
-            return el["merged_content"]
-            
         category = meta.get("element_category", "unknown")
         element_type = el.get("element_type", "text")
         section_title = meta.get("section_title_inherited", "Unknown Section")
+        
+        # DEBUG: Print the config value to help diagnose the issue
+        print(f"DEBUG CHUNKING: include_section_titles = {self.include_section_titles}, category = {category}, section_title = {section_title}")
+
+        # Check if this is a split element with pre-computed content
+        if "split_content" in el:
+            content = el["split_content"]
+            if self.include_section_titles:
+                return f"Section: {section_title}\n\n{content}"
+            else:
+                return content
+            
+        # Check if this is a merged element
+        if "merged_content" in el:
+            content = el["merged_content"]
+            if self.include_section_titles:
+                return f"Section: {section_title}\n\n{content}"
+            else:
+                return content
 
         if category == "List":
             # Special formatting for combined lists: narrative + list items
@@ -440,22 +451,33 @@ class IntelligentChunker:
             list_texts = meta.get("list_texts", [])
 
             if narrative_text and list_texts:
-                return f"Section: {section_title}\n\n{narrative_text}\n\n{chr(10).join(list_texts)}"
+                content = f"{narrative_text}\n\n{chr(10).join(list_texts)}"
             elif narrative_text:
-                return f"Section: {section_title}\n\n{narrative_text}"
+                content = narrative_text
             elif list_texts:
-                return f"Section: {section_title}\n\n{chr(10).join(list_texts)}"
+                content = chr(10).join(list_texts)
             else:
-                return f"Section: {section_title}\n\n[Empty list]"
+                content = "[Empty list]"
+            
+            if self.include_section_titles:
+                return f"Section: {section_title}\n\n{content}"
+            else:
+                return content
 
         elif category == "NarrativeText":
             text_content = self.extract_text_content(el, meta)
-            return f"Section: {section_title}\n\n{text_content}"
+            if self.include_section_titles:
+                return f"Section: {section_title}\n\n{text_content}"
+            else:
+                return text_content
 
         elif element_type == "table" or category == "Table":
             text_content = self.extract_text_content(el, meta)
             if self.format_tables_with_context:
-                return f"Context: {section_title}\n\nType: Table\n\nSummary: {text_content}"
+                if self.include_section_titles:
+                    return f"Context: {section_title}\n\nType: Table\n\nSummary: {text_content}"
+                else:
+                    return f"Type: Table\n\nSummary: {text_content}"
             else:
                 return text_content
 
@@ -465,14 +487,20 @@ class IntelligentChunker:
         ):
             text_content = self.extract_text_content(el, meta)
             if self.format_images_with_context:
-                return f"Context: {section_title}\n\nType: Image\n\nSummary: {text_content}"
+                if self.include_section_titles:
+                    return f"Context: {section_title}\n\nType: Image\n\nSummary: {text_content}"
+                else:
+                    return f"Type: Image\n\nSummary: {text_content}"
             else:
                 return text_content
 
         elif category == "ListItem":
             # Handle list items that weren't grouped (should be rare)
             text_content = self.extract_text_content(el, meta)
-            return f"Section: {section_title}\n\n{text_content}"
+            if self.include_section_titles:
+                return f"Section: {section_title}\n\n{text_content}"
+            else:
+                return text_content
 
         elif category == "UncategorizedText":
             # Handle uncategorized text that might be table references
@@ -481,9 +509,15 @@ class IntelligentChunker:
                 keyword in text_content.lower()
                 for keyword in ["tabel", "table", "figur", "figure"]
             ):
-                return f"Context: {section_title}\n\nType: Reference\n\nContent: {text_content}"
+                if self.include_section_titles:
+                    return f"Context: {section_title}\n\nType: Reference\n\nContent: {text_content}"
+                else:
+                    return f"Type: Reference\n\nContent: {text_content}"
             else:
-                return f"Section: {section_title}\n\n{text_content}"
+                if self.include_section_titles:
+                    return f"Section: {section_title}\n\n{text_content}"
+                else:
+                    return text_content
 
         else:
             # For other elements, use their text as-is
@@ -644,13 +678,14 @@ class IntelligentChunker:
         base_element = elements[0].copy()
         base_meta = self.extract_structural_metadata(base_element)
         
-        # Combine content from all elements
+        # Combine content from all elements (extract raw text without section headers)
         combined_content_parts = []
         for el in elements:
             meta = self.extract_structural_metadata(el)
-            content = self.compose_final_content(el, meta)
-            if content.strip():
-                combined_content_parts.append(content.strip())
+            # Get raw text content without section headers
+            raw_content = self.extract_text_content(el, meta)
+            if raw_content.strip():
+                combined_content_parts.append(raw_content.strip())
                 
         combined_content = "\n\n".join(combined_content_parts)
         

@@ -26,18 +26,18 @@ class PDFValidationService:
     
     # Security patterns - separated into critical and warning levels
     CRITICAL_PATTERNS = [
-        rb"/JavaScript",
-        rb"/JS",
-        rb"/EmbeddedFile",
-        rb"/OpenAction",
-        rb"/SubmitForm",
-        rb"/ImportData",
+        rb"/EmbeddedFile",  # Embedded files could contain malware
+        rb"/OpenAction",    # Auto-executing actions are risky
+        rb"/SubmitForm",    # Form submission to external servers
+        rb"/ImportData",    # Data import from external sources
     ]
     
     WARNING_PATTERNS = [
-        rb"/Launch",  # Can be legitimate for document navigation
-        rb"/AA",  # Additional Actions - common in forms
-        rb"/URI",  # External links - often legitimate
+        rb"/JavaScript",    # JavaScript - common in interactive PDFs
+        rb"/JS",           # JavaScript - often used for forms/navigation
+        rb"/Launch",       # Can be legitimate for document navigation
+        rb"/AA",           # Additional Actions - common in forms
+        rb"/URI",          # External links - often legitimate
     ]
     
     # Allowed MIME types
@@ -370,9 +370,7 @@ class PDFValidationService:
                 result["security"]["suspicious_patterns"].append(pattern_name)
                 
                 # Set specific flags
-                if b"JavaScript" in pattern or b"JS" in pattern:
-                    result["security"]["has_javascript"] = True
-                elif b"EmbeddedFile" in pattern:
+                if b"EmbeddedFile" in pattern:
                     result["security"]["has_embedded_files"] = True
         
         # Check for warning patterns
@@ -382,7 +380,9 @@ class PDFValidationService:
                 warning_found.append(pattern_name)
                 
                 # Set flags but don't add to suspicious_patterns
-                if b"URI" in pattern or b"Launch" in pattern:
+                if b"JavaScript" in pattern or b"JS" in pattern:
+                    result["security"]["has_javascript"] = True
+                elif b"URI" in pattern or b"Launch" in pattern:
                     result["security"]["has_external_links"] = True
         
         # Only reject for critical patterns
@@ -392,10 +392,22 @@ class PDFValidationService:
                 f"Security threat detected: PDF contains suspicious patterns ({', '.join(critical_found)})"
             )
         elif warning_found:
-            # Only warn for Launch, AA, URI patterns
-            result["warnings"].append(
-                f"PDF contains interactive features that are common in technical documents: {', '.join(warning_found)}"
-            )
+            # Create a friendly warning message
+            js_patterns = [p for p in warning_found if p in ['JavaScript', 'JS']]
+            other_patterns = [p for p in warning_found if p not in ['JavaScript', 'JS']]
+            
+            if js_patterns and other_patterns:
+                result["warnings"].append(
+                    f"PDF contains JavaScript and interactive features ({', '.join(warning_found)}) - common in form-based documents"
+                )
+            elif js_patterns:
+                result["warnings"].append(
+                    "PDF contains JavaScript - common in interactive forms and navigation"
+                )
+            elif other_patterns:
+                result["warnings"].append(
+                    f"PDF contains interactive features: {', '.join(other_patterns)}"
+                )
     
     def _estimate_processing_time(self, result: Dict[str, Any]):
         """Estimate processing time based on document complexity - PESSIMISTIC approach."""

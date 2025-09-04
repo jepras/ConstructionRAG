@@ -127,7 +127,6 @@ export interface PipelineConfig {
     }
   }
   enrichment?: {
-    add_context_headers?: boolean
     merge_related_elements?: boolean
     min_content_length?: number
   }

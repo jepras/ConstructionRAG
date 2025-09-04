@@ -215,7 +215,6 @@ class OverviewGenerationStep(PipelineStep):
         if top_k is None:
             top_k = self.max_chunks_per_query
 
-
         try:
             # Generate embedding for query using Voyage API
             query_embedding = await self._generate_query_embedding(query_text)
@@ -489,7 +488,6 @@ Generer projektoversigten på dansk:"""
             "max_tokens": max_tokens,
             "temperature": self.config.get("temperature", 0.3),
         }
-
 
         try:
             import requests
