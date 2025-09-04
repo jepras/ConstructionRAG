@@ -159,37 +159,37 @@ class OverviewGenerationStep(PipelineStep):
         if language == "danish":
             # Standard overview queries in Danish - exactly matching original
             project_overview_queries = [
-                # Grundlæggende projektidentitet
-                "projekt navn titel beskrivelse oversigt sammendrag formål",
-                "byggeprojekt omfang målsætninger mål leverancer",
-                "projekt lokation byggeplads adresse bygning udvikling",
-                # Nøgledeltagere
-                "entreprenør klient ejer udvikler arkitekt ingeniør",
-                "projektteam roller ansvar interessenter",
-                # Tidsplan og faser
-                "projektplan tidsplan milepæle faser byggefaser etaper",
-                "startdato færdiggørelsesdato projektvarighed",
-                # Projektomfang og type
-                "projektværdi budget omkostningsoverslag samlet kontrakt",
-                "bygningstype bolig erhverv industri infrastruktur",
-                "kvadratmeter etageareal størrelse dimensioner omfang",
+                # 1. Projektnavn, type, placering og hovedformål
+                "projekt navn titel betegnelse projektbetegnelse",
+                "projekttype bygningstype anlægstype konstruktionstype",
+                "projektplacering lokation adresse byggeplads beliggenhed område",
+                "projektformål hovedformål målsætning vision anvendelse funktion",
+                # 2. Projektomfang, hvad der skal bygges/installeres/leveres
+                "projektomfang bygningsomfang konstruktionsomfang anlægsomfang",
+                "bygningselementer konstruktioner installationer systemer komponenter",
+                "leverancer bygningsdele materialer udstyr installationer",
+                "byggeri nybyggeri ombygning renovering tilbygning modernisering",
+                "tekniske installationer",
+                # 3. Faggrupper og fagområder
+                "fagentreprenør faggruppe fagområde byggefag håndværk",
             ]
         else:  # English
             project_overview_queries = [
-                # Core project identity
-                "project name title description overview summary purpose",
-                "construction project scope objectives goals deliverables",
-                "project location site address building development",
-                # Key participants
-                "contractor client owner developer architect engineer",
-                "project team roles responsibilities stakeholders",
-                # Timeline and phases
-                "project schedule timeline milestones phases construction stages",
-                "start date completion date project duration",
-                # Project scale and type
-                "project value budget cost estimate total contract",
-                "building type residential commercial industrial infrastructure",
-                "square meters floor area size dimensions scope",
+                # 1. Project name, type, location and main purpose
+                "project name title designation project designation",
+                "project type building type construction type facility type",
+                "project location site address construction site area region",
+                "project purpose main objective vision function application use",
+                # 2. Project scope, what will be built/installed/delivered
+                "project scope construction scope building scope facility scope",
+                "building elements structures installations systems components",
+                "deliverables building parts materials equipment installations",
+                "construction new build renovation refurbishment extension modernization",
+                "technical installations HVAC electrical ventilation cooling heating",
+                "square meters floor area gross area net area building area",
+                "floors height building height number floors levels stories",
+                # 3. Trade groups and disciplines
+                "trade contractor trade group discipline construction trade",
             ]
 
         return project_overview_queries
@@ -454,10 +454,10 @@ Indhold: {content[:800]}..."""
         prompt = f"""Baseret på byggeprojektets dokumentudtog nedenfor, generer en kort 2-3 afsnit projektoversigt der dækker:
 
 1. Projektnavn, type, placering og hovedformål
-2. Nøgleinteressenter (klient, entreprenør, arkitekt osv.) og projekttidslinje  
-3. Projektomfang, budget og vigtige leverancer
+2. Projektomfang, hvad der skal bygges, installeres og leveres i projektet. Nævn hvad der er mest fokus på og hvad der er sekundære opgaver. 
+3. Hvilke faggrupper og fagområder der er mest nævnt i dokumenteret i prioriteret rækkefølge. 
 
-Brug KUN information der eksplicit findes i dokumentudtragene. Citér kilder ved hjælp af (Kilde: filnavn:side). Hvis kritisk information mangler, nævn kort hvad der ikke er tilgængeligt.
+Brug KUN information der eksplicit findes i dokumentudtragene. 
 
 Dokumentudtrag:
 {excerpts_text}

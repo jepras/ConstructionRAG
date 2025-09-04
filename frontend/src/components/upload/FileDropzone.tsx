@@ -13,6 +13,7 @@ interface FileDropzoneProps {
   selectedFiles: File[]
   onRemoveFile: (index: number) => void
   onValidationComplete?: (isValid: boolean, estimatedMinutes: number) => void
+  onValidationErrors?: (hasErrors: boolean) => void
   maxFiles?: number
   maxSize?: number
   disabled?: boolean
@@ -24,6 +25,7 @@ export function FileDropzone({
   selectedFiles,
   onRemoveFile,
   onValidationComplete,
+  onValidationErrors,
   maxFiles = 5,
   maxSize = 50 * 1024 * 1024, // 50MB
   disabled = false,
@@ -70,6 +72,14 @@ export function FileDropzone({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isValidating, overallValid, estimatedMinutes, selectedFiles.length])
+
+  // Notify parent about validation errors (not warnings)
+  useEffect(() => {
+    if (onValidationErrors && !isValidating && selectedFiles.length > 0) {
+      onValidationErrors(validationErrors.length > 0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isValidating, validationErrors.length, selectedFiles.length])
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
     setError(null)

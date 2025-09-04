@@ -223,19 +223,18 @@ You will be given:
 
 1. The "[PAGE_TITLE]" for the page you need to create and [PAGE_DESCRIPTION].
 
-2. A list of "[RELEVANT_PAGE_RETRIEVED_CHUNKS]" from the construction project that you MUST use as the sole basis for the content. You have access to the full content of these document excerpts retrieved from project PDFs, specifications, contracts, and drawings. You MUST use AT LEAST 5 relevant document sources for comprehensive coverage - if fewer are provided, you MUST note this limitation.
+2. A list of "[RELEVANT_PAGE_RETRIEVED_CHUNKS]" from the construction project that you MUST use as the sole basis for the content. You have access to the full content of these document excerpts retrieved from project PDFs, specifications, contracts, and drawings. You MUST use AT LEAST 5 relevant document sources for comprehensive coverage - if no relevant sources are provided, you MUST note this limitation.
 
 CRITICAL STARTING INSTRUCTION:
 The main title of the page should be a H1 Markdown heading.
 
 Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
 
-1. **Introduction:** Start with a concise introduction (1-2 paragraphs) explaining the purpose, scope, and high-level overview of "{page_title}" within the context of the overall construction project. Immediately after this, provide a table of the sections on this page with name of section and a short description of each section.
+1. **Introduction:** Start with a concise introduction (1-2 paragraphs) explaining the purpose, scope, and high-level overview of "{page_title}" within the context of the overall construction project. If it is possible to draw a high level overview of the work described in the page's topic with a diagram, then do it. Immediately after this, provide a table of the sections on this page with name of section and a short description of each section.
 
 2. **Detailed Sections:** Break down "{page_title}" into logical sections using H2 (`##`) and H3 (`###`) Markdown headings. For each section:
    * Explain the project requirements, specifications, processes, or deliverables relevant to the section's focus, as evidenced in the source documents.
-   * Identify key stakeholders, contractors, materials, systems, regulatory requirements, or project phases pertinent to that section.
-   * Include relevant quantities, dimensions, costs, and timeline information where available.
+   * Include relevant quantities, dimensions, costs, and timeline information where available. Leave out if it is not available. 
 
 3. **Mermaid Diagrams:**
    * EXTENSIVELY use Mermaid diagrams (e.g., `flowchart TD`, `sequenceDiagram`, `gantt`, `graph TD`, `Entity Relationship`, `Block`, `Git`, `Pie`, `Sankey`, `Timeline`) to visually represent project workflows, construction sequences, stakeholder relationships, and process flows found in the source documents.
@@ -287,16 +286,9 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
 
 6. **Source Citations (EXTREMELY IMPORTANT):**
    * For EVERY piece of significant information, explanation, diagram, table entry, or document excerpt, you MUST cite the specific source document(s) and relevant page numbers or sections from which the information was derived.
-   * Use standard markdown reference-style citations with numbered footnotes at the end of sentences or paragraphs.
-   * Format citations as: The project budget is €2.5 million[1][p. 5-7] where [1] links to the footnote reference. and [p. 5-7] links to the page number.
-   * Place all footnote definitions on a new line each at the bottom of each section on the page using the format:
-     [1]: contract.pdf, page 5-7
-     [2]: specifications.pdf, section 3.2  
-     [3]: drawings.dwg, sheet A1
-     [4]: safety_plan.pdf, section 4.2
-     [5]: material_specs.xlsx, concrete_sheet
+   * Format citations as [document name, page number]. For example: The project budget is €2.5 million[contract.pdf, 5].
 
-   For multiple sources supporting one claim, use: Construction will begin in March 2024[1][2][3]
+   For multiple sources supporting one claim, use: Construction will begin in March 2024[contract.pdf, 5][budget.pdf, 26].
    IMPORTANT: You MUST cite AT LEAST 5 different source documents throughout the wiki page to ensure comprehensive coverage when available.
 
 7. **Technical Accuracy:** All information must be derived SOLELY from the `[RELEVANT_DOCUMENT_EXCERPTS]`. Do not infer, invent, or use external knowledge about construction practices, building codes, or industry standards unless it's directly supported by the provided project documents. If information is not present in the provided excerpts, do not include it or explicitly state its absence if crucial to the topic.
@@ -310,9 +302,10 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
 | `112727-01_K07_H1_EK_61.101` | Basement | Shows location of main panel (HT) and main cross-field (HX). |
 | `112727-01_K07_H1_E0_61.102` | Ground floor | Routing paths in common areas, café and multi-room. |
 
-10. **Conclusion/Summary:** End with a brief summary paragraph if appropriate for "{page_title}", reiterating the key aspects covered, critical deadlines, major deliverables, and their significance within the overall construction project. If relevant, and if information is available in the provided documents, list the to other potential wiki pages using below these paragraphs. 
-
-IMPORTANT: Generate the content in Danish language.
+IMPORTANT: 
+- Generate the content in Danish language.
+- Avoid filler text. Get straight to the point. Output in a concise and accurate format. 
+- Avoid lengthy text. Prioritise bullets when possible for easy readability. 
 
 Remember:
 - Ground every claim in the provided project document excerpts
@@ -321,7 +314,6 @@ Remember:
 - Include specific quantities, dates, costs, and technical specifications when available in the documents
 - Focus on practical project information that can guide construction activities
 - Highlight critical path items, regulatory requirements, and quality control measures
-- Emphasize safety requirements and compliance obligations throughout
 
 PAGE_TITLE: {page_title}
 PAGE_DESCRIPTION: {page_description}

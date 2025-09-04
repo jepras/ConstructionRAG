@@ -24,8 +24,10 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   const [selectedExperts, setSelectedExperts] = useState<string[]>([])
   const [validationComplete, setValidationComplete] = useState(false)
   const [filesAreValid, setFilesAreValid] = useState(false)
+  const [hasValidationErrors, setHasValidationErrors] = useState(false)
   const [estimatedTime, setEstimatedTime] = useState(0)
-  
+  const [isValidating, setIsValidating] = useState(false)
+
   const createProjectMutation = useCreateProject()
 
   const availableExperts = [
@@ -39,12 +41,19 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
     setFiles(newFiles)
     setValidationComplete(false) // Reset validation state
     setFilesAreValid(false)
+    setHasValidationErrors(false)
+    setIsValidating(newFiles.length > 0) // Start validating if we have files
   }
-  
+
   const handleValidationComplete = (isValid: boolean, estimatedMinutes: number) => {
     setValidationComplete(true)
     setFilesAreValid(isValid)
     setEstimatedTime(estimatedMinutes)
+    setIsValidating(false) // Validation is complete
+  }
+
+  const handleValidationStateChange = (hasErrors: boolean) => {
+    setHasValidationErrors(hasErrors)
   }
 
   const handleRemoveFile = (index: number) => {
@@ -52,8 +61,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   }
 
   const toggleExpert = (expertId: string) => {
-    setSelectedExperts(prev => 
-      prev.includes(expertId) 
+    setSelectedExperts(prev =>
+      prev.includes(expertId)
         ? prev.filter(id => id !== expertId)
         : [...prev, expertId]
     )
@@ -99,7 +108,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="project-name">Project Name</Label>
+            <Label htmlFor="project-name">Project Name*</Label>
             <Input
               id="project-name"
               placeholder="e.g., Downtown Tower Construction"
@@ -128,7 +137,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
         <div className="flex items-center gap-2 mb-4">
           <Upload className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold text-foreground">
-            Project Documents
+            Project Documents*
           </h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
@@ -140,6 +149,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
           selectedFiles={files}
           onRemoveFile={handleRemoveFile}
           onValidationComplete={handleValidationComplete}
+          onValidationErrors={handleValidationStateChange}
           maxFiles={20}
           disabled={createProjectMutation.isPending}
           showValidation={true}
@@ -162,8 +172,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
                 disabled={createProjectMutation.isPending}
                 className={cn(
                   "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all",
-                  isPublic 
-                    ? "bg-primary text-primary-foreground border-primary" 
+                  isPublic
+                    ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:bg-secondary"
                 )}
               >
@@ -176,8 +186,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
                 disabled={createProjectMutation.isPending}
                 className={cn(
                   "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all",
-                  !isPublic 
-                    ? "bg-primary text-primary-foreground border-primary" 
+                  !isPublic
+                    ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:bg-secondary"
                 )}
               >
@@ -199,8 +209,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
                 disabled={createProjectMutation.isPending}
                 className={cn(
                   "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all",
-                  shareWithAI 
-                    ? "bg-primary text-primary-foreground border-primary" 
+                  shareWithAI
+                    ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:bg-secondary"
                 )}
               >
@@ -213,8 +223,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
                 disabled={createProjectMutation.isPending}
                 className={cn(
                   "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all",
-                  !shareWithAI 
-                    ? "bg-primary text-primary-foreground border-primary" 
+                  !shareWithAI
+                    ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card border-border hover:bg-secondary"
                 )}
               >
@@ -274,8 +284,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
       {createProjectMutation.error && (
         <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
           <p className="text-sm text-destructive">
-            {createProjectMutation.error instanceof Error 
-              ? createProjectMutation.error.message 
+            {createProjectMutation.error instanceof Error
+              ? createProjectMutation.error.message
               : "Failed to create project. Please try again."}
           </p>
         </div>
@@ -284,10 +294,12 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
       <Button
         onClick={handleSubmit}
         disabled={
-          createProjectMutation.isPending || 
-          files.length === 0 || 
+          createProjectMutation.isPending ||
+          files.length === 0 ||
           !projectName.trim() ||
-          (files.length > 0 && (!validationComplete || !filesAreValid))
+          isValidating ||
+          (files.length > 0 && !validationComplete) ||
+          hasValidationErrors
         }
         className="w-full h-12 text-base"
       >
@@ -296,12 +308,12 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Creating Project...
           </>
-        ) : files.length > 0 && !validationComplete ? (
+        ) : isValidating || (files.length > 0 && !validationComplete) ? (
           <>
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Validating Files...
           </>
-        ) : files.length > 0 && !filesAreValid ? (
+        ) : hasValidationErrors ? (
           "Fix Validation Errors to Continue"
         ) : estimatedTime > 0 ? (
           `Create Project (~${estimatedTime} min processing)`

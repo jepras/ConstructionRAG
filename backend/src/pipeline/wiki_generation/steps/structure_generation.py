@@ -180,32 +180,31 @@ IMPORTANT: The wiki content will be generated in Danish language.
 
 # Return output 
 ## Return output rules
-- Create EXACTLY {self.max_pages} wiki pages in total (including the overview page).
-- Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language). Do NOT create multiple overview pages with similar names. 
-
-- Make sure each page has a topic and EXACTLY {self.queries_per_page} associated queries that will help them retrieve relevant information for that topic. Like this for overview (in the language the document is, probably danish): 
+- Create a maximum of {self.max_pages} wiki pages in total (including the overview page). Only create as many pages as you need to cover the project. 
+- Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language), with the below queries. Do NOT create multiple overview pages with similar names. 
 
 project_overview_queries = [
     # Core project identity
     "project name title description overview summary purpose",
+    "project type building type construction type facility type",
     "construction project scope objectives goals deliverables",
-    "project location site address building development",
+    "project purpose main objective vision function application use",
+    "project scope construction scope building scope facility scope",
+    "building elements structures installations systems components",
+    "deliverables building parts materials equipment installations",
     
     # Key participants
     "contractor client owner developer architect engineer",
     "project team roles responsibilities stakeholders",
-    
-    # Timeline and phases
-    "project schedule timeline milestones phases construction stages",
-    "start date completion date project duration",
+    "trade group discipline construction trade",
     
     # Project scale and type
     "project value budget cost estimate total contract",
-    "building type residential commercial industrial infrastructure",
     "square meters floor area size dimensions scope"
 ] 
 
-- Each page should focus on a specific aspect of the construction project. 
+- Make sure each page has a topic and EXACTLY {self.queries_per_page} associated queries that will help them retrieve relevant information for that topic. Like the previous queries for overview (in the language the document is, probably danish): 
+- Each page should focus on a specific aspect of the construction project as described in the project overview & semantic analysis. It is often relevant to create subpages for different trade groups. 
 
 ## Return output format
 Return your analysis in the following JSON format:

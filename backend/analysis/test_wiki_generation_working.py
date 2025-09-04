@@ -190,7 +190,7 @@ class WikiTestWorking:
         logger.info("STEP 3: Semantic Clustering (SKIPPED)")
         logger.info("="*60)
         
-        semantic_analysis = None  # No semantic analysis - rely on project overview only
+        semantic_analysis = {}  # No semantic analysis - rely on project overview only
         self.save_json("03_semantic_clusters_skipped.json", {"note": "Semantic clustering was skipped - structure generation will rely on project overview only"})
         logger.info("⚠️ Skipped semantic clustering - structure generation will use project overview only")
         steps_completed["clustering"] = True
