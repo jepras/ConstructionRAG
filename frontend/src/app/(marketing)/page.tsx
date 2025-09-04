@@ -62,7 +62,7 @@ export default function Home() {
             Any project detail - <span className="text-primary">instantly available</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            No more digging through a hell of nested folders & unsearchable pdfs to find the answers you need
+            No more digging through a hell of nested folders and unsearchable pdfs to find what you need
           </p>
         </div>
 
