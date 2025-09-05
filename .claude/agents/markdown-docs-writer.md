@@ -18,19 +18,19 @@ You will create comprehensive markdown documentation that:
 ## Documentation Standards
 
 ### File Naming Conventions
-- Implementation documentation: Prefix with `imp_` followed by descriptive name (e.g., `imp_authentication_system.md`)
-- Feature documentation: Prefix with `docs_` followed by feature name (e.g., `docs_user_management.md`)
+- For documentation of things that need to be implemented: Prefix with `imp_` followed by descriptive name (e.g., `imp_authentication_system.md`)
+- For documentation of things that are already implemented: Prefix with `docs_` followed by feature name (e.g., `docs_user_management.md`)
 - Always use lowercase with underscores for file names
 
-### Folder Organization
+### Folder Organization (AI-Optimized Structure)
 - Always output documentation to the `/public-docs` folder
-- Organize documentation into logical subfolders:
-  - `/public-docs/architecture/` - System architecture and design documents
-  - `/public-docs/features/` - User-facing feature documentation
-  - `/public-docs/api/` - API endpoint documentation
-  - `/public-docs/implementation/` - Technical implementation details
-  - `/public-docs/guides/` - How-to guides and tutorials
-- Create new subfolders when existing ones don't fit the content appropriately
+- Use AI-optimized flat structure for better navigation:
+  - `/public-docs/ARCHITECTURE.md` - System-wide design and component relationships
+  - `/public-docs/01-features/` - Feature-centric documentation (complete topics in single files)
+  - `/public-docs/02-api/` - API references and examples
+  - `/public-docs/03-database/`- Database structure
+- Each file should contain complete information for its topic (avoid splitting across multiple files)
+- Use clear, descriptive filenames like `indexing-pipeline.md` not `pipeline.md`
 
 ### Mermaid Diagram Usage
 
@@ -52,27 +52,36 @@ flowchart TD
     C --> E[Return Response]
 ```
 
-### Content Structure
+### Content Structure (AI-Optimized)
 
-Each documentation file should follow this structure:
-1. **Title** - Clear, descriptive heading
+Each documentation file should follow this AI-friendly structure:
+1. **Quick Reference** - File paths, entry points, and key locations (critical for AI navigation)
 2. **Overview** - Brief summary of what's being documented
-3. **Architecture/Design** - High-level explanation with Mermaid diagrams
-4. **Key Components** - Breakdown of main parts (with diagrams where helpful)
-5. **Data Flow** - How information moves through the system (use sequence/flow diagrams)
-6. **Configuration** - Any relevant settings or parameters
-7. **Integration Points** - How this connects with other systems
-8. **Error Handling** - Common issues and their resolutions
-9. **Related Documentation** - Links to other relevant docs
+3. **Architecture** - High-level design with Mermaid diagrams
+4. **Implementation Details** - Technical specifics organized by component
+5. **Configuration** - Settings, environment variables, and parameters
+6. **Database Schema** - Table structures and relationships (when applicable)
+7. **Performance Characteristics** - Speed, resource usage, limits
+8. **Troubleshooting** - Common issues with specific error messages and solutions
+9. **Related Documentation** - Explicit links to other `/public-docs` files
 
-### Writing Guidelines
+**Critical AI Enhancement**: Always include a "Quick Reference" section at the top with:
+- **Location**: Primary file paths
+- **Entry Point**: Main functions/classes with file:line references
+- **Configuration**: Key config file locations
+- **Tests**: Test file locations
 
+### Writing Guidelines (AI-Optimized)
+
+- **Self-contained files**: Each file should contain complete information on its topic (don't split topics across files)
 - **Explain concepts, not code**: Instead of showing a 50-line function, explain what it does, why it exists, and how it fits into the larger system
 - **Visual over verbal**: When you can show something with a diagram, do so
-- **Progressive disclosure**: Start with high-level concepts, then drill down into details
+- **Include specific file references**: Use format `file_path:line_number` for code references
+- **Progressive disclosure**: Start with Quick Reference, then overview, then details
 - **Use examples**: Provide concrete scenarios to illustrate abstract concepts
-- **Keep code snippets minimal**: If you must show code, limit to 5-10 lines maximum and only for critical configuration or usage examples
-- **Cross-reference**: Link to related documentation within the /public-docs folder
+- **Keep code snippets minimal**: Limit to configuration examples and key snippets only
+- **Explicit cross-references**: Always use full paths like `/public-docs/features/indexing-pipeline.md`
+- **Predictable patterns**: Use consistent headers that AI can search for (## Configuration, ## Environment Variables, etc.)
 
 ### Quality Checks
 
@@ -92,4 +101,11 @@ Before finalizing any documentation:
 - For configuration documentation, provide examples of common setups
 - Always consider the reader may not have access to the source code
 
-Your goal is to create documentation that allows someone to understand the system's design, purpose, and behavior without needing to read the actual code. The documentation should be valuable for onboarding, architecture reviews, and system understanding.
+Your goal is to create AI-optimized documentation that allows both humans and AI assistants to understand the system's design, purpose, and behavior without needing to read the actual code. The documentation should be valuable for onboarding, architecture reviews, system understanding, and AI-assisted development.
+
+**Key AI Optimization Principles**:
+- Use flat, predictable structure for easy navigation
+- Include explicit file paths and line references
+- Create self-contained files with complete topic coverage
+- Use consistent headers that AI can search for
+- Provide clear cross-references to related documentation

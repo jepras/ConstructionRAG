@@ -594,10 +594,9 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning table image: {image_url}")
-                # Include bbox in context if available
+                # Use structural_metadata which already contains bbox from metadata step
                 context = table_element["structural_metadata"].copy()
-                if "bbox" in table_element.get("metadata", {}):
-                    context["bbox"] = table_element["metadata"]["bbox"]
+                # Bbox is already in structural_metadata, no need to add separately
 
                 vlm_result = await self.vlm_captioner.caption_table_image_async(image_url, context)
                 enrichment_metadata["table_image_caption"] = vlm_result["caption"]
@@ -662,8 +661,10 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning full-page image: {image_url}")
+                # Use structural_metadata which already contains full_page_bbox from metadata step
+                context = page_info["structural_metadata"].copy()
                 vlm_result = await self.vlm_captioner.caption_full_page_image_async(
-                    image_url, page_info["structural_metadata"], page_text_context
+                    image_url, context, page_text_context
                 )
                 enrichment_metadata["full_page_image_caption"] = vlm_result["caption"]
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]

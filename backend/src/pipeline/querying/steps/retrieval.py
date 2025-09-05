@@ -182,14 +182,19 @@ class DocumentRetriever(PipelineStep):
                 metadata = result.get("metadata", {})
                 document_id = metadata.get("document_id")
             
+            # Extract bbox from metadata if present
+            metadata = result.get("metadata", {})
+            bbox = metadata.get("bbox") if metadata else None
+            
             search_result = SearchResult(
                 content=result["content"],
-                metadata=result.get("metadata", {}),
+                metadata=metadata,
                 similarity_score=result["similarity_score"],
                 source_filename=source_filename,
                 page_number=page_number,
                 chunk_id=str(result["id"]),
                 document_id=str(document_id) if document_id else None,
+                bbox=bbox,  # Add bbox to SearchResult
             )
             result_objects.append(search_result)
         

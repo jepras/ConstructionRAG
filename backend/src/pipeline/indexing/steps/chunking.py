@@ -126,6 +126,7 @@ class IntelligentChunker:
                 "element_id",
                 "image_filepath",
                 "html_text",
+                "bbox",  # Include bbox in fallback extraction
             ]
             if k in el
         }

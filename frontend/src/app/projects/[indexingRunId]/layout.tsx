@@ -4,14 +4,16 @@ import React, { ReactNode } from 'react';
 import { Header } from '@/components/layout/Header';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { WikiTitleProvider, useWikiTitle } from '@/components/providers/WikiTitleProvider';
 
 interface PublicProjectLayoutProps {
   children: ReactNode;
   params: Promise<{ indexingRunId: string }>;
 }
 
-export default function PublicProjectLayout({ children, params }: PublicProjectLayoutProps) {
+function PublicProjectLayoutContent({ children, params }: PublicProjectLayoutProps) {
   const { isAuthenticated } = useAuth();
+  const { wikiTitle } = useWikiTitle();
 
   // Handle params properly in client component
   const [indexingRunId, setIndexingRunId] = React.useState<string>('');
@@ -22,8 +24,8 @@ export default function PublicProjectLayout({ children, params }: PublicProjectL
     });
   }, [params]);
 
-  // Extract a display name from the indexing run ID (first 8 chars for readability)
-  const displayName = indexingRunId ? `Project ${indexingRunId.slice(0, 8)}` : "Project";
+  // Use wiki title if available, otherwise fallback to slug-based name
+  const displayName = wikiTitle || (indexingRunId ? `Project ${indexingRunId.slice(0, 8)}` : "Project");
 
   // For public projects, use the indexing run ID as the project slug
   const projectSlug = indexingRunId;
@@ -46,5 +48,13 @@ export default function PublicProjectLayout({ children, params }: PublicProjectL
         </div>
       </main>
     </div>
+  );
+}
+
+export default function PublicProjectLayout({ children, params }: PublicProjectLayoutProps) {
+  return (
+    <WikiTitleProvider>
+      <PublicProjectLayoutContent children={children} params={params} />
+    </WikiTitleProvider>
   );
 }
