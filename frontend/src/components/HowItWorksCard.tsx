@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight, Plus, FileText, Sheet, Cpu, BookOpen, CheckSquare, SquareChartGantt } from "lucide-react";
 
 interface HowItWorksCardProps {
   step: number;
@@ -33,8 +33,8 @@ export function ProcessingDiagram() {
       {/* Inputs */}
       <div className="p-3 bg-card rounded-lg border border-border flex flex-col items-center justify-center text-center gap-3">
         <div className="flex flex-col items-center gap-2">
-          <div className="w-6 h-6 bg-red-400 rounded"></div>
-          <div className="w-6 h-6 bg-green-400 rounded"></div>
+          <FileText className="w-6 h-6 text-red-400" />
+          <Sheet className="w-6 h-6 text-green-400" />
         </div>
         <p className="text-xs font-medium leading-tight">Your project<br/>files</p>
       </div>
@@ -48,17 +48,17 @@ export function ProcessingDiagram() {
       <div className="flex items-center">
         <div className="flex flex-col items-center justify-center gap-1.5">
             <div className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border w-full">
-                <div className="w-5 h-5 bg-yellow-400 rounded flex-shrink-0"></div>
+                <BookOpen className="w-5 h-5 text-yellow-400 flex-shrink-0" />
                 <span className="text-xs font-medium">Best practices</span>
             </div>
             <Plus className="w-3 h-3 text-muted-foreground" />
             <div className="flex items-center gap-2 p-2 bg-card rounded-lg border-2 border-primary w-full">
-                <div className="w-5 h-5 bg-primary rounded flex-shrink-0"></div>
+                <Cpu className="w-5 h-5 text-primary flex-shrink-0" />
                 <span className="text-xs font-bold text-foreground">AI crunch</span>
             </div>
             <Plus className="w-3 h-3 text-muted-foreground" />
             <div className="flex items-center gap-2 p-2 bg-card rounded-lg border border-border w-full">
-                <div className="w-5 h-5 bg-green-400 rounded flex-shrink-0"></div>
+                <CheckSquare className="w-5 h-5 text-green-400 flex-shrink-0" />
                 <span className="text-xs font-medium">Your checklist</span>
             </div>
         </div>
@@ -71,7 +71,7 @@ export function ProcessingDiagram() {
       
       {/* Output */}
       <div className="p-3 bg-card rounded-lg border border-border flex flex-col items-center justify-center text-center gap-3">
-        <div className="w-8 h-8 bg-primary rounded"></div>
+        <SquareChartGantt className="w-8 h-8 text-primary" />
          <p className="text-xs font-medium leading-tight">Custom<br/>Overview</p>
       </div>
     </div>
