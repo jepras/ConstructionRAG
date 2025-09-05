@@ -18,6 +18,6 @@ export default function SignInPage() {
 }
 
 export const metadata = {
-  title: 'Sign In - specfinder.io',
+  title: 'Sign In',
   description: 'Sign in to your specfinder.io account',
 }

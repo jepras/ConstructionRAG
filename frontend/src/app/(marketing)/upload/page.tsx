@@ -1,11 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { UploadForm } from "@/components/upload/UploadForm"
 import { CheckCircle } from "lucide-react"
 
 export default function UploadPage() {
   const [isUploaded, setIsUploaded] = useState(false)
+  
+  useEffect(() => {
+    document.title = "Upload - specfinder.io";
+  }, []);
 
   const handleUploadComplete = (runId: string) => {
     setIsUploaded(true)

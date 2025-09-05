@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -318,6 +318,10 @@ function OrganisationSection() {
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const { user, isLoading } = useAuth();
+  
+  useEffect(() => {
+    document.title = "Settings - specfinder.io";
+  }, []);
 
   if (isLoading) {
     return (

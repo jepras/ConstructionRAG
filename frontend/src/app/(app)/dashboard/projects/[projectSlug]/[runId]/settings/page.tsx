@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import ProjectSettingsContent from '@/components/features/project-pages/ProjectSettingsContent';
 
@@ -24,6 +24,10 @@ export default function DashboardProjectSettingsPage({ params }: DashboardProjec
       setRunId(runId);
     });
   }, [params]);
+
+  useEffect(() => {
+    document.title = "Settings - specfinder.io";
+  }, []);
 
   // Show loading during auth check
   if (isLoading) {

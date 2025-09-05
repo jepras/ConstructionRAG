@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Check, X } from "lucide-react";
+import { useEffect } from "react";
 import Link from "next/link";
 
 interface Feature {
@@ -205,6 +206,10 @@ function FeatureItem({ feature, isLimitation = false }: { feature: Feature; isLi
 }
 
 export default function PricingPage() {
+  useEffect(() => {
+    document.title = "Pricing - specfinder.io";
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="container mx-auto px-6 py-20">

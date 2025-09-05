@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import ProjectWikiClient from '@/components/features/wiki/ProjectWikiClient';
 
@@ -24,6 +24,10 @@ export default function DashboardProjectPage({ params }: DashboardProjectPagePro
       setRunId(runId);
     });
   }, [params]);
+
+  useEffect(() => {
+    document.title = "Wiki - specfinder.io";
+  }, []);
 
   // Show loading during auth check
   if (isLoading) {

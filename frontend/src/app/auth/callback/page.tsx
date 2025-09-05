@@ -9,6 +9,10 @@ export default function AuthCallbackPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    document.title = "Authenticating - specfinder.io";
+  }, []);
+
+  useEffect(() => {
     const handleAuthCallback = async () => {
       try {
         const { data, error } = await supabase.auth.getSession()

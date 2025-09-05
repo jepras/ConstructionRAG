@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { CreateProjectForm } from "@/components/projects/CreateProjectForm"
 import { CheckCircle, ChevronLeft } from "lucide-react"
@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button"
 
 export default function NewProjectPage() {
   const [isCreated, setIsCreated] = useState(false)
+  
+  useEffect(() => {
+    document.title = "New Project - specfinder.io";
+  }, []);
 
   const handleProjectCreated = (projectId: string) => {
     setIsCreated(true)

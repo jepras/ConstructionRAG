@@ -1,6 +1,10 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 
+export const metadata = {
+  title: "Home",
+};
+
 export default function MarketingLayout({
   children,
 }: {

@@ -11,7 +11,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "specfinder.io",
+  title: {
+    template: "%s - specfinder.io",
+    default: "specfinder.io",
+  },
   description: "AI-powered construction document processing and Q&A system",
   icons: {
     icon: [

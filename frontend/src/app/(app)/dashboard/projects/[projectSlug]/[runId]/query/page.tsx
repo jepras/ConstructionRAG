@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import ProjectQueryContent from '@/components/features/project-pages/ProjectQueryContent';
 
@@ -24,6 +24,10 @@ export default function DashboardProjectQueryPage({ params }: DashboardProjectQu
       setRunId(runId);
     });
   }, [params]);
+
+  useEffect(() => {
+    document.title = "Q&A - specfinder.io";
+  }, []);
 
   // Show loading during auth check
   if (isLoading) {

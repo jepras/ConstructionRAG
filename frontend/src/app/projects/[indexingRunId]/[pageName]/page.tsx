@@ -12,6 +12,14 @@ interface PublicWikiPageProps {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+export async function generateMetadata({ params }: PublicWikiPageProps) {
+  const { pageName } = await params;
+  const displayName = pageName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  return {
+    title: displayName,
+  };
+}
+
 // Extract UUID from slug format: "project-name-{uuid}"
 function extractUUIDFromSlug(slug: string): string {
   const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useProjectWithRun, useProjectWikiRuns, useProjectWikiPages, useProjectWikiContent } from '@/hooks/useApiQueries';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
@@ -36,6 +36,11 @@ export default function DashboardWikiPage({ params }: DashboardWikiPageProps) {
       setPageName(pageName);
     });
   }, [params]);
+
+  useEffect(() => {
+    const displayName = pageName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    document.title = `${displayName} - specfinder.io`;
+  }, [pageName]);
 
   const projectId = extractProjectIdFromSlug(projectSlug);
 

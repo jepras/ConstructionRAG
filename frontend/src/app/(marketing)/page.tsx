@@ -18,10 +18,6 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasAsked, setHasAsked] = useState(false);
 
-  useEffect(() => {
-    document.title = "Home - specfinder.io";
-  }, []);
-
   const handleQuerySubmit = () => {
     if (query.trim() && !isLoading && !hasAsked) {
       const submittedQuery = query;

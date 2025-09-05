@@ -7,6 +7,12 @@ interface PublicProjectIndexingPageProps {
   }>;
 }
 
+export async function generateMetadata({ params }: PublicProjectIndexingPageProps) {
+  return {
+    title: "Indexing",
+  };
+}
+
 async function PublicProjectIndexingWrapper({ indexingRunId }: { indexingRunId: string }) {
   return (
     <ProjectIndexingContent 

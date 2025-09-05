@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useUserProjectsWithWikis } from '@/hooks/useApiQueries'
@@ -46,6 +46,10 @@ function transformUserProject(backendProject: any) {
 function DashboardContent() {
   const { isLoading: authLoading } = useAuth()
   const [refreshKey, setRefreshKey] = useState(0) // Force refresh on delete
+  
+  useEffect(() => {
+    document.title = "Dashboard - specfinder.io";
+  }, []);
 
   // Fetch user projects with wikis from API - only when authenticated
   const {

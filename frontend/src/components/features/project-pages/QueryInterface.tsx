@@ -55,9 +55,7 @@ export default function QueryInterface({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // Remove auto-scroll to bottom - let users control scrolling
 
   const queryMutation = useMutation({
     mutationFn: (request: CreateQueryRequest) => {

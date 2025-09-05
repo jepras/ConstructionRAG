@@ -11,6 +11,12 @@ interface PublicProjectPageProps {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
+export async function generateMetadata({ params }: PublicProjectPageProps) {
+  return {
+    title: "Wiki",
+  };
+}
+
 // Extract UUID from slug format: "project-name-{uuid}"
 function extractUUIDFromSlug(slug: string): string {
   const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

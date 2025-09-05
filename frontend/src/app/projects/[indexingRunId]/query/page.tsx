@@ -7,6 +7,12 @@ interface PublicProjectQueryPageProps {
   }>;
 }
 
+export async function generateMetadata({ params }: PublicProjectQueryPageProps) {
+  return {
+    title: "Q&A",
+  };
+}
+
 async function PublicProjectQueryWrapper({ indexingRunId }: { indexingRunId: string }) {
   return (
     <ProjectQueryContent 

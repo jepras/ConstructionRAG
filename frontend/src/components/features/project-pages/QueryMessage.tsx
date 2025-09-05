@@ -25,7 +25,7 @@ export default function QueryMessage({ message, isTyping, onSourceSelect, select
   const isUser = message.type === 'user';
   const [selectedSource, setSelectedSource] = useState<QueryResponse['search_results'][0] | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSourcesExpanded, setIsSourcesExpanded] = useState(true); // Expanded by default to show sources immediately
+  const [isSourcesExpanded, setIsSourcesExpanded] = useState(false); // Collapsed by default
 
   const handleSourceClick = (source: QueryResponse['search_results'][0]) => {
     // If onSourceSelect is provided, use it for the source panel

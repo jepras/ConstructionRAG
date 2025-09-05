@@ -5,6 +5,6 @@ export default function SignUpPage() {
 }
 
 export const metadata = {
-  title: 'Sign Up - specfinder.io',
+  title: 'Sign Up',
   description: 'Create your specfinder.io account',
 }
