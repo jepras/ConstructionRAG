@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,9 +12,19 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand and Contact */}
           <div className="space-y-4">
-            <div className="text-xl font-bold text-foreground">
-              specfinder.io
-            </div>
+            <Link href="/" className="flex items-center gap-2.5 group w-fit">
+              <Image
+                src="/favicon-32x32.png"
+                alt="Specfinder"
+                width={28}
+                height={28}
+                className="w-7 h-7"
+                priority
+              />
+              <span className="text-xl font-semibold text-white/90 group-hover:text-white transition-colors">
+                specfinder<span className="text-orange-500">.io</span>
+              </span>
+            </Link>
             <div className="text-sm text-muted-foreground space-y-1">
               <p>Made in Copenhagen</p>
               <p>hello@specfinder.io</p>
@@ -81,7 +92,7 @@ export function Footer() {
         {/* Copyright */}
         <div className="border-t border-border mt-8 pt-4">
           <p className="text-sm text-muted-foreground text-center">
-            © 2025 specfinder.io. All rights reserved.
+            © 2025 specfinder<span className="text-orange-500">.io</span>. All rights reserved.
           </p>
         </div>
       </div>

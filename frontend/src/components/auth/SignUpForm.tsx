@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -75,11 +76,29 @@ export function SignUpForm() {
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md bg-card border-border">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold text-foreground">
-              Check Your Email
-            </CardTitle>
+        <div className="w-full max-w-md space-y-8">
+          {/* Branding */}
+          <div className="text-center space-y-3">
+            <div className="flex justify-center">
+              <Image
+                src="/favicon-32x32.png"
+                alt="Specfinder"
+                width={48}
+                height={48}
+                className="w-12 h-12"
+                priority
+              />
+            </div>
+            <h1 className="text-3xl font-semibold text-foreground">
+              specfinder<span className="text-orange-500">.io</span>
+            </h1>
+          </div>
+          
+          <Card className="w-full bg-card border-border">
+            <CardHeader className="space-y-1 text-center">
+              <CardTitle className="text-2xl font-bold text-foreground">
+                Check Your Email
+              </CardTitle>
             <CardDescription className="text-muted-foreground">
               We&apos;ve sent you a confirmation link at {email}
             </CardDescription>
@@ -99,6 +118,7 @@ export function SignUpForm() {
             </Button>
           </CardFooter>
         </Card>
+        </div>
       </div>
     )
   }
@@ -106,11 +126,29 @@ export function SignUpForm() {
   if (step === 1) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md bg-card border-border">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-foreground text-center">
-              Choose Your Plan
-            </CardTitle>
+        <div className="w-full max-w-md space-y-8">
+          {/* Branding */}
+          <div className="text-center space-y-3">
+            <div className="flex justify-center">
+              <Image
+                src="/favicon-32x32.png"
+                alt="Specfinder"
+                width={48}
+                height={48}
+                className="w-12 h-12"
+                priority
+              />
+            </div>
+            <h1 className="text-3xl font-semibold text-foreground">
+              specfinder<span className="text-orange-500">.io</span>
+            </h1>
+          </div>
+          
+          <Card className="w-full bg-card border-border">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-bold text-foreground text-center">
+                Choose Your Plan
+              </CardTitle>
             <CardDescription className="text-muted-foreground text-center">
               Select a plan and enter your account details
             </CardDescription>
@@ -199,6 +237,7 @@ export function SignUpForm() {
             </CardFooter>
           </form>
         </Card>
+        </div>
       </div>
     )
   }
@@ -206,11 +245,29 @@ export function SignUpForm() {
   if (step === 2) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md bg-card border-border">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-foreground text-center">
-              Beta Access
-            </CardTitle>
+        <div className="w-full max-w-md space-y-8">
+          {/* Branding */}
+          <div className="text-center space-y-3">
+            <div className="flex justify-center">
+              <Image
+                src="/favicon-32x32.png"
+                alt="Specfinder"
+                width={48}
+                height={48}
+                className="w-12 h-12"
+                priority
+              />
+            </div>
+            <h1 className="text-3xl font-semibold text-foreground">
+              specfinder<span className="text-orange-500">.io</span>
+            </h1>
+          </div>
+          
+          <Card className="w-full bg-card border-border">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-bold text-foreground text-center">
+                Beta Access
+              </CardTitle>
             <CardDescription className="text-muted-foreground text-center">
               Get free access during our beta period
             </CardDescription>
@@ -249,6 +306,7 @@ export function SignUpForm() {
             </CardFooter>
           </form>
         </Card>
+        </div>
       </div>
     )
   }

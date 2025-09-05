@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -64,11 +65,29 @@ export function SignInForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md bg-card border-border">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-foreground text-center">
-            Sign In
-          </CardTitle>
+      <div className="w-full max-w-md space-y-8">
+        {/* Branding */}
+        <div className="text-center space-y-3">
+          <div className="flex justify-center">
+            <Image
+              src="/favicon-32x32.png"
+              alt="Specfinder"
+              width={48}
+              height={48}
+              className="w-12 h-12"
+              priority
+            />
+          </div>
+          <h1 className="text-3xl font-semibold text-foreground">
+            specfinder<span className="text-orange-500">.io</span>
+          </h1>
+        </div>
+        
+        <Card className="w-full bg-card border-border">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold text-foreground text-center">
+              Sign In
+            </CardTitle>
           <CardDescription className="text-muted-foreground text-center">
             Enter your email and password to access your account
           </CardDescription>
@@ -148,7 +167,8 @@ export function SignInForm() {
             </div>
           </CardFooter>
         </form>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }

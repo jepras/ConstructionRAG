@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Search, Upload, MessageSquare, Download, Info, ArrowUp, Mic } from "lucide-react";
 import Link from "next/link";
+import HowItWorksCard, { ProcessingDiagram } from "@/components/HowItWorksCard";
 
 export default function Home() {
   const [query, setQuery] = useState("What are the key requirements for concrete curing?");
@@ -333,28 +334,13 @@ export default function Home() {
           </div>
 
           {/* Step 2 */}
-          <div className="text-center">
-            <div className="bg-card border border-border rounded-lg p-8 mb-6">
-              <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
-                2
-              </div>
-              <h3 className="text-xl font-semibold mb-4 text-card-foreground">Get a personalised overview</h3>
-              <div className="bg-secondary border border-border rounded p-4 mb-6">
-                <div className="text-left">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="w-4 h-4 bg-primary rounded"></div>
-                    <span className="text-sm text-secondary-foreground">Overview</span>
-                  </div>
-                  <div className="bg-muted h-2 rounded mb-2"></div>
-                  <div className="bg-muted h-2 rounded mb-2 w-3/4"></div>
-                  <div className="bg-muted h-2 rounded w-1/2"></div>
-                </div>
-              </div>
-              <p className="text-muted-foreground text-sm">
-                Our AI automatises the extraction of key data and insights from your documents that you normally are spending hours to gather.  
-              </p>
-            </div>
-          </div>
+          <HowItWorksCard
+            step={2}
+            title="Crunch & Enhance"
+            description="Our AI synthesizes information, enriching it with best practices and expert checklists to create a clear, actionable project overview."
+          >
+            <ProcessingDiagram />
+          </HowItWorksCard>
 
           {/* Step 3 */}
           <div className="text-center">
