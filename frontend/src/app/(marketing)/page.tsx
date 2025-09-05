@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Upload, MessageSquare, Download, Info, ArrowUp, Mic } from "lucide-react";
 import Link from "next/link";
 import HowItWorksCard, { ProcessingDiagram } from "@/components/HowItWorksCard";
@@ -17,6 +17,10 @@ export default function Home() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasAsked, setHasAsked] = useState(false);
+
+  useEffect(() => {
+    document.title = "Home - specfinder.io";
+  }, []);
 
   const handleQuerySubmit = () => {
     if (query.trim() && !isLoading && !hasAsked) {

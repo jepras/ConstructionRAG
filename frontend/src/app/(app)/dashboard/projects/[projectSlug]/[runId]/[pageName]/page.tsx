@@ -189,6 +189,7 @@ function WikiPageContent({
       projectSlug={navigationSlug}
       content={pageContent?.content || ''}
       currentPage={pageName}
+      isAuthenticated={true}
     >
       <LazyWikiContent content={pageContent!} />
     </WikiLayout>

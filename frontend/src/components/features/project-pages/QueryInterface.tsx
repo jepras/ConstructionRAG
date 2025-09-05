@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { apiClient, QueryResponse, CreateQueryRequest } from '@/lib/api-client';
 import QueryMessage from './QueryMessage';
 import QueryInput from './QueryInput';
@@ -22,6 +22,7 @@ interface QueryInterfaceProps {
   onQueryResponse?: (searchResults: QueryResponse['search_results']) => void;
   onSourceSelect?: (source: QueryResponse['search_results'][0]) => void;
   selectedSource?: QueryResponse['search_results'][0];
+  initialQuery?: string | null;
 }
 
 export default function QueryInterface({ 
@@ -29,11 +30,26 @@ export default function QueryInterface({
   isAuthenticated,
   onQueryResponse,
   onSourceSelect,
-  selectedSource
+  selectedSource,
+  initialQuery
 }: QueryInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [hasProcessedInitialQuery, setHasProcessedInitialQuery] = useState(false);
+  const initialQueryProcessedRef = useRef(false);
+  
+  // Mount log
+  useEffect(() => {
+    console.log('🎪 QueryInterface MOUNTED with props:', {
+      indexingRunId,
+      isAuthenticated,
+      initialQuery,
+      hasOnQueryResponse: !!onQueryResponse,
+      hasOnSourceSelect: !!onSourceSelect,
+      selectedSource: !!selectedSource
+    });
+  }, []); // Only on mount
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -44,10 +60,19 @@ export default function QueryInterface({
   }, [messages]);
 
   const queryMutation = useMutation({
-    mutationFn: (request: CreateQueryRequest) => apiClient.createQuery(request),
+    mutationFn: (request: CreateQueryRequest) => {
+      console.log('🔥 API REQUEST STARTED:', request);
+      return apiClient.createQuery(request);
+    },
     onSuccess: (response) => {
+      console.log('✅ API SUCCESS:', {
+        responseLength: response.response?.length,
+        searchResultsCount: response.search_results?.length
+      });
+      
       // Update the assistant message with the actual response
       setMessages(prev => {
+        console.log('🔄 Updating assistant message with response');
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
         if (lastMessage && lastMessage.type === 'assistant') {
@@ -87,6 +112,8 @@ export default function QueryInterface({
       }
     },
     onError: (error: any) => {
+      console.log('❌ API ERROR:', error);
+      
       // Update the assistant message with error
       setMessages(prev => {
         const newMessages = [...prev];
@@ -102,35 +129,103 @@ export default function QueryInterface({
     }
   });
 
-  const handleSubmit = async (query: string) => {
-    if (!query.trim()) return;
+  const handleSubmit = useCallback(async (query: string) => {
+    console.log('🎯 handleSubmit called with query:', query);
+    console.log('📊 Current messages count:', messages.length);
+    
+    if (!query.trim()) {
+      console.log('❌ handleSubmit: Empty query, returning');
+      return;
+    }
 
-    // Add user message
+    console.log('🚀 handleSubmit: Submitting query to API');
+
+    // Add user message and loading assistant message in single setState
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       type: 'user',
       content: query,
       timestamp: new Date(),
     };
-    setMessages(prev => [...prev, userMessage]);
-
-    // Add loading assistant message
     const assistantMessage: Message = {
-      id: `assistant-${Date.now()}`,
+      id: `assistant-${Date.now() + 1}`, // Ensure unique ID
       type: 'assistant',
       content: '',
       timestamp: new Date(),
       isLoading: true,
     };
-    setMessages(prev => [...prev, assistantMessage]);
+    setMessages(prev => {
+      console.log('📝 handleSubmit: Adding both user and loading messages');
+      return [...prev, userMessage, assistantMessage];
+    });
     setIsTyping(true);
 
     // Make the API call
+    console.log('🌐 handleSubmit: Making API call with query:', query);
     queryMutation.mutate({
       query,
       indexing_run_id: indexingRunId,
     });
-  };
+  }, [queryMutation, indexingRunId, messages.length]);
+
+  // Handle initial query from URL parameter
+  useEffect(() => {
+    console.log('🔍 QueryInterface useEffect triggered:', {
+      initialQuery,
+      hasProcessedInitialQuery,
+      initialQueryProcessedRef: initialQueryProcessedRef.current,
+      mutationStatus: queryMutation.status,
+      messagesCount: messages.length
+    });
+    
+    if (initialQuery && !initialQueryProcessedRef.current) {
+      console.log('✅ Processing initial query:', initialQuery);
+      initialQueryProcessedRef.current = true;
+      setHasProcessedInitialQuery(true);
+      
+      if (!initialQuery.trim()) {
+        console.log('❌ Empty query, returning');
+        return;
+      }
+
+      console.log('🚀 Submitting initial query to API');
+      
+      // Use a single setState call to add both messages at once
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        type: 'user',
+        content: initialQuery,
+        timestamp: new Date(),
+      };
+
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now() + 1}`, // Ensure unique ID
+        type: 'assistant',
+        content: '',
+        timestamp: new Date(),
+        isLoading: true,
+      };
+
+      setMessages(prev => {
+        console.log('📝 Adding both user and loading messages');
+        return [...prev, userMessage, assistantMessage];
+      });
+      setIsTyping(true);
+
+      // Make the API call
+      console.log('🌐 Making API call with query:', initialQuery);
+      queryMutation.mutate({
+        query: initialQuery,
+        indexing_run_id: indexingRunId,
+      });
+    } else {
+      console.log('⏭️ Skipping initial query processing:', {
+        hasInitialQuery: !!initialQuery,
+        alreadyProcessedRef: initialQueryProcessedRef.current,
+        alreadyProcessedState: hasProcessedInitialQuery
+      });
+    }
+  }, [initialQuery]);
 
   return (
     <div className="flex flex-col h-full">

@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import WikiNavigation from './WikiNavigation';
 import WikiTOC from './WikiTOC';
+import FloatingChatBar from './FloatingChatBar';
 import { WikiPage } from '@/lib/api-client';
 
 interface WikiLayoutProps {
@@ -11,6 +12,7 @@ interface WikiLayoutProps {
   projectSlug: string;
   content?: string; // For TOC generation
   currentPage?: string;
+  isAuthenticated?: boolean;
 }
 
 export default function WikiLayout({ 
@@ -18,7 +20,8 @@ export default function WikiLayout({
   pages, 
   projectSlug, 
   content = '',
-  currentPage 
+  currentPage,
+  isAuthenticated = false
 }: WikiLayoutProps) {
   return (
     <div className="flex h-full rounded-lg relative">
@@ -49,6 +52,12 @@ export default function WikiLayout({
 
       {/* Mobile navigation overlay - TODO: Implement mobile menu */}
       {/* This would show on mobile when menu button is tapped */}
+      
+      {/* Floating Chat Bar */}
+      <FloatingChatBar 
+        projectSlug={projectSlug}
+        isAuthenticated={isAuthenticated}
+      />
     </div>
   );
 }

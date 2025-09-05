@@ -74,6 +74,9 @@ class IntelligentChunker:
 
     def extract_structural_metadata(self, el: dict) -> dict:
         """Extract structural metadata from element, handling various formats"""
+        element_type = el.get("element_type", "unknown")
+        element_id = el.get("id", el.get("element_id", "unknown"))
+        
         # Try to get structural_metadata from various possible locations
         # 1. Directly as a dict
         if "structural_metadata" in el:
@@ -83,6 +86,9 @@ class IntelligentChunker:
                 meta = meta.model_dump()
             elif hasattr(meta, "dict"):
                 meta = meta.model_dump(exclude_none=True)
+            
+            bbox = meta.get("bbox")
+            print(f"🔍 BBOX_TRACE: Found structural_metadata for {element_type} ({element_id}), bbox: {bbox}")
             return meta
 
         # 2. Nested in original_element (for enriched elements)
@@ -95,6 +101,8 @@ class IntelligentChunker:
                     meta = meta.model_dump()
                 elif hasattr(meta, "dict"):
                     meta = meta.model_dump(exclude_none=True)
+                bbox = meta.get("bbox")
+                print(f"🔍 BBOX_TRACE: Found structural_metadata in original_element for {element_type} ({element_id}), bbox: {bbox}")
                 return meta
             # If it's a Pydantic model
             if hasattr(orig, "structural_metadata"):
@@ -103,10 +111,12 @@ class IntelligentChunker:
                     meta = meta.model_dump()
                 elif hasattr(meta, "dict"):
                     meta = meta.model_dump(exclude_none=True)
+                bbox = meta.get("bbox")
+                print(f"🔍 BBOX_TRACE: Found structural_metadata via getattr for {element_type} ({element_id}), bbox: {bbox}")
                 return meta
 
         # 3. Fallback: try top-level keys
-        return {
+        fallback_meta = {
             k: el.get(k)
             for k in [
                 "source_filename",
@@ -130,6 +140,9 @@ class IntelligentChunker:
             ]
             if k in el
         }
+        bbox = fallback_meta.get("bbox")
+        print(f"🔍 BBOX_TRACE: Using fallback extraction for {element_type} ({element_id}), bbox: {bbox}, keys found: {list(fallback_meta.keys())}")
+        return fallback_meta
 
     def extract_text_content(self, el: dict, extracted_meta: dict = None) -> str:
         """Extract text content from element, prioritizing VLM captions for tables/images"""
@@ -632,6 +645,9 @@ class IntelligentChunker:
                 print(f"🔍 BEAM SUCCESSFULLY SPLIT chunk {chunk_idx}: {content_length} chars -> {len(text_chunks)} chunks")
                 
                 # Create new chunks from splits
+                original_bbox = chunk["metadata"].get("bbox")
+                print(f"🔍 BBOX_TRACE: Splitting chunk {chunk.get('chunk_id', 'unknown')}, original bbox: {original_bbox}")
+                
                 for i, chunk_text in enumerate(text_chunks):
                     new_chunk = chunk.copy()
                     new_chunk["chunk_id"] = f"{chunk['chunk_id']}_split_{i}"
@@ -644,7 +660,17 @@ class IntelligentChunker:
                     new_metadata["split_index"] = i
                     new_metadata["total_splits"] = len(text_chunks)
                     new_metadata["original_chunk_id"] = chunk["chunk_id"]
+                    
+                    # EXPLICIT FIX: Ensure bbox is preserved in split chunks
+                    if original_bbox is not None:
+                        new_metadata["bbox"] = original_bbox
+                        print(f"🔍 BBOX_TRACE: Explicitly preserved bbox {original_bbox} in split chunk {i}")
+                    
                     new_chunk["metadata"] = new_metadata
+                    
+                    # Verify bbox is preserved
+                    split_bbox = new_metadata.get("bbox")
+                    print(f"🔍 BBOX_TRACE: Split chunk {i}/{len(text_chunks)} bbox: {split_bbox}")
                     
                     split_chunks.append(new_chunk)
                     
@@ -791,14 +817,21 @@ class IntelligentChunker:
                 print(f"🔍 BEAM COMPOSING LARGE CONTENT: {len(content)} chars, type={meta.get('element_category', 'unknown')}, preview='{content_preview}'")
 
             # Create chunk object with composed content
+            chunk_bbox = meta.get("bbox")
+            chunk_id = str(uuid.uuid4())
+            element_type = el.get("element_type", "unknown")
+            element_category = meta.get("element_category", "unknown")
+            
+            print(f"🔍 BBOX_TRACE: Creating chunk for {element_type}/{element_category}, bbox from meta: {chunk_bbox}")
+            
             chunk = {
-                "chunk_id": str(uuid.uuid4()),
+                "chunk_id": chunk_id,
                 "content": content,
                 "metadata": {
                     "source_filename": meta.get("source_filename"),
                     "page_number": meta.get("page_number"),
-                    "bbox": meta.get("bbox"),  # Preserve bounding box coordinates
-                    "element_category": meta.get("element_category", "unknown"),
+                    "bbox": chunk_bbox,  # Preserve bounding box coordinates
+                    "element_category": element_category,
                     "section_title_inherited": section_title,
                     "text_complexity": meta.get("text_complexity", "medium"),
                     "content_length": len(content),  # Use composed content length
@@ -816,6 +849,8 @@ class IntelligentChunker:
                     "structural_metadata": meta,
                 },
             }
+            
+            print(f"🔍 BBOX_TRACE: Chunk created with bbox: {chunk['metadata']['bbox']}")
 
             composed_chunks.append(chunk)
 
@@ -1031,8 +1066,21 @@ class ChunkingStep(PipelineStep):
             extracted_pages = enriched_data.get("extracted_pages", {})
 
             for page_num, page_info in extracted_pages.items():
+                # Check bbox before modification
+                bbox_before = None
+                if "structural_metadata" in page_info:
+                    bbox_before = page_info["structural_metadata"].get("bbox")
+                print(f"🔍 BBOX_TRACE: Processing extracted page {page_num}, bbox in structural_metadata: {bbox_before}")
+                
                 page_info["element_type"] = "full_page_image"
                 page_info["page_number"] = int(page_num)
+                
+                # Check bbox after modification
+                bbox_after = None
+                if "structural_metadata" in page_info:
+                    bbox_after = page_info["structural_metadata"].get("bbox")
+                print(f"🔍 BBOX_TRACE: After adding element_type, page {page_num} bbox: {bbox_after}")
+                
                 all_elements.append(page_info)
 
             logger.info(f"Processing {len(all_elements)} total elements")

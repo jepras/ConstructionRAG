@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import QueryInterface from './QueryInterface';
 import SourcePanel from './SourcePanel';
 import { SearchResult } from '@/lib/api-client';
@@ -31,6 +32,8 @@ export default function ProjectQueryContent({
 }: ProjectQueryContentProps) {
   const [selectedSource, setSelectedSource] = useState<SearchResult | undefined>(undefined);
   const [allSources, setAllSources] = useState<SearchResult[]>([]);
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get('q');
 
   // Extract the actual indexing run ID from the runId parameter
   const indexingRunId = extractUUIDFromSlug(runId);
@@ -65,6 +68,7 @@ export default function ProjectQueryContent({
             onQueryResponse={handleNewQueryResponse}
             onSourceSelect={handleSourceChange}
             selectedSource={selectedSource}
+            initialQuery={initialQuery}
           />
         </div>
       </div>

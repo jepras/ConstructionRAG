@@ -217,6 +217,7 @@ export default function ProjectWikiClient({ slug, optimisticData }: ProjectWikiC
       projectSlug={slug}
       content={firstPageContent?.content || ''}
       currentPage={firstPage?.name || ''}
+      isAuthenticated={true}
     >
       <LazyWikiContent content={firstPageContent!} />
     </WikiLayout>
