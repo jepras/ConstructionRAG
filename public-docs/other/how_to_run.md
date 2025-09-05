@@ -36,3 +36,74 @@ beam deploy beam-app.py:process_documents
 
 ### 
 supabase db push
+
+
+#### Test query for retrieval system 
+python -c "
+import asyncio
+import sys
+sys.path.append('.')
+from tests.integration.test_danish_query_baseline import run_query_with_indexing_run
+
+async def run_multiple():
+    queries = [
+        'adgangskontrol anlæg el sikring',
+        'adk aia',
+        'ventilation hvac varme brugsvand afløbsrør',
+        'belysning hovedledning  føringsveje tavler?',
+        'Hvad handler elenterprisen om?',
+        'Hvad er kravene til sikkerhed og låse?'
+    ]
+
+    run_id = 'b1aa2098-d307-4cbf-94fb-e894c5739222'
+
+    for query in queries:
+        print(f'\n--- Running: {query} ---')
+        await run_query_with_indexing_run(query, run_id)
+
+asyncio.run(run_multiple())
+"
+
+
+
+
+
+
+?
+
+python -c "
+import asyncio
+import sys
+sys.path.append('.')
+from tests.integration.test_danish_query_baseline import run_query_with_indexing_run
+
+async def run_multiple():
+    queries = [
+        'byggeprojekt omfang målsætninger mål leverancer?',
+        'Hvad handler bygge projektet om?',
+        'Hvilke leverancer er der i projektet?',
+        'Hvad er opgavens omfang?',
+        'installation krav fag teknisk beskrivelse',
+        'opgave formål'
+    ]
+
+    run_id = 'b1aa2098-d307-4cbf-94fb-e894c5739222'
+
+    for query in queries:
+        print(f'\n--- Running: {query} ---')
+        await run_query_with_indexing_run(query, run_id)
+
+asyncio.run(run_multiple())
+"
+
+curl -X POST http://localhost:8000/api/wiki/runs \
+    -H "Content-Type: application/json" \
+    -d '{"indexing_run_id": "b1aa2098-d307-4cbf-94fb-e894c5739222"}'
+
+curl -X POST "http://localhost:8000/api/wiki/runs?index_run_id=b1aa2098-d307-4cbf-94fb-e894c5739222" \
+        -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsImtpZCI6IkFDMkJFbCtEWkxJeDNzb3QiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2x2dnlremRkYnlyeGN4Z2lhaHVvLnN1cG
+      FiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJhNGJlOTM1ZC1kZDE3LTRkYjItYWE0ZS1iNDk4OTI3N2JiMWEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzU2OTk4NzkyLCJpYXQiOjE3NTY5OTU
+      xOTIsImVtYWlsIjoiamVwcmFzaGVyQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRh
+      dGEiOnsiZW1haWwiOiJqZXByYXNoZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiYTRiZTkzNWQtZGQxNy00ZGIyLWFhNGUtYjQ5O
+      DkyNzdiYjFhIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTY5OTUxOTJ9XSwic2Vzc2lvbl9pZCI6Im
+      VlYzAxYzIwLTJlNWEtNDBiOC04NzkzLTQzN2I5MzlmYTM3YiIsImlzX2Fub255bW91cyI6ZmFsc2V9.j0G_La0MTX2uz0PcaS7dA-tPAUHPoezMjYMVLZiFUsY")

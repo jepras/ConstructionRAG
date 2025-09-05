@@ -297,7 +297,7 @@ export default function Home() {
           <div className="flex justify-center mt-12">
             <Link href="/projects">
               <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{ animation: 'scale-pulse 2s ease-in-out infinite' }}>
-                Try search on a real project
+                Try search on a real project - no user needed!
               </Button>
             </Link>
           </div>
@@ -327,7 +327,7 @@ export default function Home() {
               </div>
 
               <p className="text-muted-foreground text-sm">
-                Drag and drop your project folder. We process PDFs, spreadsheets and BIM files to build a complete picture.
+                Upload your pdfs or sync your project folder. We process PDFs and spreadsheets to build a complete picture.
               </p>
             </div>
           </div>
@@ -351,7 +351,7 @@ export default function Home() {
                 </div>
               </div>
               <p className="text-muted-foreground text-sm">
-                Our AI synthesizes information into an interactive overview, tailored with custom checklists, tables, and charts for your role.
+                Our AI automatises the extraction of key data and insights from your documents that you normally are spending hours to gather.  
               </p>
             </div>
           </div>
@@ -392,11 +392,20 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <p className="text-muted-foreground text-xs">
-                Query documents in plain English and get immediate, accurate answers with source citations.
+              <p className="text-muted-foreground text-sm">
+                Query document and get immediate, accurate answers with source citations.
               </p>
             </div>
           </div>
+        </div>
+        
+        {/* CTA Button */}
+        <div className="flex justify-center mt-12">
+          <Link href="/projects">
+            <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{ animation: 'scale-pulse 2s ease-in-out infinite' }}>
+              Upload your own project and try it - no user needed!
+            </Button>
+          </Link>
         </div>
       </div>
 

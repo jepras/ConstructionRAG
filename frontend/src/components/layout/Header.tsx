@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -60,8 +61,18 @@ export function Header({ variant }: HeaderProps) {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="text-xl font-bold text-white">
-            specfinder.io
+          <Link href="/" className="flex items-center gap-2.5 group ml-8">
+            <Image
+              src="/favicon-32x32.png"
+              alt="Specfinder"
+              width={28}
+              height={28}
+              className="w-7 h-7"
+              priority
+            />
+            <span className="text-xl font-semibold text-white/90 group-hover:text-white transition-colors">
+              specfinder<span className="text-orange-500">.io</span>
+            </span>
           </Link>
 
           {/* Navigation */}
@@ -127,8 +138,18 @@ export function Header({ variant }: HeaderProps) {
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/dashboard" className="text-xl font-bold text-white">
-          specfinder.io
+        <Link href="/dashboard" className="flex items-center gap-2.5 group ml-8">
+          <Image
+            src="/favicon-32x32.png"
+            alt="Specfinder"
+            width={28}
+            height={28}
+            className="w-7 h-7"
+            priority
+          />
+          <span className="text-xl font-semibold text-white/90 group-hover:text-white transition-colors">
+            specfinder<span className="text-orange-500">.io</span>
+          </span>
         </Link>
 
         {/* Project Selector */}

@@ -28,6 +28,14 @@ export function Footer() {
             <div className="space-y-3 text-sm">
               <div>
                 <Link
+                  href="/upload"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Upload Project
+                </Link>
+              </div>
+              <div>
+                <Link
                   href="/projects"
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
@@ -40,14 +48,6 @@ export function Footer() {
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Pricing
-                </Link>
-              </div>
-              <div>
-                <Link
-                  href="/upload"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Upload Project
                 </Link>
               </div>
             </div>
