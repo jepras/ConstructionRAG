@@ -17,6 +17,7 @@ interface PDFPageViewerProps {
     bbox: number[];
     chunk_id?: string;
   }>;
+  selectedChunkId?: string;  // ID of the selected chunk to highlight differently
   scale?: number;
   onPageClick?: () => void;
   className?: string;
@@ -26,6 +27,7 @@ export default function PDFPageViewerSimple({
   pdfUrl,
   pageNumber,
   highlights = [],
+  selectedChunkId,
   scale = 1.5,
   onPageClick,
   className = '',

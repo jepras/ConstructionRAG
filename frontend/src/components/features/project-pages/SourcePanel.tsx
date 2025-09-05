@@ -5,6 +5,7 @@ import { FileText, Maximize2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchResult } from '@/lib/api-client';
 import { PDFPageViewer, PDFFullViewer } from './PDFViewerWrapper';
+import { deduplicateBboxHighlights } from '@/lib/utils';
 
 interface SourcePanelProps {
   selectedSource?: SearchResult;
@@ -107,43 +108,91 @@ export default function SourcePanel({
 
   // Prepare highlights for all sources on the same page and document as the selected source
   const currentHighlights = selectedSource && allSources
-    ? allSources
-        .filter(source => 
-          // Only include sources from the same page and document
-          (source?.page_number || source?.metadata?.page_number) === 
-            (selectedSource?.page_number || selectedSource?.metadata?.page_number) &&
-          (source?.document_id || source?.metadata?.document_id) === 
-            (selectedSource?.document_id || selectedSource?.metadata?.document_id)
-        )
-        .map(source => ({
-          bbox: source?.bbox || source?.metadata?.bbox,
-          chunk_id: source?.chunk_id,
-        }))
-        .filter(h => h?.bbox && h.bbox.length === 4)
+    ? (() => {
+        const rawHighlights = allSources
+          .filter(source => 
+            // Only include sources from the same page and document
+            (source?.page_number || source?.metadata?.page_number) === 
+              (selectedSource?.page_number || selectedSource?.metadata?.page_number) &&
+            (source?.document_id || source?.metadata?.document_id) === 
+              (selectedSource?.document_id || selectedSource?.metadata?.document_id)
+          )
+          .map(source => ({
+            bbox: source?.bbox || source?.metadata?.bbox,
+            chunk_id: source?.chunk_id,
+          }))
+          .filter((h): h is { bbox: number[]; chunk_id?: string } => {
+            return h?.bbox !== undefined && Array.isArray(h.bbox) && h.bbox.length === 4;
+          });
+        
+        // Apply deduplication to remove overlapping/identical bboxes
+        return deduplicateBboxHighlights(rawHighlights, 0.8, 1);
+      })()
     : [];
   
-  // Debug logging for bbox
+  // Debug logging for bbox deduplication
   console.log('SourcePanel: highlights check:', {
     selectedSourcePage: selectedSource?.page_number || selectedSource?.metadata?.page_number,
     selectedSourceDoc: selectedSource?.document_id || selectedSource?.metadata?.document_id,
     totalSources: allSources?.length || 0,
-    highlightsOnPage: currentHighlights.length,
+    rawHighlightsCount: selectedSource && allSources ? allSources
+      .filter(source => 
+        (source?.page_number || source?.metadata?.page_number) === 
+          (selectedSource?.page_number || selectedSource?.metadata?.page_number) &&
+        (source?.document_id || source?.metadata?.document_id) === 
+          (selectedSource?.document_id || selectedSource?.metadata?.document_id)
+      )
+      .filter(source => (source?.bbox || source?.metadata?.bbox)?.length === 4).length : 0,
+    deduplicatedHighlightsCount: currentHighlights.length,
     currentHighlights: currentHighlights,
   });
 
   // Get all highlights for full viewer (from all sources for the same document)
   const allHighlights = allSources && selectedSource
-    ? allSources
-        .filter(s => 
-          (s?.metadata?.document_id || s?.document_id) === 
-          (selectedSource?.metadata?.document_id || selectedSource?.document_id)
-        )
-        .map(s => ({
-          page_number: s?.page_number || s?.metadata?.page_number || 1,
-          bbox: s?.bbox || s?.metadata?.bbox || [],
-          chunk_id: s?.chunk_id
-        }))
-        .filter(h => h?.bbox && h.bbox.length === 4)
+    ? (() => {
+        // Group highlights by page for per-page deduplication
+        const highlightsByPage = new Map<number, Array<{ bbox: number[], chunk_id?: string }>>();
+        
+        allSources
+          .filter(s => 
+            (s?.metadata?.document_id || s?.document_id) === 
+            (selectedSource?.metadata?.document_id || selectedSource?.document_id)
+          )
+          .forEach(s => {
+            const pageNumber = s?.page_number || s?.metadata?.page_number || 1;
+            const bbox = s?.bbox || s?.metadata?.bbox;
+            
+            if (bbox && bbox.length === 4) {
+              if (!highlightsByPage.has(pageNumber)) {
+                highlightsByPage.set(pageNumber, []);
+              }
+              highlightsByPage.get(pageNumber)!.push({
+                bbox,
+                chunk_id: s?.chunk_id
+              });
+            }
+          });
+        
+        // Deduplicate highlights on each page and convert back to full format
+        const deduplicatedHighlights: Array<{
+          page_number: number,
+          bbox: number[],
+          chunk_id?: string
+        }> = [];
+        
+        Array.from(highlightsByPage.entries()).forEach(([pageNumber, pageHighlights]) => {
+          const deduplicated = deduplicateBboxHighlights(pageHighlights, 0.8, 1);
+          deduplicated.forEach(h => {
+            deduplicatedHighlights.push({
+              page_number: pageNumber,
+              bbox: h.bbox,
+              chunk_id: h.chunk_id
+            });
+          });
+        });
+        
+        return deduplicatedHighlights;
+      })()
     : [];
 
   return (
