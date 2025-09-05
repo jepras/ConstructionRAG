@@ -48,7 +48,7 @@ export default function ProjectQueryContent({
   };
 
   return (
-    <div className="h-full grid grid-cols-1 lg:grid-cols-2">
+    <div className="min-h-[600px] grid grid-cols-1 lg:grid-cols-2">
       {/* Left Side - Query Interface */}
       <div className="min-w-0 flex flex-col col-span-1">
         <div className="px-6 py-4 border-b border-border">

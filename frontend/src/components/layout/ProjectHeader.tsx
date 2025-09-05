@@ -14,6 +14,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 // Helper function to determine the base path based on current context
 function getBasePath(pathname: string): string {
@@ -95,6 +96,23 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
     const currentPath = pathname.replace(`${basePath}/${extractedProjectSlug}/${extractedRunId}`, '');
     const newPath = `${basePath}/${extractedProjectSlug}/${newRunId}${currentPath}`;
     router.push(newPath);
+  };
+
+  const handleShare = async () => {
+    try {
+      // Get the current page URL
+      const currentUrl = window.location.href;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(currentUrl);
+      
+      // Show success toast
+      toast.success("URL copied to clipboard!");
+    } catch (error) {
+      // Fallback for browsers that don't support clipboard API
+      console.error('Failed to copy to clipboard:', error);
+      toast.error("Failed to copy URL. Please copy manually from the address bar.");
+    }
   };
 
   // Find current run info
@@ -193,7 +211,7 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
             )}
 
             {/* Share Button */}
-            <Button size="sm" className="flex items-center gap-2">
+            <Button size="sm" className="flex items-center gap-2" onClick={handleShare}>
               <Share2 className="w-4 h-4" />
               <span>Share</span>
             </Button>

@@ -24,6 +24,8 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
         mermaid.initialize({
           startOnLoad: false,
           theme: 'default',
+          suppressErrorRendering: true, // Suppress error popup displays
+          logLevel: 'error', // Only log errors to console, don't display them
           themeVariables: {
             primaryColor: '#f97316', // orange-500
             primaryTextColor: '#000000',
@@ -43,21 +45,87 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
         
         // Render the diagram
         const { svg } = await mermaid.render(id, children.trim());
-        containerRef.current.innerHTML = svg;
+        
+        // Check if container still exists before setting innerHTML
+        if (containerRef.current) {
+          containerRef.current.innerHTML = svg;
+        }
         
       } catch (error) {
-        console.error('Mermaid rendering error:', error);
+        // Silently handle mermaid errors without logging to avoid console spam
         // Fallback to code block if rendering fails
-        containerRef.current.innerHTML = `
-          <pre class="bg-card border border-border rounded-lg p-4 overflow-x-auto text-sm">
-            <code>${children}</code>
-          </pre>
-        `;
+        if (containerRef.current) {
+          containerRef.current.innerHTML = `
+            <pre class="bg-card border border-border rounded-lg p-4 overflow-x-auto text-sm">
+              <code>${children}</code>
+            </pre>
+          `;
+        }
       }
+      
+      // Hide any mermaid error popups that might still appear
+      const hideErrorPopups = () => {
+        const errorElements = document.querySelectorAll('[class*="mermaid"], [id*="mermaid"]');
+        errorElements.forEach(el => {
+          const errorText = el.textContent || '';
+          if (errorText.includes('Syntax error') || errorText.includes('mermaid version')) {
+            (el as HTMLElement).style.display = 'none';
+          }
+        });
+      };
+      
+      // Run cleanup with delays
+      setTimeout(hideErrorPopups, 100);
+      setTimeout(hideErrorPopups, 500);
     };
 
     renderDiagram();
   }, [children]);
+
+  // Global error cleanup effect
+  useEffect(() => {
+    const hideGlobalMermaidErrors = () => {
+      // Target specific mermaid error elements instead of scanning all elements
+      const errorSelectors = [
+        '[class*="mermaid"]',
+        '[id*="mermaid"]',
+        'div[style*="position: fixed"]',
+        'div[style*="position: absolute"]'
+      ];
+      
+      errorSelectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          const text = el.textContent || '';
+          const className = el.className || '';
+          
+          // Check if element contains mermaid error messages
+          if (
+            text.includes('Syntax error in text') ||
+            text.includes('mermaid version') ||
+            (typeof className === 'string' && className.includes('mermaid') && text.includes('Syntax error'))
+          ) {
+            (el as HTMLElement).style.display = 'none';
+            (el as HTMLElement).style.visibility = 'hidden';
+            (el as HTMLElement).style.opacity = '0';
+            (el as HTMLElement).style.height = '0';
+            (el as HTMLElement).style.overflow = 'hidden';
+          }
+        });
+      });
+    };
+
+    // Run cleanup with delays to catch dynamically added elements
+    const timeouts = [
+      setTimeout(hideGlobalMermaidErrors, 100),
+      setTimeout(hideGlobalMermaidErrors, 500),
+      setTimeout(hideGlobalMermaidErrors, 1000)
+    ];
+    
+    return () => {
+      timeouts.forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
 
   return (
     <div className="my-6">

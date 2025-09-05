@@ -6,7 +6,7 @@ import { Plus } from 'lucide-react';
 export default function AddProjectCard() {
   return (
     <Link 
-      href="/auth/signin"
+      href="/upload"
       className="group relative flex flex-col items-center justify-center p-6 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all duration-200 min-h-[200px]"
     >
       <div className="flex flex-col items-center text-center space-y-3">
@@ -18,7 +18,7 @@ export default function AddProjectCard() {
             Add Project
           </h3>
           <p className="text-sm text-muted-foreground">
-            Login to analyze your own project
+            Create public project or sign up to create private projects.
           </p>
         </div>
       </div>

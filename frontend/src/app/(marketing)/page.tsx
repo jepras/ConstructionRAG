@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Search, Upload, MessageSquare, Download, Info, ArrowUp, Mic } from "lucide-react";
 import Link from "next/link";
 import HowItWorksCard, { ProcessingDiagram } from "@/components/HowItWorksCard";
+import { DragDropVisual } from "@/components/DragDropVisual";
 
 export default function Home() {
   const [query, setQuery] = useState("What are the key requirements for concrete curing?");
@@ -317,15 +318,13 @@ export default function Home() {
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Step 1 */}
           <div className="text-center">
-            <div className="bg-card border border-border rounded-lg p-8 mb-6">
-              <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
+            <div className="bg-card border border-border rounded-lg px-8 py-6 mb-6">
+              <div className="w-10 h-8 bg-primary rounded flex items-center justify-center mx-auto mb-4 text-lg font-bold text-primary-foreground">
                 1
               </div>
               <h3 className="text-xl font-semibold mb-4 text-card-foreground">Upload or sync your documents</h3>
-              <div className="flex justify-center items-center space-x-4 mb-6">
-                <Upload className="w-8 h-8 text-muted-foreground" />
-                <ArrowUp className="w-6 h-6 text-muted-foreground" />
-              </div>
+              
+              <DragDropVisual />
 
               <p className="text-muted-foreground text-sm">
                 Upload your pdfs or sync your project folder. We process PDFs and spreadsheets to build a complete picture.
@@ -337,21 +336,21 @@ export default function Home() {
           <HowItWorksCard
             step={2}
             title="Crunch & Enhance"
-            description="Our AI synthesizes information, enriching it with best practices and expert checklists to create a clear, actionable project overview."
+            description="Our AI extracts key data from your construction project folders, automating what you usually are spending hours to gather"
           >
             <ProcessingDiagram />
           </HowItWorksCard>
 
           {/* Step 3 */}
           <div className="text-center">
-            <div className="bg-card border border-border rounded-lg p-8 mb-6">
-              <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
+            <div className="bg-card border border-border rounded-lg px-8 py-6 mb-6">
+              <div className="w-10 h-8 bg-primary rounded flex items-center justify-center mx-auto mb-4 text-lg font-bold text-primary-foreground">
                 3
               </div>
               <h3 className="text-xl font-semibold mb-4 text-card-foreground">Ask critical questions</h3>
               <div className="bg-secondary border border-border rounded-lg p-4 mb-6 space-y-2">
                 {/* Chat-like interface */}
-                <div>
+                <div className="flex justify-start">
                   <div className="bg-primary text-primary-foreground p-2 rounded-lg text-xs max-w-md inline-block text-left">
                     What are the longest lead time items?
                   </div>
@@ -364,7 +363,7 @@ export default function Home() {
                     Custom steel trusses (TR-1) require a 16 week lead time. [procurement.xlsx]
                   </div>
                 </div>
-                <div>
+                <div className="flex justify-start">
                   <div className="bg-primary text-primary-foreground p-2 rounded-lg text-xs max-w-md inline-block text-left">
                     Any conflicts between electrical and HVAC plans?
                   </div>
@@ -387,7 +386,7 @@ export default function Home() {
         
         {/* CTA Button */}
         <div className="flex justify-center mt-12">
-          <Link href="/projects">
+          <Link href="/upload">
             <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{ animation: 'scale-pulse 2s ease-in-out infinite' }}>
               Upload your own project and try it - no user needed!
             </Button>

@@ -17,9 +17,9 @@ interface UploadFormProps {
 export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [files, setFiles] = useState<File[]>([])
   const [email, setEmail] = useState("")
-  const [isPublic, setIsPublic] = useState(true)
-  const [shareWithAI, setShareWithAI] = useState(true)
-  const [language, setLanguage] = useState("English")
+  const [isPublic] = useState(true) // Always true for public upload form
+  const [shareWithAI] = useState(true) // Always true for public upload form
+  const [language, setLanguage] = useState("Danish")
   const [validationComplete, setValidationComplete] = useState(false)
   const [filesAreValid, setFilesAreValid] = useState(false)
   const [estimatedTime, setEstimatedTime] = useState(0)
@@ -98,24 +98,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
       </div>
 
       <div className="bg-card border border-border rounded-lg p-6">
-        <p className="text-sm text-muted-foreground mb-4">
-          It might take a few hours for our AI to crunch your PDFs, images & tables, depending on the content.
-          Add your email and you can test this first thing tomorrow with your morning coffee on site!
-        </p>
-
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="your.email@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={uploadMutation.isPending}
-              className="mt-1"
-            />
-          </div>
 
           <div className="space-y-4">
             <div>
@@ -137,13 +120,10 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsPublic(false)}
-                  disabled={uploadMutation.isPending}
+                  disabled={true}
                   className={cn(
-                    "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all relative",
-                    !isPublic 
-                      ? "bg-primary text-primary-foreground border-primary" 
-                      : "bg-card border-border hover:bg-secondary"
+                    "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all relative opacity-50 cursor-not-allowed",
+                    "bg-card border-border"
                   )}
                 >
                   <Lock className="h-4 w-4" />
@@ -174,13 +154,10 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShareWithAI(false)}
-                  disabled={uploadMutation.isPending}
+                  disabled={true}
                   className={cn(
-                    "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all relative",
-                    !shareWithAI 
-                      ? "bg-primary text-primary-foreground border-primary" 
-                      : "bg-card border-border hover:bg-secondary"
+                    "flex items-center justify-center gap-2 p-3 rounded-lg border transition-all relative opacity-50 cursor-not-allowed",
+                    "bg-card border-border"
                   )}
                 >
                   <Shield className="h-4 w-4" />
@@ -193,35 +170,35 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
             </div>
           </div>
 
-          <div>
+          <div className="opacity-60 pointer-events-none">
             <Label className="text-sm font-medium mb-2 block">Expert Modules <span className="text-xs text-primary">PRO</span></Label>
-            <div className="grid grid-cols-2 gap-3 opacity-50">
-              <div className="p-3 bg-card border border-border rounded-lg">
-                <span className="text-sm">🛡️ Security Tender Expert</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-muted border border-border rounded-lg">
+                <span className="text-sm text-muted-foreground">🛡️ Security Tender Expert</span>
               </div>
-              <div className="p-3 bg-card border border-border rounded-lg">
-                <span className="text-sm">💧 Moisture Risk Expert</span>
+              <div className="p-3 bg-muted border border-border rounded-lg">
+                <span className="text-sm text-muted-foreground">💧 Moisture Risk Expert</span>
               </div>
-              <div className="p-3 bg-card border border-border rounded-lg">
-                <span className="text-sm">🏗️ Structural Integrity Analyst</span>
+              <div className="p-3 bg-muted border border-border rounded-lg">
+                <span className="text-sm text-muted-foreground">🏗️ Structural Integrity Analyst</span>
               </div>
-              <div className="p-3 bg-card border border-border rounded-lg">
-                <span className="text-sm">🏢 LEED Certification Assistant</span>
+              <div className="p-3 bg-muted border border-border rounded-lg">
+                <span className="text-sm text-muted-foreground">🏢 LEED Certification Assistant</span>
               </div>
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 opacity-60 pointer-events-none">
             <div>
-              <Label className="text-sm font-medium mb-2 block">Custom Checklist <span className="text-xs text-primary">PRO</span></Label>
-              <Button variant="outline" className="w-full opacity-50" disabled>
+              <Label className="text-sm font-medium mb-2 block text-muted-foreground">Custom Checklist <span className="text-xs text-primary">PRO</span></Label>
+              <Button variant="outline" className="w-full bg-muted text-muted-foreground border-muted" disabled>
                 + Add Checks
               </Button>
             </div>
 
             <div>
-              <Label className="text-sm font-medium mb-2 block">Best Practice Docs <span className="text-xs text-primary">PRO</span></Label>
-              <div className="p-8 border-2 border-dashed border-border rounded-lg text-center opacity-50">
+              <Label className="text-sm font-medium mb-2 block text-muted-foreground">Best Practice Docs <span className="text-xs text-primary">PRO</span></Label>
+              <div className="p-8 border-2 border-dashed border-muted rounded-lg text-center bg-muted/20">
                 <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
                 <p className="text-xs text-muted-foreground mt-1">PDF files only</p>
@@ -238,15 +215,29 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
               disabled={uploadMutation.isPending}
               className="w-full mt-1 px-3 py-2 bg-input border border-border rounded-lg text-foreground"
             >
-              <option value="English">English</option>
               <option value="Danish">Danish</option>
-              <option value="Swedish">Swedish</option>
-              <option value="Norwegian">Norwegian</option>
-              <option value="German">German</option>
-              <option value="French">French</option>
-              <option value="Spanish">Spanish</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-6">
+        <p className="text-sm text-muted-foreground mb-4">
+          It might take a few hours for our AI to crunch your PDFs, images & tables, depending on the content.
+          Add your email and you can test this first thing tomorrow with your morning coffee on site!
+        </p>
+        <div>
+          <Label htmlFor="email">Email *</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="your.email@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={uploadMutation.isPending}
+            className="mt-1"
+            required
+          />
         </div>
       </div>
 

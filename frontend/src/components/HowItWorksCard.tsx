@@ -11,8 +11,8 @@ interface HowItWorksCardProps {
 export default function HowItWorksCard({ step, title, description, children }: HowItWorksCardProps) {
   return (
     <div className="text-center">
-      <div className="bg-card border border-border rounded-lg p-8 mb-6">
-        <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold text-primary-foreground">
+      <div className="bg-card border border-border rounded-lg px-8 py-6 mb-6">
+        <div className="w-10 h-8 bg-primary rounded flex items-center justify-center mx-auto mb-4 text-lg font-bold text-primary-foreground">
           {step}
         </div>
         <h3 className="text-xl font-semibold mb-4 text-card-foreground">{title}</h3>

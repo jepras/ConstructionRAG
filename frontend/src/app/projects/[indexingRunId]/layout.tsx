@@ -40,7 +40,7 @@ export default function PublicProjectLayout({ children, params }: PublicProjectL
       )}
       <main className="flex-1">
         <div className="container mx-auto px-4 py-6">
-          <div className="bg-card border border-border rounded-lg shadow-sm min-h-[calc(100vh-200px)]">
+          <div className="bg-card border border-border rounded-lg shadow-sm">
             {children}
           </div>
         </div>
