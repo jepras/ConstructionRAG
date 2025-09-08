@@ -265,6 +265,7 @@ async def create_upload(
                     "status": "pending",
                     "created_at": "now()",
                     "access_level": "public",
+                    "email": email,
                 }
             ).execute()
 

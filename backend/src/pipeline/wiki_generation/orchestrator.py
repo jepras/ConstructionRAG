@@ -231,6 +231,9 @@ class WikiGenerationOrchestrator:
                 f"Successfully generated {len(generated_pages)} wiki pages",
             )
 
+            # Send completion email for anonymous uploads
+            await self._send_completion_email_if_needed(index_run_id, upload_type_enum)
+
             # Update wiki run with final data
             final_wiki_run = await self._get_wiki_run(wiki_run.id)
 
@@ -493,3 +496,55 @@ class WikiGenerationOrchestrator:
         except Exception as e:
             logger.error(f"Failed to delete wiki run: {e}")
             return False
+
+    async def _send_completion_email_if_needed(self, index_run_id: str, upload_type: UploadType) -> None:
+        """Send completion email for anonymous uploads if email is available."""
+        try:
+            # Only send emails for anonymous email uploads
+            if upload_type != UploadType.EMAIL:
+                logger.debug(f"Skipping email for upload type: {upload_type}")
+                return
+
+            # Get email from indexing run
+            indexing_run_response = (
+                self.supabase.table("indexing_runs")
+                .select("email")
+                .eq("id", index_run_id)
+                .execute()
+            )
+
+            if not indexing_run_response.data:
+                logger.warning(f"No indexing run found for ID: {index_run_id}")
+                return
+
+            email = indexing_run_response.data[0].get("email")
+            if not email:
+                logger.info(f"No email found for indexing run: {index_run_id}")
+                return
+
+            # Generate wiki URL (public project URL)
+            wiki_url = f"https://specfinder.io/projects/{index_run_id}"
+
+            # Send email using Loops service
+            try:
+                from src.services.loops_service import LoopsService
+
+                loops_service = LoopsService()
+                result = await loops_service.send_wiki_completion_email(
+                    email=email,
+                    wiki_url=wiki_url,
+                    project_name="Your Documents",
+                    add_to_audience=True,
+                )
+
+                if result["success"]:
+                    logger.info(f"Wiki completion email sent successfully to {email}")
+                else:
+                    logger.error(f"Failed to send wiki completion email: {result['error']}")
+
+            except Exception as loops_error:
+                logger.error(f"Error initializing Loops service: {loops_error}")
+
+        except Exception as e:
+            logger.error(f"Error sending completion email: {e}")
+            # Don't raise - email failure shouldn't break wiki generation
