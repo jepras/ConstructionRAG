@@ -1,5 +1,10 @@
 import posthog from "posthog-js"
 
+// Temporary debug logging
+console.log('PostHog Key:', process.env.NEXT_PUBLIC_POSTHOG_KEY)
+console.log('PostHog Host:', process.env.NEXT_PUBLIC_POSTHOG_HOST)
+console.log('NODE_ENV:', process.env.NODE_ENV)
+
 posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
   api_host: "/ingest",
   ui_host: "https://eu.posthog.com",
