@@ -1,7 +1,8 @@
 import posthog from 'posthog-js'
 
 posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
-  api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  api_host: "/ingest", // Use the proxy from next.config.ts
+  ui_host: "https://eu.posthog.com",
   defaults: '2025-05-24',
   capture_exceptions: true,
   debug: process.env.NODE_ENV === "development",
