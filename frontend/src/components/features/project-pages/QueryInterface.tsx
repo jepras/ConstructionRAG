@@ -6,6 +6,7 @@ import QueryMessage from './QueryMessage';
 import QueryInput from './QueryInput';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import posthog from 'posthog-js';
 
 interface Message {
   id: string;
@@ -82,6 +83,15 @@ export default function QueryInterface({
       });
       setIsTyping(false);
       
+      // Track successful query response
+      posthog.capture('query_response_received', {
+        is_authenticated: isAuthenticated || false,
+        results_count: response.search_results?.length || 0,
+        response_length: response.response?.length || 0,
+        indexing_run_id: indexingRunId,
+        user_context: isAuthenticated ? 'authenticated' : 'public'
+      });
+      
       // Notify parent component of new search results
       if (onQueryResponse && response.search_results) {
         console.log('QueryInterface: Search results received:', {
@@ -157,6 +167,15 @@ export default function QueryInterface({
       return [...prev, userMessage, assistantMessage];
     });
     setIsTyping(true);
+
+    // Track query submission with authentication context
+    posthog.capture('query_submitted', {
+      is_authenticated: isAuthenticated || false,
+      query_length: query.length,
+      indexing_run_id: indexingRunId,
+      user_context: isAuthenticated ? 'authenticated' : 'public',
+      query_source: initialQuery ? 'url_parameter' : 'direct_input'
+    });
 
     // Make the API call
     console.log('🌐 handleSubmit: Making API call with query:', query);

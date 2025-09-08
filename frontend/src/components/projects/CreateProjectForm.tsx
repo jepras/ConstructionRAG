@@ -9,6 +9,7 @@ import { Globe, Lock, ExternalLink, Shield, Loader2, FolderOpen } from "lucide-r
 import { useCreateProject } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import posthog from 'posthog-js'
 
 interface CreateProjectFormProps {
   onProjectCreated: (projectId: string) => void
@@ -85,6 +86,20 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
 
     createProjectMutation.mutate(projectData, {
       onSuccess: (response) => {
+        // Track authenticated project creation
+        posthog.capture('project_created', {
+          is_authenticated: true,
+          upload_type: 'user_project',
+          project_name: projectName,
+          file_count: files.length,
+          total_file_size_mb: Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024 * 100) / 100,
+          is_public: isPublic,
+          language: language,
+          selected_experts: selectedExperts,
+          estimated_time_minutes: estimatedTime,
+          user_context: 'authenticated'
+        })
+        
         toast.success(`Project "${projectName}" created successfully!`)
         onProjectCreated(response.project_id || response.id)
       },

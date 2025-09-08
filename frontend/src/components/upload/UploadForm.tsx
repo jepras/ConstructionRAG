@@ -9,6 +9,7 @@ import { Globe, Lock, ExternalLink, Shield, Loader2 } from "lucide-react"
 import { useUploadFiles } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import posthog from 'posthog-js'
 
 interface UploadFormProps {
   onUploadComplete: (indexingRunId: string) => void
@@ -62,6 +63,17 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
     uploadMutation.mutate(formData, {
       onSuccess: (response) => {
+        // Track public upload success
+        posthog.capture('document_uploaded', {
+          is_authenticated: false,
+          upload_type: 'email',
+          file_count: files.length,
+          total_file_size_mb: Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024 * 100) / 100,
+          language: language,
+          estimated_time_minutes: estimatedTime,
+          user_context: 'public'
+        })
+        
         toast.success("Documents uploaded and processing started!")
         if (response.index_run_id) {
           onUploadComplete(response.index_run_id)

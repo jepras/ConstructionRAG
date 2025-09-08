@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import posthog from 'posthog-js';
 
 interface FloatingChatBarProps {
   projectSlug: string;
@@ -28,6 +29,15 @@ export default function FloatingChatBar({ projectSlug, isAuthenticated = false }
       // Public projects use single slug format: /projects/{indexingRunId}/query
       queryUrl = `/projects/${projectSlug}/query?q=${encodeURIComponent(query.trim())}`;
     }
+
+    // Track query initiation from wiki floating chat bar
+    posthog.capture('query_initiated_from_wiki', {
+      is_authenticated: isAuthenticated,
+      query_length: query.trim().length,
+      project_slug: projectSlug,
+      user_context: isAuthenticated ? 'authenticated' : 'public',
+      query_source: 'floating_chat_bar'
+    });
 
     // Open in new tab
     window.open(queryUrl, '_blank');
