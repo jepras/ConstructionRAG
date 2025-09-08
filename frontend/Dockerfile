@@ -46,6 +46,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Runtime environment variable for Loops API (server-side only, template IDs hardcoded)
+# This will be injected by Railway at runtime
+ARG LOOPS_API_KEY
+ENV LOOPS_API_KEY=$LOOPS_API_KEY
+
 # Create nextjs user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

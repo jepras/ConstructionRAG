@@ -2,10 +2,51 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function Footer() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const handleNewsletterSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email) {
+      setMessage("Please enter your email");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/newsletter/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage("Success! Check your email to confirm.");
+        setEmail("");
+      } else {
+        setMessage(data.error || "Something went wrong. Please try again.");
+      }
+    } catch (error) {
+      console.error("Newsletter signup error:", error);
+      setMessage("Failed to subscribe. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <footer className="border-t border-border bg-card mt-auto">
       <div className="container mx-auto px-4 py-8">
@@ -69,23 +110,39 @@ export function Footer() {
             <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
               Sign up for Product Updates
             </h3>
-            <div className="space-y-3">
+            <form onSubmit={handleNewsletterSignup} className="space-y-3">
               <div className="flex space-x-2">
                 <Input
                   type="email"
                   placeholder="Enter your email"
                   className="flex-1"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                  required
                 />
-                <Button variant="default" size="sm">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                <Button type="submit" variant="default" size="sm" disabled={loading}>
+                  {loading ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
                 </Button>
               </div>
+              {message && (
+                <p className={`text-xs ${message.includes("Success") ? "text-green-500" : "text-orange-500"}`}>
+                  {message}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 No spam, just updates on new features and improvements.
               </p>
-            </div>
+            </form>
           </div>
         </div>
 

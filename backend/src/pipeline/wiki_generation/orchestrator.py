@@ -535,6 +535,7 @@ class WikiGenerationOrchestrator:
                     wiki_url=wiki_url,
                     project_name="Your Documents",
                     add_to_audience=True,
+                    user_group="Public uploaders",
                 )
 
                 if result["success"]:
