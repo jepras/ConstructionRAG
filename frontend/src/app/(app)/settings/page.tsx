@@ -45,9 +45,6 @@ const settingsNavItems = [
 function ProfileSection({ user }: { user: { id: string; email: string; profile?: { full_name?: string } } | null }) {
   const [fullName, setFullName] = useState(user?.profile?.full_name || "");
   const [email, setEmail] = useState(user?.email || "");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSaveChanges = async () => {
@@ -67,21 +64,6 @@ function ProfileSection({ user }: { user: { id: string; email: string; profile?:
     }
   };
 
-  const handlePasswordChange = async () => {
-    if (newPassword !== confirmPassword) {
-      toast.error("New passwords don't match");
-      return;
-    }
-    setIsLoading(true);
-    // TODO: Implement password change API call
-    setTimeout(() => {
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      toast.success("Password updated successfully!");
-      setIsLoading(false);
-    }, 1000);
-  };
 
   return (
     <div className="space-y-6">
@@ -131,64 +113,6 @@ function ProfileSection({ user }: { user: { id: string; email: string; profile?:
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-foreground">Change Password</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Update your account password.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword" className="text-sm font-medium text-foreground">
-              Current Password
-            </Label>
-            <Input 
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="bg-input"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="newPassword" className="text-sm font-medium text-foreground">
-              New Password
-            </Label>
-            <Input 
-              id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="bg-input"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
-              Confirm New Password
-            </Label>
-            <Input 
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="bg-input"
-            />
-          </div>
-
-          <div className="pt-4">
-            <Button 
-              variant="default" 
-              onClick={handlePasswordChange}
-              disabled={isLoading || !currentPassword || !newPassword || !confirmPassword}
-            >
-              {isLoading ? "Updating..." : "Update Password"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -229,23 +153,8 @@ function BillingSection() {
                 <div className="font-medium text-foreground">Amount</div>
                 <div className="font-medium text-foreground">Status</div>
               </div>
-              <div className="grid grid-cols-3 gap-4 p-4 border-b border-border">
-                <div className="text-foreground">June 30, 2024</div>
-                <div className="text-foreground">$99.00</div>
-                <div>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-                    Paid
-                  </Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4 p-4">
-                <div className="text-foreground">May 31, 2024</div>
-                <div className="text-foreground">$99.00</div>
-                <div>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-                    Paid
-                  </Badge>
-                </div>
+              <div className="p-8 text-center">
+                <p className="text-muted-foreground">No payment history available</p>
               </div>
             </div>
           </div>
@@ -289,23 +198,8 @@ function OrganisationSection() {
           <div>
             <h3 className="text-lg font-medium text-foreground mb-4">Team Members</h3>
             <div className="border border-border rounded-lg">
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <div>
-                  <p className="font-medium text-foreground">You (User)</p>
-                  <p className="text-sm text-muted-foreground">user@example.com</p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  Owner
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium text-foreground">Jane Doe</p>
-                  <p className="text-sm text-muted-foreground">jane@example.com</p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  Admin
-                </Badge>
+              <div className="p-8 text-center">
+                <p className="text-muted-foreground">No team members to display</p>
               </div>
             </div>
           </div>
