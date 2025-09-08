@@ -132,11 +132,31 @@ class PageContentRetrievalStep(PipelineStep):
             return result
 
         except Exception as e:
-            logger.error(f"Page content retrieval failed: {e}")
+            # Log the full error details for debugging
+            logger.error(f"Page content retrieval failed: {e}", exc_info=True)
+            
+            # Determine error code based on exception type
+            if "VOYAGE_API_KEY" in str(e) or "api_key" in str(e).lower():
+                error_code = ErrorCode.CONFIGURATION_ERROR
+                error_message = f"Page content retrieval failed - API configuration issue: {str(e)}"
+            elif "timeout" in str(e).lower() or "connection" in str(e).lower():
+                error_code = ErrorCode.EXTERNAL_API_ERROR
+                error_message = f"Page content retrieval failed - Network/timeout issue: {str(e)}"
+            elif "database" in str(e).lower() or "supabase" in str(e).lower():
+                error_code = ErrorCode.DATABASE_ERROR
+                error_message = f"Page content retrieval failed - Database issue: {str(e)}"
+            else:
+                error_code = ErrorCode.INTERNAL_ERROR
+                error_message = f"Page content retrieval failed - Unexpected error: {str(e)}"
+            
             raise AppError(
-                "Page content retrieval failed",
-                error_code=ErrorCode.DATABASE_ERROR,
-                details={"reason": str(e)},
+                error_message,
+                error_code=error_code,
+                details={
+                    "original_error": str(e),
+                    "error_type": type(e).__name__,
+                    "step": "page_content_retrieval"
+                },
             ) from e
 
     async def validate_prerequisites_async(self, input_data: dict[str, Any]) -> bool:
@@ -165,16 +185,30 @@ class PageContentRetrievalStep(PipelineStep):
 
         for query in queries:
             logger.info(f"🔍 [Wiki:Retrieval] Processing query: '{query[:80]}...'")
-
-            # Generate embedding using shared service
-            query_embedding = await self.retrieval_core.generate_query_embedding(query)
-
-            # Search using shared retrieval core with HNSW optimization
-            similar_chunks = await self.retrieval_core.search_with_fallback(
-                query_embedding,
-                indexing_run_id=indexing_run_id,
-                language="danish"
-            )
+            
+            try:
+                # Generate embedding using shared service
+                query_embedding = await self.retrieval_core.generate_query_embedding(query)
+                logger.debug(f"🔍 [Wiki:Retrieval] Generated embedding for query: {len(query_embedding)} dimensions")
+                
+            except Exception as e:
+                logger.error(f"🔍 [Wiki:Retrieval] Failed to generate embedding for query '{query[:50]}...': {e}")
+                # Skip this query and continue with others
+                continue
+            
+            try:
+                # Search using shared retrieval core with HNSW optimization
+                similar_chunks = await self.retrieval_core.search_with_fallback(
+                    query_embedding,
+                    indexing_run_id=indexing_run_id,
+                    language="danish"
+                )
+                logger.debug(f"🔍 [Wiki:Retrieval] Search completed for query: {len(similar_chunks)} results")
+                
+            except Exception as e:
+                logger.error(f"🔍 [Wiki:Retrieval] Failed to search for query '{query[:50]}...': {e}")
+                # Skip this query and continue with others
+                similar_chunks = []
 
             logger.info(f"📊 [Wiki:Retrieval] Query retrieved {len(similar_chunks)} chunks")
             

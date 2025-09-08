@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     beam_webhook_url: str | None = None
     beam_auth_token: str | None = None
 
+    # PostHog Analytics & Error Tracking
+    posthog_api_key: str | None = None
+    posthog_host: str = "https://eu.posthog.com"
+
     # Application
     app_name: str = "ConstructionRAG"
     app_version: str = "1.0.0"

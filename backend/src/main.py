@@ -65,6 +65,14 @@ async def validate_startup_config() -> None:
     cfg.validate_startup()
 
 
+@app.on_event("shutdown")
+async def shutdown_services() -> None:
+    """Clean shutdown of services."""
+    from src.services.posthog_service import posthog_service
+    
+    posthog_service.shutdown()
+
+
 # Health check endpoint
 @app.get("/")
 async def root():

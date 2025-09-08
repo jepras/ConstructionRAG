@@ -9,6 +9,7 @@ from src.middleware.request_id import get_request_id
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 from src.utils.logging import get_logger
+from src.services.posthog_service import posthog_service
 
 logger = get_logger(__name__)
 
@@ -17,6 +18,20 @@ async def app_error_handler(request: Request, exc: AppError):
     request_id = exc.request_id or get_request_id()
     payload = exc.to_response()
     payload["request_id"] = request_id
+    
+    # Capture in PostHog
+    posthog_service.capture_exception(
+        exc,
+        properties={
+            "error_code": exc.error_code.value,
+            "request_id": request_id,
+            "path": str(request.url.path),
+            "method": request.method,
+            "status_code": exc.status_code,
+            "source": "backend_api"
+        }
+    )
+    
     logger.error(
         "Application error",
         error_code=exc.error_code.value,
@@ -90,6 +105,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 async def general_exception_handler(request: Request, exc: Exception):
     request_id = get_request_id()
+    
+    # Capture unexpected errors in PostHog (these are the most important!)
+    posthog_service.capture_exception(
+        exc,
+        properties={
+            "error_code": ErrorCode.INTERNAL_ERROR.value,
+            "request_id": request_id,
+            "path": str(request.url.path),
+            "method": request.method,
+            "status_code": 500,
+            "source": "backend_api",
+            "severity": "critical"
+        }
+    )
+    
     logger.error(
         "Internal error",
         error_code=ErrorCode.INTERNAL_ERROR.value,
