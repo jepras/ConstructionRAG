@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
-import { PostHogProvider } from "@/components/providers/PostHogProvider";
 import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
@@ -39,7 +38,6 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthProvider>
-            <PostHogProvider />
             <div className="min-h-screen flex flex-col">
               {children}
             </div>
