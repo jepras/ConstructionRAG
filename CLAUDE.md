@@ -55,6 +55,13 @@ Development Frontend on Streamlit
 Production React Frontend on Railway 
 
 ### URLs
+
+#### Production
+- **Frontend**: https://specfinder.io
+- **Backend API**: https://api.specfinder.io
+- **API Documentation**: https://api.specfinder.io/docs
+
+#### Local Development
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - API Documentation: http://localhost:8000/docs
