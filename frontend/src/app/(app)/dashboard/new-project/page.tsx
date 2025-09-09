@@ -15,6 +15,8 @@ export default function NewProjectPage() {
 
   const handleProjectCreated = (projectId: string) => {
     setIsCreated(true)
+    // Scroll to top for better UX when showing success message
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (

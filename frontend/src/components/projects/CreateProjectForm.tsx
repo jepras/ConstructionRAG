@@ -74,6 +74,28 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
       return
     }
 
+    // Generate a temporary project ID for immediate redirect
+    const tempProjectId = `temp-project-${Date.now()}-${Math.random().toString(36).substring(2)}`
+
+    // Track authenticated project creation immediately
+    posthog.capture('project_created', {
+      is_authenticated: true,
+      upload_type: 'user_project',
+      project_name: projectName,
+      file_count: files.length,
+      total_file_size_mb: Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024 * 100) / 100,
+      is_public: isPublic,
+      language: language,
+      selected_experts: selectedExperts,
+      estimated_time_minutes: estimatedTime,
+      user_context: 'authenticated'
+    })
+
+    // Show success message and redirect immediately
+    toast.success(`Project "${projectName}" created successfully!`)
+    onProjectCreated(tempProjectId)
+
+    // Create project in background (fire and forget)
     const projectData = {
       name: projectName,
       initial_version_name: initialVersion,
@@ -86,26 +108,13 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
 
     createProjectMutation.mutate(projectData, {
       onSuccess: (response) => {
-        // Track authenticated project creation
-        posthog.capture('project_created', {
-          is_authenticated: true,
-          upload_type: 'user_project',
-          project_name: projectName,
-          file_count: files.length,
-          total_file_size_mb: Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024 * 100) / 100,
-          is_public: isPublic,
-          language: language,
-          selected_experts: selectedExperts,
-          estimated_time_minutes: estimatedTime,
-          user_context: 'authenticated'
-        })
-        
-        toast.success(`Project "${projectName}" created successfully!`)
-        onProjectCreated(response.project_id || response.id)
+        // Background project creation succeeded - user already redirected
+        console.log("Background project creation completed:", response.project_id || response.id)
       },
       onError: (error) => {
-        console.error("Error creating project:", error)
-        toast.error("Failed to create project. Please try again.")
+        // Background project creation failed - user already redirected, but log the error
+        console.error("Background project creation failed:", error)
+        // Optionally could show a notification, but user is already on success page
       }
     })
   }
