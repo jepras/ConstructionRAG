@@ -86,13 +86,20 @@ class StorageService:
                 if not content_type:
                     content_type = "text/plain"
             else:
-                # Read file content
-                with open(file_path, "rb") as f:
-                    file_content = f.read()
-
                 # Determine content type if not provided
                 if not content_type:
                     content_type = self._get_content_type(file_path)
+                
+                # Read file content with proper encoding for text files
+                if content_type and (content_type.startswith("text/") or "text/markdown" in content_type):
+                    # Read text files with UTF-8 encoding to preserve characters
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        text_content = f.read()
+                    file_content = text_content.encode("utf-8")
+                else:
+                    # Read binary files as usual
+                    with open(file_path, "rb") as f:
+                        file_content = f.read()
 
             # Server-side uploads require admin client to bypass storage RLS
             client = self._resolver.get_client(trusted=True, operation="upload")
@@ -340,15 +347,15 @@ class StorageService:
                     temp_file_path = temp_file.name
 
                 try:
-                    # Upload the temporary file
-                    url = await self.upload_file(temp_file_path, storage_path, "text/markdown")
+                    # Upload the temporary file with explicit UTF-8 charset
+                    url = await self.upload_file(temp_file_path, storage_path, "text/markdown; charset=utf-8")
                 finally:
                     # Clean up temporary file
                     if os.path.exists(temp_file_path):
                         os.unlink(temp_file_path)
             else:
-                # Upload file from path
-                url = await self.upload_file(file_path, storage_path, "text/markdown")
+                # Upload file from path with explicit UTF-8 charset
+                url = await self.upload_file(file_path, storage_path, "text/markdown; charset=utf-8")
 
             # Return metadata
             return {
@@ -393,8 +400,8 @@ class StorageService:
                 temp_file_path = temp_file.name
 
             try:
-                # Use the existing upload_file method which handles content types properly
-                url = await self.upload_file(temp_file_path, storage_path, "text/markdown")
+                # Use the existing upload_file method with explicit UTF-8 charset
+                url = await self.upload_file(temp_file_path, storage_path, "text/markdown; charset=utf-8")
 
                 logger.info(f"Uploaded wiki metadata to storage: {storage_path} -> {url}")
 
@@ -625,7 +632,7 @@ class StorageService:
             ".pdf": "application/pdf",
             ".html": "text/html",
             ".txt": "text/plain",
-            ".md": "text/markdown",
+            ".md": "text/markdown; charset=utf-8",
         }
         return content_types.get(ext, "application/octet-stream")
 

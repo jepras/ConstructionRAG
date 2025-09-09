@@ -140,6 +140,12 @@ class StructureGenerationStep(PipelineStep):
         # Call LLM with analytics tracking
         response = await self._call_openrouter_api(prompt, max_tokens=3000, indexing_run_id=indexing_run_id)
 
+        # Debug logging for LLM response
+        logger.info(f"📋 [Wiki:Structure] LLM response received, length: {len(response)} chars")
+        logger.debug(f"📋 [Wiki:Structure] Raw LLM response preview: {response[:500]}...")
+        if len(response) > 500:
+            logger.debug(f"📋 [Wiki:Structure] Raw LLM response end: ...{response[-200:]}")
+
         # Parse JSON response
         wiki_structure = self._parse_json_response(response)
 
@@ -288,45 +294,91 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 
     def _parse_json_response(self, llm_response: str) -> dict[str, Any]:
         """Parse JSON response from LLM, handling markdown code blocks."""
+        logger.debug(f"📋 [Wiki:Structure] Attempting to parse JSON response, length: {len(llm_response)}")
+        
+        # Handle completely empty response
+        if not llm_response or not llm_response.strip():
+            logger.error(f"📋 [Wiki:Structure] Empty LLM response received")
+            raise ValueError("Empty response from LLM")
+        
+        original_response = llm_response
+        
         try:
             # Try to parse directly first
-            return json.loads(llm_response.strip())
-        except json.JSONDecodeError:
-            # Try to extract JSON from markdown code blocks
-            import re
+            logger.debug(f"📋 [Wiki:Structure] Attempting direct JSON parse")
+            result = json.loads(llm_response.strip())
+            logger.info(f"📋 [Wiki:Structure] ✅ Direct JSON parse successful")
+            return result
+        except json.JSONDecodeError as e:
+            logger.debug(f"📋 [Wiki:Structure] Direct JSON parse failed: {e}")
 
-            # Look for JSON code blocks
-            json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
-            match = re.search(json_pattern, llm_response, re.DOTALL)
+        import re
 
+        # Strategy 1: Look for JSON code blocks with various patterns
+        logger.debug(f"📋 [Wiki:Structure] Trying markdown code block extraction")
+        patterns = [
+            r"```json\s*\n?(.*?)\n?\s*```",  # ```json\n{...}\n```
+            r"```\s*\n?(\{.*?\})\s*\n?```",  # ```\n{...}\n```  
+            r"```(?:json)?\s*(\{.*?\})\s*```",  # Original pattern
+        ]
+        
+        for i, pattern in enumerate(patterns):
+            match = re.search(pattern, llm_response, re.DOTALL)
             if match:
                 try:
-                    return json.loads(match.group(1))
-                except json.JSONDecodeError:
-                    pass
+                    logger.debug(f"📋 [Wiki:Structure] Pattern {i+1} matched, attempting parse")
+                    result = json.loads(match.group(1).strip())
+                    logger.info(f"📋 [Wiki:Structure] ✅ Code block extraction successful with pattern {i+1}")
+                    return result
+                except json.JSONDecodeError as e:
+                    logger.debug(f"📋 [Wiki:Structure] Pattern {i+1} matched but JSON parse failed: {e}")
 
-            # Try to find JSON-like content between curly braces
-            brace_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
-            match = re.search(brace_pattern, llm_response, re.DOTALL)
+        # Strategy 2: Manual cleanup approach
+        logger.debug(f"📋 [Wiki:Structure] Trying manual cleanup approach")
+        cleaned_response = llm_response.strip()
+        
+        # Remove various markdown prefixes/suffixes
+        cleanup_pairs = [
+            ("```json\n", "\n```"),
+            ("```json", "```"),
+            ("```\n", "\n```"),
+            ("```", "```"),
+        ]
+        
+        for start, end in cleanup_pairs:
+            if cleaned_response.startswith(start) and cleaned_response.endswith(end):
+                cleaned_response = cleaned_response[len(start):-len(end)].strip()
+                logger.debug(f"📋 [Wiki:Structure] Removed markers: '{start}' and '{end}'")
+                break
 
-            if match:
-                try:
-                    return json.loads(match.group(0))
-                except json.JSONDecodeError:
-                    pass
+        try:
+            logger.debug(f"📋 [Wiki:Structure] Attempting parse of cleaned response")
+            result = json.loads(cleaned_response)
+            logger.info(f"📋 [Wiki:Structure] ✅ Manual cleanup parse successful")
+            return result
+        except json.JSONDecodeError as e:
+            logger.debug(f"📋 [Wiki:Structure] Manual cleanup parse failed: {e}")
 
-            # If all else fails, try to clean up the response and parse
-            cleaned_response = llm_response.strip()
-            # Remove common prefixes/suffixes
-            if cleaned_response.startswith("```json"):
-                cleaned_response = cleaned_response[7:]
-            if cleaned_response.endswith("```"):
-                cleaned_response = cleaned_response[:-3]
-
+        # Strategy 3: Find JSON-like content between curly braces (more permissive)
+        logger.debug(f"📋 [Wiki:Structure] Trying brace pattern extraction")
+        brace_pattern = r"(\{(?:[^{}]|{[^{}]*})*\})"
+        matches = re.findall(brace_pattern, llm_response, re.DOTALL)
+        
+        for i, match in enumerate(matches):
             try:
-                return json.loads(cleaned_response.strip())
-            except json.JSONDecodeError:
-                raise ValueError(f"Failed to parse JSON response: {llm_response[:200]}...")
+                logger.debug(f"📋 [Wiki:Structure] Trying brace match {i+1}/{len(matches)}")
+                result = json.loads(match.strip())
+                logger.info(f"📋 [Wiki:Structure] ✅ Brace extraction successful with match {i+1}")
+                return result
+            except json.JSONDecodeError as e:
+                logger.debug(f"📋 [Wiki:Structure] Brace match {i+1} parse failed: {e}")
+
+        # Final failure with detailed logging
+        logger.error(f"📋 [Wiki:Structure] ❌ All JSON parsing strategies failed")
+        logger.error(f"📋 [Wiki:Structure] Response preview (first 300 chars): {original_response[:300]}")
+        logger.error(f"📋 [Wiki:Structure] Response preview (last 300 chars): {original_response[-300:]}")
+        
+        raise ValueError(f"Failed to parse JSON response after trying all strategies. Response length: {len(original_response)}. Preview: {original_response[:200]}...")
 
     def _validate_wiki_structure(self, wiki_structure: dict[str, Any]) -> dict[str, Any]:
         """Validate and clean wiki structure."""

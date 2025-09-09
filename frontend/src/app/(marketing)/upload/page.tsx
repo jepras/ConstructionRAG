@@ -39,8 +39,14 @@ export default function UploadPage() {
               We are on it!
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              We are creating your first generic overview with your documents. We know all workers have different needs, which is why we have our expert modules. However, they require quite some maintenance so they are behind a paywall. If you want to see what it looks like, then you can see an example project{" "}
-              <a href="#" className="text-primary hover:underline">here</a>. See you tomorrow!
+              In the meantime, you can look through our{" "}
+              <a href="/projects" className="text-primary hover:underline">
+                public projects
+              </a>{" "}
+              and test out the chat feature on the public projects or see the features we offer for users on the{" "}
+              <a href="/pricing" className="text-primary hover:underline">
+                pricing page
+              </a>.
             </p>
           </div>
         )}

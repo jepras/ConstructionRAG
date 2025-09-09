@@ -220,8 +220,10 @@ VIGTIGT!
 INSTRUKTIONER:
 - Svar på dansk
 - Vær præcis og faktuel
-- Citer relevante dele af kilderne når det er relevant - brug ALTID det faktiske dokumentnavn og sidetal som [dokumentnavn.pdf, side X]. Eksempel: [projektbeskrivelse.pdf, side 5]
-- VIGTIG: Undgå generiske referencer som "Kilde 1" eller lignende - brug ALTID det virkelige dokumentnavn
+- Citer relevante dele af kilderne når det er relevant - brug nummererede referencer som [1], [2] osv.
+- Tilføj en "Referencer:" sektion til sidst i dit svar med nummererede kilder i formatet:
+  [1] dokumentnavn.pdf, side X
+  [2] andet-dokument.pdf, side Y
 - Hold svaret under 500 ord
 - Lav gerne mange korte afsnit for at gøre det nemt at læse.
 - Formater dit svar i normal tekst format - ikke noget markdown.

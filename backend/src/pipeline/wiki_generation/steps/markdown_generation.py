@@ -45,14 +45,14 @@ class MarkdownGenerationStep(PipelineStep):
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        
+
         # Initialize LangChain OpenAI client with OpenRouter configuration - AFTER all attributes are set
         try:
             settings = get_settings()
             self.openrouter_api_key = settings.openrouter_api_key
             if not self.openrouter_api_key:
                 raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-            
+
             # Create LangChain ChatOpenAI client configured for OpenRouter
             self.llm_client = ChatOpenAI(
                 model=self.model,
@@ -180,11 +180,6 @@ class MarkdownGenerationStep(PipelineStep):
         retrieved_chunks = page_content.get("retrieved_chunks", [])
         source_docs = page_content.get("source_documents", {})
 
-        # Log source documents for debugging
-        logger.info(f"📄 [Wiki:Citations] Available source documents: {list(source_docs.keys())}")
-        for doc_id, doc_info in source_docs.items():
-            logger.info(f"   📄 {doc_id}: {doc_info.get('filename', 'unknown')} ({doc_info.get('chunk_count', 0)} chunks)")
-
         # Limit to top chunks to avoid token overflow
         top_chunks = sorted(retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True)[:20]
 
@@ -207,14 +202,16 @@ class MarkdownGenerationStep(PipelineStep):
                 source_counter += 1
 
             source_ref = source_map[doc_id]
-            
+
             # Get actual filename from source_documents
             doc_info = source_documents.get(doc_id, {})
             filename = doc_info.get("filename", f"document_{doc_id[:8]}")
-            
+
             # Log for debugging
             if len(document_excerpts) < 3:  # Only log first 3 to avoid spam
-                logger.info(f"📋 [Wiki:Citations] Excerpt {len(document_excerpts) + 1}: Using filename '{filename}' for doc_id '{doc_id}'")
+                logger.info(
+                    f"📋 [Wiki:Citations] Excerpt {len(document_excerpts) + 1}: Using filename '{filename}' for doc_id '{doc_id}'"
+                )
 
             excerpt = f"""
 Excerpt {len(document_excerpts) + 1}:
@@ -270,6 +267,12 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
      - Maximum node label width should be 3-4 words
      - NO special characters in node IDs (avoid spaces, hyphens, underscores in IDs)
      - Each line must end with semicolon: A[Start] --> B[Process];
+     - ABSOLUTELY CRITICAL: NEVER use parentheses ( ) inside square bracket node labels [text] - this causes fatal parsing errors
+     - FORBIDDEN: A[Text (with parentheses)] ← THIS WILL FAIL
+     - REQUIRED: A[Text - with dashes] ← USE THIS INSTEAD
+     - REQUIRED: A[Text: with colons] ← OR USE THIS
+     - For time periods, use: A[Process - 2-3 uger] NOT A[Process (2-3 uger)]
+     - For descriptions, use: A[Type: Description] NOT A[Type (Description)]
      - Example: 
        graph TD
            A[Start] --> B{{Decision?}};
@@ -291,6 +294,14 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
        - Show timeline relationships and critical path activities
 
 4. **Tables:**
+   * ONLY use standard Markdown table format - NEVER use DrawIO, mxfile, or any other diagram formats
+   * FORBIDDEN: <mxfile>, DrawIO XML, or any non-Markdown table formats
+   * REQUIRED: Standard Markdown table syntax only:
+     ```
+     | Column 1 | Column 2 | Column 3 |
+     |----------|----------|----------|
+     | Data 1   | Data 2   | Data 3   |
+     ```
    * Use Markdown tables to summarize information such as:
      * Key project requirements, specifications, and acceptance criteria
      * Material quantities, types, suppliers, and delivery schedules
@@ -357,7 +368,7 @@ Generate the comprehensive markdown wiki page:"""
         try:
             # Create message for LangChain
             message = HumanMessage(content=prompt)
-            
+
             # Get PostHog callback for automatic LLM tracking
             posthog_callback = posthog_service.get_langchain_callback(
                 pipeline_step="wiki_markdown_generation",
@@ -365,33 +376,17 @@ Generate the comprehensive markdown wiki page:"""
                 additional_properties={
                     "max_tokens": max_tokens,
                     "step_type": "markdown_generation",
-                    "model": self.model
-                }
+                    "model": self.model,
+                },
             )
-            
+
             # Configure callbacks for the LangChain call
             callbacks = [posthog_callback] if posthog_callback else []
-            
+
             # Make async call to LangChain ChatOpenAI with PostHog callback
-            response = await self.llm_client.ainvoke(
-                [message],
-                config={"callbacks": callbacks} if callbacks else None
-            )
-            
-            content = response.content
-            
-            # Ensure proper UTF-8 encoding for all characters (Danish æøå, quotes, symbols, etc.)
-            if isinstance(content, bytes):
-                content = content.decode('utf-8')
-            elif isinstance(content, str):
-                # Fix any double-encoding issues by re-encoding/decoding
-                try:
-                    content = content.encode('utf-8').decode('utf-8')
-                except UnicodeError:
-                    # If already properly encoded, keep as-is
-                    pass
-            
-            return content
+            response = await self.llm_client.ainvoke([message], config={"callbacks": callbacks} if callbacks else None)
+
+            return response.content
 
         except Exception as e:
             logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
