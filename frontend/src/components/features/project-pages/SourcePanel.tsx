@@ -33,14 +33,6 @@ export default function SourcePanel({
     const currentDocId = selectedSource?.metadata?.document_id || selectedSource?.document_id;
     const previousDocId = pdfUrl ? 'has-url' : 'no-url';
     
-    console.log('SourcePanel: Source changed', {
-      selectedSource,
-      hasDocumentId: !!currentDocId,
-      documentId: currentDocId,
-      indexingRunId,
-      previousState: previousDocId,
-      cacheSize: pdfUrlCache.size
-    });
 
     if (selectedSource?.metadata?.document_id || selectedSource?.document_id) {
       const loadPdfUrl = async () => {
@@ -55,7 +47,6 @@ export default function SourcePanel({
         
         // Check cache first
         if (pdfUrlCache.has(cacheKey)) {
-          console.log('SourcePanel: Using cached PDF URL for document:', documentId);
           const cachedUrl = pdfUrlCache.get(cacheKey)!;
           setPdfUrl(cachedUrl);
           return;
@@ -66,7 +57,6 @@ export default function SourcePanel({
         setPdfError(null);
         
         try {
-          console.log('SourcePanel: Loading PDF for document:', documentId);
 
           // Build URL with optional indexingRunId for anonymous access
           const params = new URLSearchParams();
@@ -75,7 +65,6 @@ export default function SourcePanel({
           }
           
           const url = `/api/documents/${documentId}/pdf${params.toString() ? '?' + params.toString() : ''}`;
-          console.log('SourcePanel: Fetching PDF from URL:', url);
           
           const response = await fetch(url, {
             method: 'GET',
@@ -85,14 +74,6 @@ export default function SourcePanel({
             credentials: 'include',
           });
 
-          const apiEndTime = performance.now();
-          console.log(`API response time: ${(apiEndTime - apiStartTime).toFixed(2)}ms`);
-
-          console.log('SourcePanel: PDF endpoint response:', {
-            ok: response.ok,
-            status: response.status,
-            statusText: response.statusText
-          });
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -101,16 +82,8 @@ export default function SourcePanel({
           }
 
           const data = await response.json();
-          console.log('SourcePanel: PDF URL received:', {
-            hasUrl: !!data.url,
-            url: data.url,
-            filename: data.filename,
-            expiresIn: data.expires_in,
-            fullResponse: data
-          });
           
           if (!data.url) {
-            console.error('SourcePanel: No URL in response data:', data);
             throw new Error('No PDF URL in response');
           }
           

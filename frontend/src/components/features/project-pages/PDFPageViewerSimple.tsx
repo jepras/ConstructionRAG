@@ -37,9 +37,6 @@ export default function PDFPageViewerSimple({
   const [documentLoadError, setDocumentLoadError] = useState<string | null>(null);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    const endTime = performance.now();
-    console.log('PDFPageViewerSimple: Document loaded with', numPages, 'pages');
-    console.log(`PDF Document load time: ${(endTime - (window as any).pdfLoadStartTime || 0).toFixed(2)}ms`);
     setNumPages(numPages);
     setDocumentLoadError(null);
   }, []);
@@ -50,17 +47,6 @@ export default function PDFPageViewerSimple({
   }, []);
 
   const onPageLoadSuccess = useCallback((page: any) => {
-    const endTime = performance.now();
-    console.log('PDFPageViewerSimple: Page', pageNumber, 'loaded successfully');
-    console.log(`PDF Page ${pageNumber} render time: ${(endTime - (window as any).pageRenderStartTime || 0).toFixed(2)}ms`);
-    console.log('PDFPageViewerSimple: Page dimensions:', {
-      width: page.width,
-      height: page.height,
-      originalWidth: page.originalWidth,
-      originalHeight: page.originalHeight,
-      scale: page.scale,
-      rotation: page.rotation,
-    });
     setPageLoadError(null);
   }, [pageNumber]);
 
@@ -160,12 +146,6 @@ export default function PDFPageViewerSimple({
               {highlights.map((highlight, index) => {
                 if (!highlight.bbox || highlight.bbox.length !== 4) return null;
                 
-                // Debug logging for bbox coordinates
-                console.log(`PDFPageViewerSimple: Highlight ${index} bbox:`, {
-                  raw: highlight.bbox,
-                  scale: scale,
-                  chunk_id: highlight.chunk_id,
-                });
                 
                 // Transform bbox coordinates to match the scaled PDF
                 // bbox format: [x0, y0, x1, y1] in PDF coordinates (points)
@@ -175,13 +155,6 @@ export default function PDFPageViewerSimple({
                 const scaledY = y0 * scale;
                 const scaledWidth = (x1 - x0) * scale;
                 const scaledHeight = (y1 - y0) * scale;
-                
-                console.log(`PDFPageViewerSimple: Highlight ${index} scaled coordinates:`, {
-                  x: scaledX,
-                  y: scaledY,
-                  width: scaledWidth,
-                  height: scaledHeight,
-                });
                 
                 return (
                   <rect

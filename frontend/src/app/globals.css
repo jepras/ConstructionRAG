@@ -130,4 +130,18 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Mermaid diagram edge label styling for better visibility on dark backgrounds */
+  svg text,
+  .mermaid text,
+  .mermaid tspan,
+  .mermaid .edgeLabel text,
+  .mermaid .edge-label text,
+  .mermaid foreignObject div,
+  .mermaid g text,
+  [class*="edgeLabel"] text,
+  [class*="edge-label"] text {
+    fill: white !important;
+    color: white !important;
+  }
 }

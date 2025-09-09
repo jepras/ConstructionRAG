@@ -40,16 +40,7 @@ export default function QueryInterface({
   const [hasProcessedInitialQuery, setHasProcessedInitialQuery] = useState(false);
   const initialQueryProcessedRef = useRef(false);
   
-  // Mount log
   useEffect(() => {
-    console.log('🎪 QueryInterface MOUNTED with props:', {
-      indexingRunId,
-      isAuthenticated,
-      initialQuery,
-      hasOnQueryResponse: !!onQueryResponse,
-      hasOnSourceSelect: !!onSourceSelect,
-      selectedSource: !!selectedSource
-    });
   }, []); // Only on mount
 
   const scrollToBottom = () => {
@@ -60,18 +51,11 @@ export default function QueryInterface({
 
   const queryMutation = useMutation({
     mutationFn: (request: CreateQueryRequest) => {
-      console.log('🔥 API REQUEST STARTED:', request);
       return apiClient.createQuery(request);
     },
     onSuccess: (response) => {
-      console.log('✅ API SUCCESS:', {
-        responseLength: response.response?.length,
-        searchResultsCount: response.search_results?.length
-      });
-      
       // Update the assistant message with the actual response
       setMessages(prev => {
-        console.log('🔄 Updating assistant message with response');
         const newMessages = [...prev];
         const lastMessage = newMessages[newMessages.length - 1];
         if (lastMessage && lastMessage.type === 'assistant') {
@@ -94,33 +78,10 @@ export default function QueryInterface({
       
       // Notify parent component of new search results
       if (onQueryResponse && response.search_results) {
-        console.log('QueryInterface: Search results received:', {
-          count: response.search_results.length,
-          firstResult: response.search_results[0] ? {
-            hasDocumentId: !!response.search_results[0].document_id,
-            hasMetadataDcoumentId: !!response.search_results[0].metadata?.document_id,
-            hasBbox: !!response.search_results[0].bbox,
-            hasMetadataBbox: !!response.search_results[0].metadata?.bbox,
-            bbox: response.search_results[0].bbox || response.search_results[0].metadata?.bbox || 'none',
-            metadata: response.search_results[0].metadata,
-            chunk_id: response.search_results[0].chunk_id
-          } : null
-        });
-        
-        // Log all results to check bbox presence
-        response.search_results.forEach((result, index) => {
-          console.log(`QueryInterface: Result ${index} bbox:`, {
-            hasBbox: !!result.bbox,
-            hasMetadataBbox: !!result.metadata?.bbox,
-            bbox: result.bbox || result.metadata?.bbox || 'none'
-          });
-        });
-        
         onQueryResponse(response.search_results);
       }
     },
     onError: (error: any) => {
-      console.log('❌ API ERROR:', error);
       
       // Update the assistant message with error
       setMessages(prev => {
@@ -138,15 +99,9 @@ export default function QueryInterface({
   });
 
   const handleSubmit = useCallback(async (query: string) => {
-    console.log('🎯 handleSubmit called with query:', query);
-    console.log('📊 Current messages count:', messages.length);
-    
     if (!query.trim()) {
-      console.log('❌ handleSubmit: Empty query, returning');
       return;
     }
-
-    console.log('🚀 handleSubmit: Submitting query to API');
 
     // Add user message and loading assistant message in single setState
     const userMessage: Message = {

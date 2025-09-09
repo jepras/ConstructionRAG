@@ -25,10 +25,10 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
           startOnLoad: false,
           theme: 'default',
           suppressErrorRendering: false, // Enable error display for debugging
-          logLevel: 'debug', // Show all logs for debugging
+          logLevel: 'error', // Only show errors
           themeVariables: {
             primaryColor: '#f97316', // orange-500
-            primaryTextColor: '#000000',
+            primaryTextColor: '#ffffff', // White text for better contrast on dark backgrounds
             primaryBorderColor: '#ea580c', // orange-600
             lineColor: '#6b7280', // gray-500
             secondaryColor: '#f3f4f6', // gray-100
@@ -37,6 +37,25 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
             mainBkg: '#ffffff',
             secondBkg: '#f3f4f6',
             tertiaryBkg: '#ffffff',
+            edgeLabelBackground: '#1f2937', // Dark background for edge labels
+            cScale0: '#ffffff', // Additional text color override
+            cScale1: '#ffffff',
+            cScale2: '#ffffff',
+            // Specific properties for flowchart edge labels
+            clusterBkg: '#1f2937',
+            altBackground: '#1f2937',
+            // Text colors for various elements
+            taskTextColor: '#ffffff',
+            activeTaskTextColor: '#ffffff',
+            gridColor: '#6b7280',
+            section0: '#f97316',
+            section1: '#ea580c',
+            section2: '#c2410c',
+            section3: '#9a3412',
+            // Edge label specific styling
+            edgeLabelColor: '#ffffff',
+            labelTextColor: '#ffffff',
+            labelColor: '#ffffff',
           },
         });
 
@@ -53,12 +72,6 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
         }
         
       } catch (error) {
-        // Detailed error logging for debugging
-        console.error('=== MERMAID ERROR ===');
-        console.error('Error details:', error);
-        console.error('Error message:', error.message);
-        console.error('Failed content:', JSON.stringify(children.trim()));
-        
         // Fallback to code block if rendering fails
         if (containerRef.current) {
           containerRef.current.innerHTML = `
