@@ -1,5 +1,6 @@
 """Markdown generation step for wiki generation pipeline."""
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -74,31 +75,60 @@ class MarkdownGenerationStep(PipelineStep):
             page_contents = input_data["page_contents"]
             logger.info(f"Starting markdown generation for {len(wiki_structure['pages'])} pages")
 
-            # Generate markdown for each page
+            # Generate markdown for each page in parallel
             generated_pages = {}
             total_content_length = 0
 
+            logger.info(f"Starting parallel markdown generation for {len(wiki_structure['pages'])} pages")
+
+            # Create tasks for parallel execution
+            tasks = []
+            page_info_list = []
+            
             for page in wiki_structure["pages"]:
                 page_id = page["id"]
                 page_title = page["title"]
                 page_description = page.get("description", "")
-
-                logger.info(f"Generating markdown for page: {page_title}")
-
-                # Get content for this page
                 page_content = page_contents.get(page_id, {})
+                
+                # Store page info for later processing
+                page_info_list.append({
+                    "id": page_id,
+                    "title": page_title,
+                    "description": page_description,
+                })
+                
+                # Create async task for this page
+                task = self._generate_page_markdown(page, page_content, metadata)
+                tasks.append(task)
+                
+                logger.info(f"Queued markdown generation for page: {page_title}")
 
-                # Generate markdown
-                markdown_content = await self._generate_page_markdown(page, page_content, metadata)
+            # Execute all markdown generation tasks in parallel
+            logger.info(f"Executing {len(tasks)} markdown generation tasks in parallel")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
+            # Process results and handle any exceptions
+            for i, (page_info, result) in enumerate(zip(page_info_list, results)):
+                page_id = page_info["id"]
+                page_title = page_info["title"]
+                page_description = page_info["description"]
+                
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to generate markdown for page '{page_title}': {result}")
+                    # Re-raise the first exception to fail the entire step
+                    raise result
+                
+                logger.info(f"Successfully generated markdown for page: {page_title}")
+                
                 generated_pages[page_id] = {
                     "title": page_title,
                     "description": page_description,
-                    "markdown_content": markdown_content,
-                    "content_length": len(markdown_content),
+                    "markdown_content": result,
+                    "content_length": len(result),
                 }
 
-                total_content_length += len(markdown_content)
+                total_content_length += len(result)
 
             # Create step result
             result = StepResult(
@@ -144,7 +174,9 @@ class MarkdownGenerationStep(PipelineStep):
         """Estimate step duration in seconds."""
         wiki_structure = input_data.get("wiki_structure", {})
         num_pages = len(wiki_structure.get("pages", []))
-        return num_pages * 60  # 60 seconds per page for LLM generation
+        # With parallel processing, duration is based on the slowest call rather than sum
+        # Estimate ~60 seconds for the slowest page + some overhead for coordination
+        return 60 + (num_pages * 5)  # Base time + coordination overhead per page
 
     async def _generate_page_markdown(
         self,

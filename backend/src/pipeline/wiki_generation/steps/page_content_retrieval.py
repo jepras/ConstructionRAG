@@ -32,31 +32,28 @@ class PageContentRetrievalStep(PipelineStep):
         self.storage_service = storage_service or StorageService()
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
-        
+
         # Load wiki retrieval config from SoT
         wiki_cfg = ConfigService().get_effective_config("wiki")
         retrieval_cfg = wiki_cfg.get("retrieval", {})
-        
+
         # Configure retrieval settings
         self.max_chunks_per_query = retrieval_cfg.get("top_k", 10)
         self.max_chunks_per_page = retrieval_cfg.get("max_chunks_per_page", 20)
         self.similarity_threshold = retrieval_cfg.get("similarity_threshold", 0.15)
-        
+
         # Create shared retrieval configuration
         shared_config = SharedRetrievalConfig(
             embedding_model=retrieval_cfg.get("embedding_model", "voyage-multilingual-2"),
             dimensions=retrieval_cfg.get("dimensions", 1024),
             top_k=self.max_chunks_per_query,
             similarity_thresholds={"minimum": self.similarity_threshold},
-            danish_thresholds={"minimum": self.similarity_threshold}
+            danish_thresholds={"minimum": self.similarity_threshold},
         )
-        
+
         # Initialize shared retrieval core
-        self.retrieval_core = RetrievalCore(
-            config=shared_config,
-            db_client=self.supabase
-        )
-        
+        self.retrieval_core = RetrievalCore(config=shared_config, db_client=self.supabase)
+
         logger.info(
             f"[Wiki:Retrieval] Using shared retrieval with model='{shared_config.embedding_model}', "
             f"top_k={self.max_chunks_per_query}, threshold={self.similarity_threshold}"
@@ -74,7 +71,7 @@ class PageContentRetrievalStep(PipelineStep):
             # Retrieve content for each page
             page_contents = {}
             total_chunks_retrieved = 0
-            
+
             logger.info(
                 f"[Wiki:Retrieval] Starting retrieval with threshold={self.similarity_threshold}, "
                 f"max_chunks_per_query={self.max_chunks_per_query}, max_chunks_per_page={self.max_chunks_per_page}"
@@ -134,7 +131,7 @@ class PageContentRetrievalStep(PipelineStep):
         except Exception as e:
             # Log the full error details for debugging
             logger.error(f"Page content retrieval failed: {e}", exc_info=True)
-            
+
             # Determine error code based on exception type
             if "VOYAGE_API_KEY" in str(e) or "api_key" in str(e).lower():
                 error_code = ErrorCode.CONFIGURATION_ERROR
@@ -148,15 +145,11 @@ class PageContentRetrievalStep(PipelineStep):
             else:
                 error_code = ErrorCode.INTERNAL_ERROR
                 error_message = f"Page content retrieval failed - Unexpected error: {str(e)}"
-            
+
             raise AppError(
                 error_message,
                 error_code=error_code,
-                details={
-                    "original_error": str(e),
-                    "error_type": type(e).__name__,
-                    "step": "page_content_retrieval"
-                },
+                details={"original_error": str(e), "error_type": type(e).__name__, "step": "page_content_retrieval"},
             ) from e
 
     async def validate_prerequisites_async(self, input_data: dict[str, Any]) -> bool:
@@ -185,43 +178,30 @@ class PageContentRetrievalStep(PipelineStep):
 
         for query in queries:
             logger.info(f"🔍 [Wiki:Retrieval] Processing query: '{query[:80]}...'")
-            
+
             try:
                 # Generate embedding using shared service
                 query_embedding = await self.retrieval_core.generate_query_embedding(query)
                 logger.debug(f"🔍 [Wiki:Retrieval] Generated embedding for query: {len(query_embedding)} dimensions")
-                
+
             except Exception as e:
                 logger.error(f"🔍 [Wiki:Retrieval] Failed to generate embedding for query '{query[:50]}...': {e}")
                 # Skip this query and continue with others
                 continue
-            
+
             try:
                 # Search using shared retrieval core with HNSW optimization
                 similar_chunks = await self.retrieval_core.search_with_fallback(
-                    query_embedding,
-                    indexing_run_id=indexing_run_id,
-                    language="danish"
+                    query_embedding, indexing_run_id=indexing_run_id, language="danish"
                 )
                 logger.debug(f"🔍 [Wiki:Retrieval] Search completed for query: {len(similar_chunks)} results")
-                
+
             except Exception as e:
                 logger.error(f"🔍 [Wiki:Retrieval] Failed to search for query '{query[:50]}...': {e}")
                 # Skip this query and continue with others
                 similar_chunks = []
 
             logger.info(f"📊 [Wiki:Retrieval] Query retrieved {len(similar_chunks)} chunks")
-            
-            # Log details about top chunks for debugging
-            if similar_chunks:
-                for i, chunk in enumerate(similar_chunks[:3]):
-                    content_preview = chunk["content"][:200].replace("\n", " ")
-                    logger.info(
-                        f"   Top {i+1} (sim={chunk.get('similarity_score', 0):.3f}): "
-                        f"{content_preview}..."
-                    )
-            else:
-                logger.warning(f"   ⚠️ No results for query: '{query}'")
 
             # Add query information to chunks and filter metadata to essentials
             for chunk in similar_chunks:
@@ -236,7 +216,9 @@ class PageContentRetrievalStep(PipelineStep):
                     if document_id not in source_documents:
                         source_documents[document_id] = {
                             "document_id": document_id,
-                            "filename": chunk.get("metadata", {}).get("source_filename", chunk.get("source_filename", "Unknown")),
+                            "filename": chunk.get("metadata", {}).get(
+                                "source_filename", chunk.get("source_filename", "Unknown")
+                            ),
                             "chunk_count": 0,
                         }
                     source_documents[document_id]["chunk_count"] += 1
@@ -247,7 +229,7 @@ class PageContentRetrievalStep(PipelineStep):
 
         # Limit to configured max chunks per page
         top_chunks = unique_chunks[: self.max_chunks_per_page]
-        
+
         logger.info(
             f"✅ [Wiki:Retrieval] Page aggregation complete: "
             f"{len(top_chunks)} unique chunks from {len(queries)} queries"
@@ -282,16 +264,12 @@ class PageContentRetrievalStep(PipelineStep):
 
     def _filter_essential_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
         """Filter metadata to only essential fields for wiki generation.
-        
+
         Essential fields:
         - page_number: For source citations
-        - source_filename: For document identification 
+        - source_filename: For document identification
         - bbox: For PDF highlighting
         - document_id: For document grouping
         """
         essential_fields = ["page_number", "source_filename", "bbox", "document_id"]
-        return {
-            field: metadata.get(field)
-            for field in essential_fields
-            if metadata.get(field) is not None
-        }
+        return {field: metadata.get(field) for field in essential_fields if metadata.get(field) is not None}

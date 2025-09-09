@@ -294,7 +294,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
         {uploadMutation.isPending ? (
           <>
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            Indexing Repository...
+            Processing Documents...
           </>
         ) : files.length > 0 && !validationComplete ? (
           <>
@@ -304,9 +304,9 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
         ) : files.length > 0 && !filesAreValid ? (
           "Fix Validation Errors to Continue"
         ) : estimatedTime > 0 ? (
-          `Index Repository (~${estimatedTime} min)`
+          `Process Documents (~${estimatedTime} min)`
         ) : (
-          "Index Repository"
+          "Process Documents"
         )}
       </Button>
     </div>
