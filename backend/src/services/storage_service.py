@@ -29,6 +29,8 @@ class StorageService:
         # Default to anon client for safety; methods will resolve per-operation
         self.supabase = self._resolver.get_client()
         self.bucket_name = bucket_name
+        # Cache bucket existence to avoid repeated API calls
+        self._bucket_exists: bool | None = None
 
     @classmethod
     def create_test_storage(cls):
@@ -36,12 +38,17 @@ class StorageService:
         return cls(bucket_name="pipeline-assets-test")
 
     async def ensure_bucket_exists(self) -> bool:
-        """Ensure the storage bucket exists, create if it doesn't."""
+        """Ensure the storage bucket exists, create if it doesn't (cached)."""
+        # Return cached result if already checked
+        if self._bucket_exists is not None:
+            return self._bucket_exists
+        
         try:
             # Use admin for bucket management
             admin = self._resolver.get_client(trusted=True, operation="ensure_bucket")
             result = admin.storage.get_bucket(self.bucket_name)
             logger.info(f"Storage bucket '{self.bucket_name}' exists")
+            self._bucket_exists = True
             return True
         except Exception:
             try:
@@ -63,9 +70,11 @@ class StorageService:
                     },
                 )
                 logger.info(f"Created storage bucket '{self.bucket_name}'")
+                self._bucket_exists = True
                 return True
             except Exception as e:
                 logger.error(f"Failed to create storage bucket: {e}")
+                self._bucket_exists = False
                 raise StorageError(f"Failed to create storage bucket: {str(e)}")
 
     async def upload_file(

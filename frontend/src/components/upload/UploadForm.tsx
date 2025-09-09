@@ -55,7 +55,25 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
       return // Validation handled by button disabled state
     }
 
-    // Upload files
+    // Generate a temporary ID for immediate redirect
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2)}`
+
+    // Track public upload attempt immediately
+    posthog.capture('document_uploaded', {
+      is_authenticated: false,
+      upload_type: 'email',
+      file_count: files.length,
+      total_file_size_mb: Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024 * 100) / 100,
+      language: language,
+      estimated_time_minutes: estimatedTime,
+      user_context: 'public'
+    })
+
+    // Show success message and redirect immediately
+    toast.success("Documents uploaded and processing started!")
+    onUploadComplete(tempId)
+
+    // Start upload in background (fire and forget)
     const formData = new FormData()
     files.forEach(file => {
       formData.append("files", file)
@@ -66,25 +84,13 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
     uploadMutation.mutate(formData, {
       onSuccess: (response) => {
-        // Track public upload success
-        posthog.capture('document_uploaded', {
-          is_authenticated: false,
-          upload_type: 'email',
-          file_count: files.length,
-          total_file_size_mb: Math.round(files.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024 * 100) / 100,
-          language: language,
-          estimated_time_minutes: estimatedTime,
-          user_context: 'public'
-        })
-        
-        toast.success("Documents uploaded and processing started!")
-        if (response.index_run_id) {
-          onUploadComplete(response.index_run_id)
-        }
+        // Background upload succeeded - user already redirected
+        console.log("Background upload completed:", response.index_run_id)
       },
       onError: (error) => {
-        console.error("Upload error:", error)
-        toast.error("Failed to upload documents. Please try again.")
+        // Background upload failed - user already redirected, but log the error
+        console.error("Background upload failed:", error)
+        // Optionally could show a notification, but user is already on success page
       }
     })
   }

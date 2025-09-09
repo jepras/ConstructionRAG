@@ -271,21 +271,28 @@ async def create_upload(
                 }
             ).execute()
 
-            document_ids: list[str] = []
-            document_data: list[dict[str, Any]] = []
+            # Read all files first (this is fast)
+            file_data = []
             for file in files:
                 content = await file.read()
-                created = await doc_service.create_email_document(
-                    file_bytes=content,
-                    filename=file.filename,
-                    index_run_id=index_run_id,
-                    email=email,
-                )
+                file_data.append((content, file.filename))
+            
+            # Create all documents in parallel
+            created_docs = await doc_service.create_email_documents_batch(
+                file_data=file_data,
+                index_run_id=index_run_id,
+                email=email,
+            )
+            
+            # Process results
+            document_ids: list[str] = []
+            document_data: list[dict[str, Any]] = []
+            for i, created in enumerate(created_docs):
                 document_ids.append(created["document_id"])
                 document_data.append(
                     {
                         "document_id": created["document_id"],
-                        "filename": file.filename,
+                        "filename": file_data[i][1],  # Original filename
                         "storage_url": created["storage_url"],
                     }
                 )
