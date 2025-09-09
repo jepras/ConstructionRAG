@@ -51,17 +51,17 @@ export default function ProjectQueryContent({
   };
 
   return (
-    <div className="h-[calc(100vh-200px)] grid grid-cols-1 lg:grid-cols-2">
+    <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-1 h-[calc(100vh-16rem)] lg:h-[calc(100vh-15rem)]">
       {/* Left Side - Query Interface */}
-      <div className="min-w-0 flex flex-col col-span-1">
-        <div className="px-6 py-4 border-b border-border">
+      <div className="min-w-0 flex flex-col col-span-1 lg:min-h-0">
+        <div className="px-6 py-4 border-b border-border flex-shrink-0">
           <h1 className="text-2xl font-bold text-foreground">Project Q&A</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Ask questions about this project's documentation and get AI-powered answers.
           </p>
         </div>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0">
           <QueryInterface
             indexingRunId={indexingRunId}
             isAuthenticated={isAuthenticated}
