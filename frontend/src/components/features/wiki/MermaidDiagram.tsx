@@ -43,12 +43,6 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        // Debug logging
-        console.log('=== MERMAID DEBUG ===');
-        console.log('Diagram ID:', id);
-        console.log('Raw content:', JSON.stringify(children));
-        console.log('Trimmed content:', JSON.stringify(children.trim()));
-        console.log('Content length:', children.trim().length);
         
         // Render the diagram
         const { svg } = await mermaid.render(id, children.trim());
@@ -59,11 +53,10 @@ export default function MermaidDiagram({ children }: MermaidDiagramProps) {
         }
         
       } catch (error) {
-        // Log the actual error for debugging
+        // Detailed error logging for debugging
         console.error('=== MERMAID ERROR ===');
         console.error('Error details:', error);
         console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
         console.error('Failed content:', JSON.stringify(children.trim()));
         
         // Fallback to code block if rendering fails

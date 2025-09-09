@@ -255,7 +255,10 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
    * Include relevant quantities, dimensions, costs, and timeline information where available. Leave out if it is not available. 
 
 3. **Mermaid Diagrams:**
-   * EXTENSIVELY use Mermaid diagrams (e.g., `flowchart TD`, `sequenceDiagram`, `gantt`, `graph TD`, `Entity Relationship`, `Block`, `Git`, `Pie`, `Sankey`, `Timeline`) to visually represent project workflows, construction sequences, stakeholder relationships, and process flows found in the source documents.
+   * EXCLUSIVELY use Mermaid diagrams - NEVER reference images, placeholder images, or external diagrams
+   * FORBIDDEN: ![image](url), placeholder images, or any image references
+   * REQUIRED: Only create Mermaid diagrams using code blocks (e.g., `flowchart TD`, `sequenceDiagram`, `gantt`, `graph TD`, `Entity Relationship`, `Block`, `Git`, `Pie`, `Sankey`, `Timeline`)
+   * EXTENSIVELY use Mermaid diagrams to visually represent project workflows, construction sequences, stakeholder relationships, and process flows found in the source documents.
    * Ensure diagrams are accurate and directly derived from information in the `[RELEVANT_PAGE_RETRIEVED_CHUNKS]`.
    * Provide a brief explanation before or after each diagram to give context.
    * CRITICAL: All diagrams MUST follow strict syntax rules:
@@ -269,10 +272,14 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
      - Each line must end with semicolon: A[Start] --> B[Process];
      - ABSOLUTELY CRITICAL: NEVER use parentheses ( ) inside square bracket node labels [text] - this causes fatal parsing errors
      - FORBIDDEN: A[Text (with parentheses)] ← THIS WILL FAIL
+     - FORBIDDEN: A[Dimensionering af Føringsveje (f.eks. KB 300 mm)] ← THIS WILL FAIL  
      - REQUIRED: A[Text - with dashes] ← USE THIS INSTEAD
      - REQUIRED: A[Text: with colons] ← OR USE THIS
      - For time periods, use: A[Process - 2-3 uger] NOT A[Process (2-3 uger)]
      - For descriptions, use: A[Type: Description] NOT A[Type (Description)]
+     - For examples, use: A[Føringsveje - f.eks KB 300 mm] NOT A[Føringsveje (f.eks. KB 300 mm)]
+     - For floors, write them out: A[Tredje Sal], A[Anden Sal], A[Første Sal] NOT A[3. Sal], A[2. Sal], A[1. Sal]
+     - CRITICAL: Avoid patterns that look like numbered lists - write out numbers as words (Tredje, Anden, Første)
      - Example: 
        graph TD
            A[Start] --> B{{Decision?}};

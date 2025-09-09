@@ -43,14 +43,14 @@ class StructureGenerationStep(PipelineStep):
         defaults_cfg = ConfigService().get_effective_config("defaults")
         global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
         self.model = gen_cfg.get("model", global_default_model)
-        
+
         # Initialize LangChain OpenAI client with OpenRouter configuration
         try:
             settings = get_settings()
             self.openrouter_api_key = settings.openrouter_api_key
             if not self.openrouter_api_key:
                 raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-            
+
             # Create LangChain ChatOpenAI client configured for OpenRouter
             self.llm_client = ChatOpenAI(
                 model=self.model,
@@ -82,7 +82,9 @@ class StructureGenerationStep(PipelineStep):
             logger.info(f"Starting structure generation for {metadata['total_documents']} documents")
 
             # Generate wiki structure using LLM
-            wiki_structure = await self._generate_wiki_structure(project_overview, semantic_analysis, metadata, indexing_run_id)
+            wiki_structure = await self._generate_wiki_structure(
+                project_overview, semantic_analysis, metadata, indexing_run_id
+            )
 
             # Validate structure
             validated_structure = self._validate_wiki_structure(wiki_structure)
@@ -219,7 +221,6 @@ project_overview_queries = [
     
     # Project scale and type
     "project value budget cost estimate total contract",
-    "square meters floor area size dimensions scope"
 ] 
 
 - Make sure each page has a topic and EXACTLY {self.queries_per_page} associated queries that will help them retrieve relevant information for that topic. Like the previous queries for overview (in the language the document is, probably danish): 
@@ -266,7 +267,7 @@ IMPORTANT FORMATTING INSTRUCTIONS:
         try:
             # Create message for LangChain
             message = HumanMessage(content=prompt)
-            
+
             # Get PostHog callback for automatic LLM tracking
             posthog_callback = posthog_service.get_langchain_callback(
                 pipeline_step="wiki_structure_generation",
@@ -274,20 +275,17 @@ IMPORTANT FORMATTING INSTRUCTIONS:
                 additional_properties={
                     "max_tokens": max_tokens,
                     "step_type": "structure_generation",
-                    "model": self.model
-                }
+                    "model": self.model,
+                },
             )
-            
+
             # Configure callbacks for the LangChain call
             callbacks = [posthog_callback] if posthog_callback else []
-            
+
             # Make async call to LangChain ChatOpenAI with PostHog callback
-            response = await self.llm_client.ainvoke(
-                [message],
-                config={"callbacks": callbacks} if callbacks else None
-            )
+            response = await self.llm_client.ainvoke([message], config={"callbacks": callbacks} if callbacks else None)
             return response.content
-            
+
         except Exception as e:
             logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
             raise Exception(f"LangChain API error: {e}")
@@ -295,14 +293,14 @@ IMPORTANT FORMATTING INSTRUCTIONS:
     def _parse_json_response(self, llm_response: str) -> dict[str, Any]:
         """Parse JSON response from LLM, handling markdown code blocks."""
         logger.debug(f"📋 [Wiki:Structure] Attempting to parse JSON response, length: {len(llm_response)}")
-        
+
         # Handle completely empty response
         if not llm_response or not llm_response.strip():
             logger.error(f"📋 [Wiki:Structure] Empty LLM response received")
             raise ValueError("Empty response from LLM")
-        
+
         original_response = llm_response
-        
+
         try:
             # Try to parse directly first
             logger.debug(f"📋 [Wiki:Structure] Attempting direct JSON parse")
@@ -318,25 +316,25 @@ IMPORTANT FORMATTING INSTRUCTIONS:
         logger.debug(f"📋 [Wiki:Structure] Trying markdown code block extraction")
         patterns = [
             r"```json\s*\n?(.*?)\n?\s*```",  # ```json\n{...}\n```
-            r"```\s*\n?(\{.*?\})\s*\n?```",  # ```\n{...}\n```  
+            r"```\s*\n?(\{.*?\})\s*\n?```",  # ```\n{...}\n```
             r"```(?:json)?\s*(\{.*?\})\s*```",  # Original pattern
         ]
-        
+
         for i, pattern in enumerate(patterns):
             match = re.search(pattern, llm_response, re.DOTALL)
             if match:
                 try:
-                    logger.debug(f"📋 [Wiki:Structure] Pattern {i+1} matched, attempting parse")
+                    logger.debug(f"📋 [Wiki:Structure] Pattern {i + 1} matched, attempting parse")
                     result = json.loads(match.group(1).strip())
-                    logger.info(f"📋 [Wiki:Structure] ✅ Code block extraction successful with pattern {i+1}")
+                    logger.info(f"📋 [Wiki:Structure] ✅ Code block extraction successful with pattern {i + 1}")
                     return result
                 except json.JSONDecodeError as e:
-                    logger.debug(f"📋 [Wiki:Structure] Pattern {i+1} matched but JSON parse failed: {e}")
+                    logger.debug(f"📋 [Wiki:Structure] Pattern {i + 1} matched but JSON parse failed: {e}")
 
         # Strategy 2: Manual cleanup approach
         logger.debug(f"📋 [Wiki:Structure] Trying manual cleanup approach")
         cleaned_response = llm_response.strip()
-        
+
         # Remove various markdown prefixes/suffixes
         cleanup_pairs = [
             ("```json\n", "\n```"),
@@ -344,10 +342,10 @@ IMPORTANT FORMATTING INSTRUCTIONS:
             ("```\n", "\n```"),
             ("```", "```"),
         ]
-        
+
         for start, end in cleanup_pairs:
             if cleaned_response.startswith(start) and cleaned_response.endswith(end):
-                cleaned_response = cleaned_response[len(start):-len(end)].strip()
+                cleaned_response = cleaned_response[len(start) : -len(end)].strip()
                 logger.debug(f"📋 [Wiki:Structure] Removed markers: '{start}' and '{end}'")
                 break
 
@@ -363,22 +361,24 @@ IMPORTANT FORMATTING INSTRUCTIONS:
         logger.debug(f"📋 [Wiki:Structure] Trying brace pattern extraction")
         brace_pattern = r"(\{(?:[^{}]|{[^{}]*})*\})"
         matches = re.findall(brace_pattern, llm_response, re.DOTALL)
-        
+
         for i, match in enumerate(matches):
             try:
-                logger.debug(f"📋 [Wiki:Structure] Trying brace match {i+1}/{len(matches)}")
+                logger.debug(f"📋 [Wiki:Structure] Trying brace match {i + 1}/{len(matches)}")
                 result = json.loads(match.strip())
-                logger.info(f"📋 [Wiki:Structure] ✅ Brace extraction successful with match {i+1}")
+                logger.info(f"📋 [Wiki:Structure] ✅ Brace extraction successful with match {i + 1}")
                 return result
             except json.JSONDecodeError as e:
-                logger.debug(f"📋 [Wiki:Structure] Brace match {i+1} parse failed: {e}")
+                logger.debug(f"📋 [Wiki:Structure] Brace match {i + 1} parse failed: {e}")
 
         # Final failure with detailed logging
         logger.error(f"📋 [Wiki:Structure] ❌ All JSON parsing strategies failed")
         logger.error(f"📋 [Wiki:Structure] Response preview (first 300 chars): {original_response[:300]}")
         logger.error(f"📋 [Wiki:Structure] Response preview (last 300 chars): {original_response[-300:]}")
-        
-        raise ValueError(f"Failed to parse JSON response after trying all strategies. Response length: {len(original_response)}. Preview: {original_response[:200]}...")
+
+        raise ValueError(
+            f"Failed to parse JSON response after trying all strategies. Response length: {len(original_response)}. Preview: {original_response[:200]}..."
+        )
 
     def _validate_wiki_structure(self, wiki_structure: dict[str, Any]) -> dict[str, Any]:
         """Validate and clean wiki structure."""
