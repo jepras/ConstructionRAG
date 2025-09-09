@@ -1,18 +1,18 @@
 from typing import Optional, Dict, Any
 import traceback
 import sys
-import time
-import uuid
 from datetime import datetime
 
 from src.config.settings import get_settings
 
 # Optional PostHog import - graceful fallback if not available
 try:
-    import posthog
+    from posthog import Posthog
+    from posthog.ai.langchain.callbacks import CallbackHandler as PostHogCallbackHandler
     POSTHOG_AVAILABLE = True
 except ImportError:
-    posthog = None
+    Posthog = None
+    PostHogCallbackHandler = None
     POSTHOG_AVAILABLE = False
 
 
@@ -36,9 +36,10 @@ class PostHogService:
         settings = get_settings()
         
         if settings.posthog_api_key:
-            self._client = posthog.Client(
-                api_key=settings.posthog_api_key,
+            self._client = Posthog(
+                project_api_key=settings.posthog_api_key,
                 host=settings.posthog_host,
+                enable_exception_autocapture=True,
                 # Server-side settings for better performance
                 flush_at=1,  # Send immediately
                 flush_interval=0,  # Don't wait
@@ -112,65 +113,52 @@ class PostHogService:
             # Silently fail
             pass
     
-    def capture_llm_generation(
+    def get_langchain_callback(
         self,
-        model: str,
-        input_prompt: str,
-        output_content: str,
-        latency_ms: float,
         pipeline_step: Optional[str] = None,
         indexing_run_id: Optional[str] = None,
         user_id: Optional[str] = None,
         additional_properties: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """Capture LLM generation event in PostHog $ai_generation format."""
-        if not self.is_enabled():
-            return
+    ) -> Optional[Any]:
+        """Get a PostHog LangChain callback handler for automatic LLM tracking.
+        
+        Args:
+            pipeline_step: Name of the pipeline step (e.g., 'wiki_overview_generation')
+            indexing_run_id: ID of the indexing run for correlation
+            user_id: Optional user ID for tracking
+            additional_properties: Additional properties to include in events
             
-        # Build standard PostHog $ai_generation event properties
+        Returns:
+            PostHog CallbackHandler instance or None if PostHog is not available
+        """
+        if not self.is_enabled() or not PostHogCallbackHandler:
+            return None
+            
+        # Build properties for the callback
         properties = {
-            # Model and provider info
-            "$ai_model": model,
-            "$ai_provider": "openrouter",
-            
-            # Input and output content (full prompt/response tracking)
-            "$ai_input": input_prompt,
-            "$ai_output_choices": [{"message": {"content": output_content}}],
-            
-            # Performance metrics
-            "$ai_response_time_ms": latency_ms,
-            "$ai_timestamp": datetime.utcnow().isoformat(),
-            
-            # Token usage (estimated - OpenRouter doesn't always provide this)
-            "$ai_input_tokens": len(input_prompt.split()) * 1.3,  # Rough estimate
-            "$ai_output_tokens": len(output_content.split()) * 1.3,  # Rough estimate
-            
-            # Cost estimation (rough - would need model-specific pricing)
-            "$ai_cost_usd": (len(input_prompt) + len(output_content)) * 0.000001,  # Very rough estimate
-            
-            # Correlation IDs for pipeline tracing
             "pipeline_step": pipeline_step,
-            "indexing_run_id": indexing_run_id,
-            
-            # Generation ID for tracking
-            "generation_id": str(uuid.uuid4()),
+            "environment": get_settings().environment,
         }
         
-        # Add any additional properties
         if additional_properties:
             properties.update(additional_properties)
         
-        distinct_id = user_id or f"backend-{hash(sys.argv[0])}"
+        # Use indexing_run_id as both distinct_id and trace_id for correlation
+        distinct_id = user_id or indexing_run_id or f"backend-{hash(sys.argv[0])}"
         
         try:
-            self._client.capture(
+            return PostHogCallbackHandler(
+                client=self._client,
                 distinct_id=distinct_id,
-                event="$ai_generation",
-                properties=properties
+                trace_id=indexing_run_id,
+                properties=properties,
+                privacy_mode=False,  # We want full prompt/response tracking
+                groups={"indexing_run": indexing_run_id} if indexing_run_id else None
             )
-        except Exception:
-            # Silently fail - don't let analytics break the pipeline
-            pass
+        except Exception as e:
+            # Log but don't fail - analytics should never break the pipeline
+            print(f"Warning: Could not create PostHog callback: {e}")
+            return None
     
     def shutdown(self) -> None:
         """Flush and shutdown PostHog client."""

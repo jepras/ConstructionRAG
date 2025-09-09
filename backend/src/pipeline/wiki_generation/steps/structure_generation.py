@@ -13,6 +13,7 @@ from src.config.settings import get_settings
 from src.models import StepResult
 from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
+from src.services.posthog_service import posthog_service
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 
@@ -77,10 +78,11 @@ class StructureGenerationStep(PipelineStep):
             metadata = input_data["metadata"]
             project_overview = input_data["project_overview"]
             semantic_analysis = input_data.get("semantic_analysis", {})
+            indexing_run_id = input_data.get("index_run_id")  # Get for analytics correlation
             logger.info(f"Starting structure generation for {metadata['total_documents']} documents")
 
             # Generate wiki structure using LLM
-            wiki_structure = await self._generate_wiki_structure(project_overview, semantic_analysis, metadata)
+            wiki_structure = await self._generate_wiki_structure(project_overview, semantic_analysis, metadata, indexing_run_id)
 
             # Validate structure
             validated_structure = self._validate_wiki_structure(wiki_structure)
@@ -126,7 +128,7 @@ class StructureGenerationStep(PipelineStep):
         return 60  # Structure generation typically takes less time than overview
 
     async def _generate_wiki_structure(
-        self, project_overview: str, semantic_analysis: dict, metadata: dict[str, Any]
+        self, project_overview: str, semantic_analysis: dict, metadata: dict[str, Any], indexing_run_id: str = None
     ) -> dict[str, Any]:
         """Generate wiki structure using LLM."""
         if not self.openrouter_api_key:
@@ -135,8 +137,8 @@ class StructureGenerationStep(PipelineStep):
         # Prepare prompt
         prompt = self._create_structure_prompt(project_overview, semantic_analysis, metadata)
 
-        # Call LLM
-        response = await self._call_openrouter_api(prompt, max_tokens=3000)
+        # Call LLM with analytics tracking
+        response = await self._call_openrouter_api(prompt, max_tokens=3000, indexing_run_id=indexing_run_id)
 
         # Parse JSON response
         wiki_structure = self._parse_json_response(response)
@@ -250,8 +252,8 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 
         return prompt
 
-    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 6000) -> str:
-        """Call OpenRouter API via LangChain ChatOpenAI with the given prompt."""
+    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 6000, indexing_run_id: str = None) -> str:
+        """Call OpenRouter API via LangChain ChatOpenAI with PostHog LangChain callback for analytics."""
         if not self.llm_client:
             raise Exception("LangChain ChatOpenAI client not configured")
 
@@ -259,8 +261,25 @@ IMPORTANT FORMATTING INSTRUCTIONS:
             # Create message for LangChain
             message = HumanMessage(content=prompt)
             
-            # Make async call to LangChain ChatOpenAI
-            response = await self.llm_client.ainvoke([message])
+            # Get PostHog callback for automatic LLM tracking
+            posthog_callback = posthog_service.get_langchain_callback(
+                pipeline_step="wiki_structure_generation",
+                indexing_run_id=indexing_run_id,
+                additional_properties={
+                    "max_tokens": max_tokens,
+                    "step_type": "structure_generation",
+                    "model": self.model
+                }
+            )
+            
+            # Configure callbacks for the LangChain call
+            callbacks = [posthog_callback] if posthog_callback else []
+            
+            # Make async call to LangChain ChatOpenAI with PostHog callback
+            response = await self.llm_client.ainvoke(
+                [message],
+                config={"callbacks": callbacks} if callbacks else None
+            )
             return response.content
             
         except Exception as e:

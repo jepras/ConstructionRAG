@@ -2,7 +2,6 @@
 
 import ast
 import logging
-import time
 from datetime import datetime
 from typing import Any
 
@@ -480,7 +479,7 @@ Generer projektoversigten på dansk:"""
         return prompt
 
     async def _call_openrouter_api(self, prompt: str, max_tokens: int = 4000, indexing_run_id: str = None) -> str:
-        """Call OpenRouter API via LangChain ChatOpenAI with the given prompt and capture analytics."""
+        """Call OpenRouter API via LangChain ChatOpenAI with PostHog LangChain callback for analytics."""
         print(
             f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain client configured: {'✓' if self.llm_client else '✗'}"
         )
@@ -488,35 +487,33 @@ Generer projektoversigten på dansk:"""
         if not self.llm_client:
             raise Exception("LangChain ChatOpenAI client not configured")
 
-        start_time = time.time()
-        
         try:
             # Create message for LangChain
             message = HumanMessage(content=prompt)
             
-            # Make async call to LangChain ChatOpenAI
-            response = await self.llm_client.ainvoke([message])
-            content = response.content
-            
-            # Calculate latency
-            latency_ms = (time.time() - start_time) * 1000
-            
-            # Capture LLM analytics in PostHog
-            posthog_service.capture_llm_generation(
-                model=self.model,
-                input_prompt=prompt,
-                output_content=content,
-                latency_ms=latency_ms,
+            # Get PostHog callback for automatic LLM tracking
+            posthog_callback = posthog_service.get_langchain_callback(
                 pipeline_step="wiki_overview_generation",
                 indexing_run_id=indexing_run_id,
                 additional_properties={
                     "max_tokens": max_tokens,
-                    "step_type": "overview_generation"
+                    "step_type": "overview_generation",
+                    "model": self.model
                 }
             )
             
+            # Configure callbacks for the LangChain call
+            callbacks = [posthog_callback] if posthog_callback else []
+            
+            # Make async call to LangChain ChatOpenAI with PostHog callback
+            response = await self.llm_client.ainvoke(
+                [message],
+                config={"callbacks": callbacks} if callbacks else None
+            )
+            content = response.content
+            
             print(
-                f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - API call successful, content length: {len(content)}, latency: {latency_ms:.0f}ms"
+                f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - API call successful, content length: {len(content)}"
             )
             return content
 

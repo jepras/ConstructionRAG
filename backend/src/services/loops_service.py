@@ -16,6 +16,7 @@ class LoopsService:
     # Hardcoded template IDs (these are not secrets, just template references)
     WIKI_COMPLETION_TEMPLATE_ID = "cmfb0g26t89llxf0i592li27q"
     NEWSLETTER_CONFIRMATION_TEMPLATE_ID = "cmfb5sk790boz4o0igafcmfm4"
+    AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID = "cmfc9jow3ajs80f0is1ebv0c6"
 
     def __init__(self):
         self.api_key = os.getenv("LOOPS_API_KEY")
@@ -26,7 +27,7 @@ class LoopsService:
         
         # Log configuration (truncated for security)
         api_key_preview = self.api_key[:4] + "..." if self.api_key else "None"
-        logger.info(f"LoopsService initialized - API Key: {api_key_preview}, Templates: Wiki({self.WIKI_COMPLETION_TEMPLATE_ID[:4]}...), Newsletter({self.NEWSLETTER_CONFIRMATION_TEMPLATE_ID[:4]}...)")
+        logger.info(f"LoopsService initialized - API Key: {api_key_preview}, Templates: Wiki({self.WIKI_COMPLETION_TEMPLATE_ID[:4]}...), Newsletter({self.NEWSLETTER_CONFIRMATION_TEMPLATE_ID[:4]}...), Authenticated({self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID[:4]}...)")
 
     async def send_wiki_completion_email(
         self,
@@ -113,6 +114,96 @@ class LoopsService:
             return {"success": False, "error": error_msg}
         except Exception as e:
             error_msg = f"Unexpected error sending email to {email}: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+    async def send_authenticated_wiki_completion_email(
+        self,
+        email: str,
+        wiki_url: str,
+        project_name: str = "Your Project",
+        user_name: str = None,
+        add_to_audience: bool = True,
+        user_group: str = "Authenticated Users",
+    ) -> Dict[str, Any]:
+        """
+        Send a wiki completion notification email for authenticated users.
+
+        Args:
+            email: Recipient email address
+            wiki_url: URL to the completed wiki (private dashboard URL)
+            project_name: Name of the project/documents processed
+            user_name: Optional user name for personalization
+            add_to_audience: Whether to add contact to audience (default: True)
+            user_group: User group to assign (default: "Authenticated Users")
+
+        Returns:
+            Dict containing success status and response details
+        """
+        try:
+            payload = {
+                "transactionalId": self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID,
+                "email": email,
+                "dataVariables": {
+                    "wikiUrl": wiki_url,
+                    "projectName": project_name,
+                    "userName": user_name or "there",  # Friendly fallback
+                },
+            }
+
+            # Add to audience if requested
+            if add_to_audience:
+                payload["addToAudience"] = True
+                
+            # Add user group if specified
+            if user_group:
+                payload["userGroup"] = user_group
+
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            # Log the request details (without sensitive info)
+            logger.info(f"Sending authenticated wiki completion email to {email} with template ID: {self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID[:4]}...")
+            logger.info(f"Payload: email={email}, wikiUrl={wiki_url}, projectName={project_name}, userName={user_name}, addToAudience={add_to_audience}, userGroup={user_group}")
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.api_url, 
+                    json=payload, 
+                    headers=headers,
+                    timeout=30.0
+                )
+
+                response_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ Authenticated wiki completion email sent successfully to {email}")
+                    return {
+                        "success": True,
+                        "message": "Authenticated wiki completion email sent successfully",
+                        "response": response_data,
+                    }
+                else:
+                    error_msg = f"❌ Authenticated wiki completion email failed - Status: {response.status_code}, Response: {response_data}"
+                    logger.error(error_msg)
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "status_code": response.status_code,
+                    }
+
+        except httpx.TimeoutException:
+            error_msg = f"Timeout sending authenticated wiki completion email to {email}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except httpx.RequestError as e:
+            error_msg = f"Request error sending authenticated wiki completion email to {email}: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except Exception as e:
+            error_msg = f"Unexpected error sending authenticated wiki completion email to {email}: {str(e)}"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
 

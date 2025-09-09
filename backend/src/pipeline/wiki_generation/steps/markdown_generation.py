@@ -1,7 +1,6 @@
 """Markdown generation step for wiki generation pipeline."""
 
 import logging
-import time
 from datetime import datetime
 from typing import Any
 
@@ -351,38 +350,35 @@ Generate the comprehensive markdown wiki page:"""
         return prompt
 
     async def _call_openrouter_api(self, prompt: str, max_tokens: int = 8000, indexing_run_id: str = None) -> str:
-        """Call OpenRouter API via LangChain ChatOpenAI with the given prompt and capture analytics."""
+        """Call OpenRouter API via LangChain ChatOpenAI with PostHog LangChain callback for analytics."""
         if not self.llm_client:
             raise Exception("LangChain ChatOpenAI client not configured")
 
-        start_time = time.time()
-        
         try:
             # Create message for LangChain
             message = HumanMessage(content=prompt)
             
-            # Make async call to LangChain ChatOpenAI
-            response = await self.llm_client.ainvoke([message])
-            content = response.content
-            
-            # Calculate latency
-            latency_ms = (time.time() - start_time) * 1000
-            
-            # Capture LLM analytics in PostHog
-            posthog_service.capture_llm_generation(
-                model=self.model,
-                input_prompt=prompt,
-                output_content=content,
-                latency_ms=latency_ms,
+            # Get PostHog callback for automatic LLM tracking
+            posthog_callback = posthog_service.get_langchain_callback(
                 pipeline_step="wiki_markdown_generation",
                 indexing_run_id=indexing_run_id,
                 additional_properties={
                     "max_tokens": max_tokens,
-                    "step_type": "markdown_generation"
+                    "step_type": "markdown_generation",
+                    "model": self.model
                 }
             )
             
-            return content
+            # Configure callbacks for the LangChain call
+            callbacks = [posthog_callback] if posthog_callback else []
+            
+            # Make async call to LangChain ChatOpenAI with PostHog callback
+            response = await self.llm_client.ainvoke(
+                [message],
+                config={"callbacks": callbacks} if callbacks else None
+            )
+            
+            return response.content
 
         except Exception as e:
             logger.error(f"Exception during LangChain ChatOpenAI call: {e}")

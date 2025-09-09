@@ -156,8 +156,8 @@ class LangChainClientService:
             temperature=temperature,
             max_tokens=max_tokens,
             default_headers={
-                "HTTP-Referer": "https://constructionrag.com",
-                "X-Title": "ConstructionRAG Wiki Generator",
+                "HTTP-Referer": "https://specfinder.io",
+                "X-Title": "purpose of file",
             }
         )
         

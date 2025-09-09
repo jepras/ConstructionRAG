@@ -75,9 +75,7 @@ class VoyageEmbeddingClient:
                 )
 
                 if response.status_code != 200:
-                    raise Exception(
-                        f"Voyage API error: {response.status_code} - {response.text}"
-                    )
+                    raise Exception(f"Voyage API error: {response.status_code} - {response.text}")
 
                 result = response.json()
                 return result["data"][0]["embedding"]
@@ -90,9 +88,7 @@ class VoyageEmbeddingClient:
 class MarkdownWikiGenerator:
     """Generate comprehensive wiki documentation using 3-step RAG approach."""
 
-    def __init__(
-        self, language: str = "danish", model: str = "google/gemini-2.5-flash"
-    ):
+    def __init__(self, language: str = "danish", model: str = "google/gemini-2.5-flash"):
         self.language = language
         self.model = model
         self.supabase = get_supabase_admin_client()
@@ -104,13 +100,9 @@ class MarkdownWikiGenerator:
         # Initialize Voyage client for real vector search
         voyage_api_key = os.getenv("VOYAGE_API_KEY")
         if not voyage_api_key:
-            raise ValueError(
-                "VOYAGE_API_KEY not found in .env file - needed for real vector similarity search"
-            )
+            raise ValueError("VOYAGE_API_KEY not found in .env file - needed for real vector similarity search")
 
-        self.voyage_client = VoyageEmbeddingClient(
-            api_key=voyage_api_key, model="voyage-multilingual-2"
-        )
+        self.voyage_client = VoyageEmbeddingClient(api_key=voyage_api_key, model="voyage-multilingual-2")
 
         # Load configuration
         self.config = self.load_config()
@@ -123,9 +115,7 @@ class MarkdownWikiGenerator:
 
         # Debug API key loading
         if self.openrouter_api_key:
-            print(
-                f"- API Key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}"
-            )
+            print(f"- API Key preview: {self.openrouter_api_key[:10]}...{self.openrouter_api_key[-4:]}")
 
     def load_config(self) -> Dict[str, Any]:
         """Load configuration settings."""
@@ -141,12 +131,7 @@ class MarkdownWikiGenerator:
         print(f"Trin 1: Henter projektmetadata for indexing run: {index_run_id}")
 
         # Get indexing run with step results
-        indexing_run_response = (
-            self.supabase.table("indexing_runs")
-            .select("*")
-            .eq("id", index_run_id)
-            .execute()
-        )
+        indexing_run_response = self.supabase.table("indexing_runs").select("*").eq("id", index_run_id).execute()
 
         if not indexing_run_response.data:
             raise ValueError(f"Ingen indexing run fundet med ID: {index_run_id}")
@@ -162,9 +147,7 @@ class MarkdownWikiGenerator:
             .execute()
         )
 
-        documents = [
-            item["documents"] for item in documents_response.data if item["documents"]
-        ]
+        documents = [item["documents"] for item in documents_response.data if item["documents"]]
         document_ids = [doc["id"] for doc in documents]
 
         # Get chunks with embeddings (but don't store embeddings in output)
@@ -207,18 +190,14 @@ class MarkdownWikiGenerator:
         }
 
         # Extract pages analyzed (sum from all documents)
-        total_pages = sum(
-            doc.get("page_count", 0) for doc in documents if doc.get("page_count")
-        )
+        total_pages = sum(doc.get("page_count", 0) for doc in documents if doc.get("page_count"))
         metadata["total_pages_analyzed"] = total_pages
 
         # Extract from chunking step
         chunking_data = step_results.get("chunking", {}).get("data", {})
         if chunking_data:
             summary_stats = chunking_data.get("summary_stats", {})
-            metadata["section_headers_distribution"] = summary_stats.get(
-                "section_headers_distribution", {}
-            )
+            metadata["section_headers_distribution"] = summary_stats.get("section_headers_distribution", {})
         else:
             metadata["section_headers_distribution"] = {}
 
@@ -284,9 +263,7 @@ class MarkdownWikiGenerator:
                         chunk_embedding = [float(x) for x in chunk_embedding]
 
                         # Calculate cosine similarity
-                        similarity = self.cosine_similarity(
-                            query_embedding, chunk_embedding
-                        )
+                        similarity = self.cosine_similarity(query_embedding, chunk_embedding)
 
                         # Convert to distance for sorting (like production pipeline)
                         distance = 1 - similarity
@@ -332,9 +309,7 @@ class MarkdownWikiGenerator:
             unique_results.sort(key=lambda x: x[1], reverse=True)
             results = unique_results[:top_k]
 
-            print(
-                f"  Fundet {len(results)} relevante unikke chunks (threshold: {self.config['similarity_threshold']})"
-            )
+            print(f"  Fundet {len(results)} relevante unikke chunks (threshold: {self.config['similarity_threshold']})")
             if results:
                 avg_similarity = np.mean([score for _, score in results])
                 print(f"  Gennemsnitlig similarity: {avg_similarity:.3f}")
@@ -380,12 +355,9 @@ class MarkdownWikiGenerator:
             "entreprenør klient ejer udvikler arkitekt ingeniør",
             "projektteam roller ansvar interessenter",
             # Tidsplan og faser
-            "projektplan tidsplan milepæle faser byggefaser etaper",
             "startdato færdiggørelsesdato projektvarighed",
             # Projektomfang og type
-            "projektværdi budget omkostningsoverslag samlet kontrakt",
             "bygningstype bolig erhverv industri infrastruktur",
-            "kvadratmeter etageareal størrelse dimensioner omfang",
         ]
 
         # Get document IDs for vector search
@@ -394,10 +366,8 @@ class MarkdownWikiGenerator:
         query_results = {}
 
         # Execute each query
-        for i, query in enumerate(
-            project_overview_queries[: self.config["overview_query_count"]]
-        ):
-            print(f"  Query {i+1}/{self.config['overview_query_count']}: {query}")
+        for i, query in enumerate(project_overview_queries[: self.config["overview_query_count"]]):
+            print(f"  Query {i + 1}/{self.config['overview_query_count']}: {query}")
 
             results = await self.vector_similarity_search(query, document_ids)
             query_results[query] = {
@@ -410,26 +380,20 @@ class MarkdownWikiGenerator:
                     }
                     for chunk, score in results
                 ],
-                "avg_similarity": (
-                    np.mean([score for _, score in results]) if results else 0.0
-                ),
+                "avg_similarity": (np.mean([score for _, score in results]) if results else 0.0),
             }
 
             # Collect unique chunks
             for chunk, score in results:
                 # Avoid duplicates
                 chunk_id = chunk.get("id")
-                if not any(
-                    existing.get("id") == chunk_id for existing in all_retrieved_chunks
-                ):
+                if not any(existing.get("id") == chunk_id for existing in all_retrieved_chunks):
                     chunk_with_score = chunk.copy()
                     chunk_with_score["similarity_score"] = score
                     chunk_with_score["retrieved_by_query"] = query
                     all_retrieved_chunks.append(chunk_with_score)
 
-        print(
-            f"Samlet hentet {len(all_retrieved_chunks)} unikke chunks til projektoversigt"
-        )
+        print(f"Samlet hentet {len(all_retrieved_chunks)} unikke chunks til projektoversigt")
 
         return {
             "retrieved_chunks": all_retrieved_chunks,
@@ -442,8 +406,8 @@ class MarkdownWikiGenerator:
         headers = {
             "Authorization": f"Bearer {self.openrouter_api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://constructionrag.com",
-            "X-Title": "ConstructionRAG Wiki Generator",
+            "HTTP-Referer": "https://specfinder.io",
+            "X-Title": "generating markdown for wiki",
         }
 
         data = {
@@ -453,14 +417,10 @@ class MarkdownWikiGenerator:
             "temperature": 0.3,
         }
 
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data
-        )
+        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
 
         if response.status_code != 200:
-            raise Exception(
-                f"OpenRouter API fejl: {response.status_code} - {response.text}"
-            )
+            raise Exception(f"OpenRouter API fejl: {response.status_code} - {response.text}")
 
         result = response.json()
         return result["choices"][0]["message"]["content"]
@@ -492,7 +452,7 @@ class MarkdownWikiGenerator:
                 print(f"  Similarity: {similarity_score:.3f}, Page: {page_number}")
 
             excerpt = f"""
-Uddrag {i+1}:
+Uddrag {i + 1}:
 Kilde: dokument_{document_id[:8]}:side_{page_number}
 Relevans score: {similarity_score:.2f}
 Hentet af query: "{query}"
@@ -523,9 +483,7 @@ Generer projektoversigten på dansk:"""
             overview_content = self.call_openrouter_api(prompt, max_tokens=2000)
             end_time = time.time()
 
-            print(
-                f"LLM projektoversigt genereret på {end_time - start_time:.1f} sekunder"
-            )
+            print(f"LLM projektoversigt genereret på {end_time - start_time:.1f} sekunder")
             print(f"Oversigt længde: {len(overview_content)} tegn")
 
             return overview_content
@@ -543,20 +501,16 @@ Generer projektoversigten på dansk:"""
 
 **Information hentet:**
 - {len(retrieved_chunks)} relevante chunks blev fundet
-- Dokumentudtrag fra {len(set(chunk.get('document_id', '') for chunk in retrieved_chunks))} forskellige dokumenter
-- Gennemsnitlig relevans score: {np.mean([chunk.get('similarity_score', 0) for chunk in retrieved_chunks]):.2f}
+- Dokumentudtrag fra {len(set(chunk.get("document_id", "") for chunk in retrieved_chunks))} forskellige dokumenter
+- Gennemsnitlig relevans score: {np.mean([chunk.get("similarity_score", 0) for chunk in retrieved_chunks]):.2f}
 
 **Bemærk:** Dette er test indhold da LLM API'et ikke er tilgængeligt."""
 
             return dummy_overview
 
-    def generate_cluster_names_llm(
-        self, cluster_summaries: List[Dict[str, Any]]
-    ) -> Dict[int, str]:
+    def generate_cluster_names_llm(self, cluster_summaries: List[Dict[str, Any]]) -> Dict[int, str]:
         """Generate meaningful cluster names using LLM based on cluster content samples."""
-        print(
-            f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger..."
-        )
+        print(f"🤖 Genererer klyngenavne med LLM for {len(cluster_summaries)} klynger...")
 
         # Prepare cluster samples for LLM
         cluster_samples = []
@@ -569,19 +523,12 @@ Generer projektoversigten på dansk:"""
             cluster_samples.append(
                 {
                     "cluster_id": cluster_id,
-                    "sample_text": combined_sample[
-                        :800
-                    ],  # Limit to avoid token overflow
+                    "sample_text": combined_sample[:800],  # Limit to avoid token overflow
                 }
             )
 
         # Create prompt for LLM to generate names
-        samples_text = "\n".join(
-            [
-                f"Klynge {item['cluster_id']}: {item['sample_text']}"
-                for item in cluster_samples
-            ]
-        )
+        samples_text = "\n".join([f"Klynge {item['cluster_id']}: {item['sample_text']}" for item in cluster_samples])
 
         prompt = f"""Baseret på følgende dokumentindhold fra en byggeprojekt-database, generer korte, beskrivende navne for hver klynge.
 
@@ -635,9 +582,7 @@ Svar kun med navnene i det specificerede format."""
                 if cluster_id not in cluster_names:
                     fallback_name = f"Temaområde {cluster_id}"
                     cluster_names[cluster_id] = fallback_name
-                    print(
-                        f"  Bruger fallback navn for klynge {cluster_id}: {fallback_name}"
-                    )
+                    print(f"  Bruger fallback navn for klynge {cluster_id}: {fallback_name}")
 
             return cluster_names
 
@@ -669,14 +614,10 @@ Svar kun med navnene i det specificerede format."""
 
     def semantic_clustering(self, chunks: List[Dict]) -> Dict[str, Any]:
         """Step 4: SEMANTIC ANALYSIS - Perform semantic clustering and LLM-based naming to identify 4-10 main topics."""
-        print(
-            f"Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation..."
-        )
+        print(f"Trin 4: Udfører semantisk clustering og LLM navngivning for emneidentifikation...")
 
         # Filter chunks with embeddings
-        chunks_with_embeddings = [
-            chunk for chunk in chunks if chunk.get("embedding_1024") is not None
-        ]
+        chunks_with_embeddings = [chunk for chunk in chunks if chunk.get("embedding_1024") is not None]
 
         if len(chunks_with_embeddings) == 0:
             print("⚠️  Ingen embeddings fundet - kan ikke lave clustering")
@@ -738,9 +679,7 @@ Svar kun med navnene i det specificerede format."""
         # Add the generated names to summaries
         for summary in cluster_summaries:
             cluster_id = summary["cluster_id"]
-            summary["cluster_name"] = cluster_names.get(
-                cluster_id, f"Temaområde {cluster_id}"
-            )
+            summary["cluster_name"] = cluster_names.get(cluster_id, f"Temaområde {cluster_id}")
 
         print(f"Klynger oprettet:")
         for summary in cluster_summaries:
@@ -759,13 +698,9 @@ Svar kun med navnene i det specificerede format."""
             "n_clusters": n_clusters,
         }
 
-    def save_intermediate_results(
-        self, index_run_id: str, step_name: str, data: Dict[str, Any]
-    ) -> str:
+    def save_intermediate_results(self, index_run_id: str, step_name: str, data: Dict[str, Any]) -> str:
         """Save intermediate results for debugging and analysis."""
-        output_dir = os.path.join(
-            os.path.dirname(__file__), "..", "data", "internal", "wiki_generation"
-        )
+        output_dir = os.path.join(os.path.dirname(__file__), "..", "data", "internal", "wiki_generation")
         os.makedirs(output_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -792,15 +727,9 @@ Svar kun med navnene i det specificerede format."""
                 documents = metadata["documents"]
                 metadata["documents"] = {
                     "count": len(documents),
-                    "filenames": [
-                        doc.get("filename", "unknown") for doc in documents[:3]
-                    ]
+                    "filenames": [doc.get("filename", "unknown") for doc in documents[:3]]
                     + (["..."] if len(documents) > 3 else []),
-                    "total_file_size": sum(
-                        doc.get("file_size", 0)
-                        for doc in documents
-                        if doc.get("file_size")
-                    ),
+                    "total_file_size": sum(doc.get("file_size", 0) for doc in documents if doc.get("file_size")),
                 }
 
             # Replace chunks with minimal summary only
@@ -810,8 +739,7 @@ Svar kun med navnene i det specificerede format."""
                     "total_chunks": len(chunks),
                     "sample_chunk_ids": [chunk.get("id") for chunk in chunks[:3]],
                     "avg_content_length": (
-                        sum(len(chunk.get("content", "")) for chunk in chunks[:10])
-                        // min(10, len(chunks))
+                        sum(len(chunk.get("content", "")) for chunk in chunks[:10]) // min(10, len(chunks))
                         if chunks
                         else 0
                     ),
@@ -832,13 +760,8 @@ Svar kun med navnene i det specificerede format."""
                 chunks = query_data["retrieved_chunks"]
                 query_data["retrieved_chunks"] = {
                     "count": len(chunks),
-                    "top_similarities": [
-                        chunk.get("similarity_score", 0) for chunk in chunks[:5]
-                    ],
-                    "sample_sources": [
-                        f"doc_{chunk.get('document_id', 'unknown')[:8]}"
-                        for chunk in chunks[:3]
-                    ],
+                    "top_similarities": [chunk.get("similarity_score", 0) for chunk in chunks[:5]],
+                    "sample_sources": [f"doc_{chunk.get('document_id', 'unknown')[:8]}" for chunk in chunks[:3]],
                 }
 
             # Keep query_results but clean them
@@ -884,9 +807,7 @@ Svar kun med navnene i det specificerede format."""
 
         return clean_results
 
-    def generate_wiki_structure_llm(
-        self, project_overview: str, semantic_analysis: Dict, metadata: Dict
-    ) -> Dict:
+    def generate_wiki_structure_llm(self, project_overview: str, semantic_analysis: Dict, metadata: Dict) -> Dict:
         """Step 5: STRUCTURE LLM CALL - Create strategic wiki structure based on holistic project analysis."""
         print(f"Step 5: Generating strategic wiki structure with LLM...")
 
@@ -900,9 +821,7 @@ Svar kun med navnene i det specificerede format."""
             filename = doc.get("filename", f"document_{doc.get('id', 'unknown')[:8]}")
             file_size = doc.get("file_size", 0)
             page_count = doc.get("page_count", 0)
-            document_list.append(
-                f"- {filename} ({page_count} pages, {file_size:,} bytes)"
-            )
+            document_list.append(f"- {filename} ({page_count} pages, {file_size:,} bytes)")
 
         # Prepare semantic clusters
         cluster_list = []
@@ -910,16 +829,12 @@ Svar kun med navnene i det specificerede format."""
             cluster_id = summary.get("cluster_id", "unknown")
             cluster_name = summary.get("cluster_name", f"Cluster {cluster_id}")
             chunk_count = summary.get("chunk_count", 0)
-            cluster_list.append(
-                f"- Cluster {cluster_id} ({chunk_count} chunks): {cluster_name}"
-            )
+            cluster_list.append(f"- Cluster {cluster_id} ({chunk_count} chunks): {cluster_name}")
 
         # Prepare section headers
         section_headers = metadata.get("section_headers_distribution", {})
         section_list = []
-        for header, count in sorted(
-            section_headers.items(), key=lambda x: x[1], reverse=True
-        )[:10]:
+        for header, count in sorted(section_headers.items(), key=lambda x: x[1], reverse=True)[:10]:
             section_list.append(f"- {header}: {count} occurrences")
 
         # Create comprehensive English prompt for strategic wiki structure
@@ -1012,9 +927,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
             llm_response = self.call_openrouter_api(prompt, max_tokens=3000)
             end_time = time.time()
 
-            print(
-                f"LLM wiki structure generated in {end_time - start_time:.1f} seconds"
-            )
+            print(f"LLM wiki structure generated in {end_time - start_time:.1f} seconds")
 
             # Robust JSON parsing with markdown fence stripping
             wiki_structure = self._parse_json_response(llm_response)
@@ -1032,9 +945,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
             print(f"  Number of pages: {len(pages)}")
 
             for i, page in enumerate(pages[:3]):  # Show first 3 pages
-                print(
-                    f"    Page {i+1}: {page.get('title', 'N/A')} (score: {page.get('relevance_score', 'N/A')})"
-                )
+                print(f"    Page {i + 1}: {page.get('title', 'N/A')} (score: {page.get('relevance_score', 'N/A')})")
 
             return wiki_structure
 
@@ -1049,9 +960,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
                 cluster_name = summary.get("cluster_name", f"Topic Area {cluster_id}")
 
                 # Generate simple queries based on cluster name
-                base_query = (
-                    cluster_name.lower().replace(" and ", " ").replace(" & ", " ")
-                )
+                base_query = cluster_name.lower().replace(" and ", " ").replace(" & ", " ")
                 fallback_queries = [
                     base_query,
                     f"{base_query} specifications requirements",
@@ -1130,9 +1039,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
                 print(f"⚠️  Raw response preview: {response[:200]}...")
                 raise ValueError(f"Failed to parse JSON response: {str(e2)}")
 
-    async def retrieve_page_content(
-        self, wiki_structure: Dict, metadata: Dict
-    ) -> Dict[str, Dict]:
+    async def retrieve_page_content(self, wiki_structure: Dict, metadata: Dict) -> Dict[str, Dict]:
         """Step 6: PAGE QUERY TO VECTOR DB - Retrieve specific content for each planned wiki page."""
         print(f"Trin 6: Henter indhold til wiki-sider via vector database...")
 
@@ -1152,19 +1059,14 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
             query_results = {}
 
             for i, query in enumerate(proposed_queries):
-                print(f"    Query {i+1}/{len(proposed_queries)}: {query[:50]}...")
+                print(f"    Query {i + 1}/{len(proposed_queries)}: {query[:50]}...")
 
                 try:
                     results = await self.vector_similarity_search(query, document_ids)
                     query_results[query] = {
                         "results_count": len(results),
-                        "avg_similarity": (
-                            np.mean([score for _, score in results]) if results else 0.0
-                        ),
-                        "chunks": [
-                            {"chunk_id": chunk.get("id"), "similarity": score}
-                            for chunk, score in results
-                        ],
+                        "avg_similarity": (np.mean([score for _, score in results]) if results else 0.0),
+                        "chunks": [{"chunk_id": chunk.get("id"), "similarity": score} for chunk, score in results],
                     }
 
                     # Collect unique chunks for this page
@@ -1172,9 +1074,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
                         chunk_id = chunk.get("id")
 
                         # Avoid duplicates within this page
-                        if not any(
-                            existing.get("id") == chunk_id for existing in page_chunks
-                        ):
+                        if not any(existing.get("id") == chunk_id for existing in page_chunks):
                             chunk_with_score = chunk.copy()
                             chunk_with_score["similarity_score"] = score
                             chunk_with_score["retrieved_by_query"] = query
@@ -1198,15 +1098,11 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
                     source_documents[doc_id] += 1
 
             # Calculate content coverage metrics
-            total_similarity = sum(
-                chunk.get("similarity_score", 0) for chunk in page_chunks
-            )
+            total_similarity = sum(chunk.get("similarity_score", 0) for chunk in page_chunks)
             avg_similarity = total_similarity / len(page_chunks) if page_chunks else 0.0
 
             content_coverage = (
-                "høj"
-                if len(source_documents) >= 5
-                else "medium" if len(source_documents) >= 3 else "lav"
+                "høj" if len(source_documents) >= 5 else "medium" if len(source_documents) >= 3 else "lav"
             )
 
             page_content = {
@@ -1229,16 +1125,12 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
 
             # Warn if coverage is insufficient
             if len(source_documents) < 3:
-                print(
-                    f"    ⚠️  Lav kildediversitet for {page_title} - kun {len(source_documents)} dokumenter"
-                )
+                print(f"    ⚠️  Lav kildediversitet for {page_title} - kun {len(source_documents)} dokumenter")
 
         print(f"Indhold hentet til {len(page_content_results)} wiki-sider")
         return page_content_results
 
-    def generate_wiki_page_llm(
-        self, page_info: Dict, page_content: Dict, metadata: Dict
-    ) -> str:
+    def generate_wiki_page_llm(self, page_info: Dict, page_content: Dict, metadata: Dict) -> str:
         """Step 7: PAGE LLM CALL - Generate comprehensive markdown wiki page."""
         page_title = page_info.get("title", "Unknown Page")
         page_description = page_info.get("description", "")
@@ -1250,9 +1142,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
         source_docs = page_content.get("source_documents", {})
 
         # Limit to top chunks to avoid token overflow
-        top_chunks = sorted(
-            retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True
-        )[:20]
+        top_chunks = sorted(retrieved_chunks, key=lambda x: x.get("similarity_score", 0), reverse=True)[:20]
 
         # Create document excerpts with source attribution
         document_excerpts = []
@@ -1263,9 +1153,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
             content = chunk.get("content", "")
             doc_id = chunk.get("document_id", "unknown")
             metadata_chunk = chunk.get("metadata", {})
-            page_number = (
-                metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
-            )
+            page_number = metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
             similarity = chunk.get("similarity_score", 0.0)
 
             # Create source reference
@@ -1276,7 +1164,7 @@ Your proposed tests for step 5 seems good. Please output the json that step outp
             source_ref = source_map[doc_id]
 
             excerpt = f"""
-Excerpt {len(document_excerpts)+1}:
+Excerpt {len(document_excerpts) + 1}:
 Source: [Document {source_ref}, page {page_number}]
 Relevance: {similarity:.3f}
 Content: {content[:600]}...
@@ -1293,16 +1181,10 @@ Content: {content[:600]}...
                     doc_info = doc
                     break
 
-            filename = (
-                doc_info.get("filename", f"document_{doc_id[:8]}")
-                if doc_info
-                else f"document_{doc_id[:8]}"
-            )
+            filename = doc_info.get("filename", f"document_{doc_id[:8]}") if doc_info else f"document_{doc_id[:8]}"
             footnotes.append(f"[{ref_num}] {filename}")
 
-        excerpts_text = "\n".join(
-            document_excerpts[:12]
-        )  # Limit excerpts to avoid token overflow
+        excerpts_text = "\n".join(document_excerpts[:12])  # Limit excerpts to avoid token overflow
         footnotes_text = "\n".join(footnotes)
 
         # Create comprehensive English prompt for markdown generation
@@ -1440,10 +1322,10 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
 ### Key Data
 - Documents analyzed: {len(source_docs)}
 - Text segments: {len(retrieved_chunks)}
-- Average relevance: {page_content.get('avg_similarity', 0):.2f}
+- Average relevance: {page_content.get("avg_similarity", 0):.2f}
 
 ### Top Content
-{retrieved_chunks[0].get('content', 'No content available')[:500] + '...' if retrieved_chunks else 'No chunks found'}
+{retrieved_chunks[0].get("content", "No content available")[:500] + "..." if retrieved_chunks else "No chunks found"}
 
 ## Sources
 {footnotes_text}
@@ -1485,13 +1367,9 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
         print(f"Komplet wiki genereret: {len(wiki_pages)} markdown filer")
         return wiki_pages
 
-    async def generate_complete_seven_step_wiki(
-        self, index_run_id: str
-    ) -> Dict[str, Any]:
+    async def generate_complete_seven_step_wiki(self, index_run_id: str) -> Dict[str, Any]:
         """Execute the complete 7-step wiki generation pipeline."""
-        print(
-            f"🚀 Starter komplet 7-trins wiki generering for indexing run: {index_run_id}"
-        )
+        print(f"🚀 Starter komplet 7-trins wiki generering for indexing run: {index_run_id}")
         print(f"Konfiguration: {self.language} sprog, {self.model} model")
 
         start_time = time.time()
@@ -1515,37 +1393,27 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
 
             # Step 4: Semantic clustering for topic identification
             print(f"\n" + "=" * 50)
-            semantic_analysis = self.semantic_clustering(
-                metadata["chunks_with_embeddings"]
-            )
+            semantic_analysis = self.semantic_clustering(metadata["chunks_with_embeddings"])
             results["semantic_analysis"] = semantic_analysis
 
             # Step 5: Structure LLM call - create strategic wiki structure
             print(f"\n" + "=" * 50)
-            wiki_structure = self.generate_wiki_structure_llm(
-                project_overview, semantic_analysis, metadata
-            )
+            wiki_structure = self.generate_wiki_structure_llm(project_overview, semantic_analysis, metadata)
             results["wiki_structure"] = wiki_structure
 
             # Step 6: Page query to vector DB - retrieve content for each page
             print(f"\n" + "=" * 50)
-            page_content_results = await self.retrieve_page_content(
-                wiki_structure, metadata
-            )
+            page_content_results = await self.retrieve_page_content(wiki_structure, metadata)
             results["page_content"] = page_content_results
 
             # Step 7: Page LLM calls - generate markdown wiki pages
             print(f"\n" + "=" * 50)
-            wiki_pages = await self.generate_complete_wiki(
-                wiki_structure, page_content_results, metadata
-            )
+            wiki_pages = await self.generate_complete_wiki(wiki_structure, page_content_results, metadata)
             results["wiki_pages"] = wiki_pages
 
             # Save all results and wiki files
             clean_results = self.clean_results_for_saving(results)
-            output_dir = self.save_intermediate_results(
-                index_run_id, "complete_seven_steps", clean_results
-            )
+            output_dir = self.save_intermediate_results(index_run_id, "complete_seven_steps", clean_results)
 
             # Save individual wiki pages as files
             wiki_dir = os.path.join(output_dir, "wiki_pages")
@@ -1581,17 +1449,9 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
             print(f"  • Planlagte sider: {wiki_pages_count}")
 
             print(f"\nTrin 6 - Indholdsopsamling:")
-            total_retrieved_chunks = sum(
-                content.get("total_chunks", 0)
-                for content in page_content_results.values()
-            )
+            total_retrieved_chunks = sum(content.get("total_chunks", 0) for content in page_content_results.values())
             avg_sources_per_page = (
-                np.mean(
-                    [
-                        content.get("unique_sources", 0)
-                        for content in page_content_results.values()
-                    ]
-                )
+                np.mean([content.get("unique_sources", 0) for content in page_content_results.values()])
                 if page_content_results
                 else 0
             )
@@ -1602,9 +1462,7 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
             total_wiki_chars = sum(len(content) for content in wiki_pages.values())
             print(f"  • Genererede wiki-sider: {len(wiki_pages)}")
             print(f"  • Samlet indhold: {total_wiki_chars:,} tegn")
-            print(
-                f"  • Gennemsnitlig sidelængde: {total_wiki_chars // len(wiki_pages) if wiki_pages else 0:,} tegn"
-            )
+            print(f"  • Gennemsnitlig sidelængde: {total_wiki_chars // len(wiki_pages) if wiki_pages else 0:,} tegn")
 
             print(f"\n📁 OUTPUT FILER:")
             print(f"  • Resultater gemt i: {output_dir}")
@@ -1643,18 +1501,14 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
             results["project_overview"] = project_overview
 
             # Step 4: Semantic clustering for topic identification
-            semantic_analysis = self.semantic_clustering(
-                metadata["chunks_with_embeddings"]
-            )
+            semantic_analysis = self.semantic_clustering(metadata["chunks_with_embeddings"])
             results["semantic_analysis"] = semantic_analysis
 
             # Clean results for saving (remove large data)
             clean_results = self.clean_results_for_saving(results)
 
             # Save intermediate results
-            output_dir = self.save_intermediate_results(
-                index_run_id, "first_four_steps", clean_results
-            )
+            output_dir = self.save_intermediate_results(index_run_id, "first_four_steps", clean_results)
 
             # Print summary
             end_time = time.time()
@@ -1716,9 +1570,7 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
             project_overview = self.generate_project_overview_llm(overview_data)
 
             # Step 4: Semantic clustering
-            semantic_analysis = self.semantic_clustering(
-                metadata["chunks_with_embeddings"]
-            )
+            semantic_analysis = self.semantic_clustering(metadata["chunks_with_embeddings"])
 
         else:
             # Use sample data for testing
@@ -1788,9 +1640,7 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
         print("=" * 50)
 
         try:
-            wiki_structure = self.generate_wiki_structure_llm(
-                project_overview, semantic_analysis, metadata
-            )
+            wiki_structure = self.generate_wiki_structure_llm(project_overview, semantic_analysis, metadata)
 
             print(f"\n✅ Step 5 test completed successfully!")
             print(f"📊 Results:")
@@ -1807,9 +1657,7 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
                 print(f"     - Description: {page.get('description', 'N/A')[:100]}...")
                 print(f"     - Queries: {len(page.get('proposed_queries', []))}")
                 print(f"     - Relevance score: {page.get('relevance_score', 'N/A')}")
-                print(
-                    f"     - Argumentation: {page.get('topic_argumentation', 'N/A')[:100]}..."
-                )
+                print(f"     - Argumentation: {page.get('topic_argumentation', 'N/A')[:100]}...")
                 print()
 
             # Validate strategic thinking
@@ -1824,27 +1672,20 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
 
             # Check for professional page titles (not just cluster names)
             professional_titles = []
-            cluster_names = [
-                summary["cluster_name"]
-                for summary in semantic_analysis.get("cluster_summaries", [])
-            ]
+            cluster_names = [summary["cluster_name"] for summary in semantic_analysis.get("cluster_summaries", [])]
 
             for page in pages:
                 title = page.get("title", "")
                 if title not in cluster_names and len(title.split()) >= 2:
                     professional_titles.append(title)
 
-            if (
-                len(professional_titles) >= len(pages) * 0.5
-            ):  # At least 50% should be professional
+            if len(professional_titles) >= len(pages) * 0.5:  # At least 50% should be professional
                 strategic_indicators.append("✅ Professional page titles")
             else:
                 strategic_indicators.append("❌ Too many cluster-based titles")
 
             # Check for adequate queries
-            adequate_queries = all(
-                len(page.get("proposed_queries", [])) >= 6 for page in pages
-            )
+            adequate_queries = all(len(page.get("proposed_queries", [])) >= 6 for page in pages)
             if adequate_queries:
                 strategic_indicators.append("✅ Adequate queries per page (6-10)")
             else:
@@ -1874,9 +1715,7 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
             semantic_analysis = results.get("semantic_analysis", {})
 
             # Test Step 5 with real data
-            wiki_structure = self.generate_wiki_structure_llm(
-                project_overview, semantic_analysis, metadata
-            )
+            wiki_structure = self.generate_wiki_structure_llm(project_overview, semantic_analysis, metadata)
 
             print(f"\n✅ Step 5 test with real data completed!")
             return wiki_structure
@@ -1888,9 +1727,7 @@ This is an automatically generated page based on {len(retrieved_chunks)} documen
 
 async def main():
     """Command line interface for wiki generation."""
-    parser = argparse.ArgumentParser(
-        description="Generate automatic wiki from indexing run"
-    )
+    parser = argparse.ArgumentParser(description="Generate automatic wiki from indexing run")
     parser.add_argument("--index-run-id", required=True, help="UUID of indexing run")
     parser.add_argument(
         "--language",
@@ -1898,9 +1735,7 @@ async def main():
         choices=["danish", "english"],
         help="Output language",
     )
-    parser.add_argument(
-        "--model", default="google/gemini-2.5-flash", help="OpenRouter model to use"
-    )
+    parser.add_argument("--model", default="google/gemini-2.5-flash", help="OpenRouter model to use")
     parser.add_argument(
         "--complete",
         action="store_true",
@@ -1941,9 +1776,7 @@ async def main():
             print(json.dumps(results, indent=2, ensure_ascii=False))
 
         elif args.complete:
-            results = await generator.generate_complete_seven_step_wiki(
-                args.index_run_id
-            )
+            results = await generator.generate_complete_seven_step_wiki(args.index_run_id)
             print(f"\n✅ Complete 7-step wiki generation successful!")
         else:
             results = await generator.generate_first_four_steps(args.index_run_id)

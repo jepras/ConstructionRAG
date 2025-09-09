@@ -498,54 +498,131 @@ class WikiGenerationOrchestrator:
             return False
 
     async def _send_completion_email_if_needed(self, index_run_id: str, upload_type: UploadType) -> None:
-        """Send completion email for anonymous uploads if email is available."""
+        """Send completion email for both anonymous and authenticated uploads."""
         try:
-            # Only send emails for anonymous email uploads
-            if upload_type != UploadType.EMAIL:
+            if upload_type == UploadType.EMAIL:
+                # Anonymous upload flow
+                await self._send_anonymous_completion_email(index_run_id)
+            elif upload_type == UploadType.USER_PROJECT:
+                # Authenticated upload flow
+                await self._send_authenticated_completion_email(index_run_id)
+            else:
                 logger.debug(f"Skipping email for upload type: {upload_type}")
-                return
-
-            # Get email from indexing run
-            indexing_run_response = (
-                self.supabase.table("indexing_runs")
-                .select("email")
-                .eq("id", index_run_id)
-                .execute()
-            )
-
-            if not indexing_run_response.data:
-                logger.warning(f"No indexing run found for ID: {index_run_id}")
-                return
-
-            email = indexing_run_response.data[0].get("email")
-            if not email:
-                logger.info(f"No email found for indexing run: {index_run_id}")
-                return
-
-            # Generate wiki URL (public project URL)
-            wiki_url = f"https://specfinder.io/projects/{index_run_id}"
-
-            # Send email using Loops service
-            try:
-                from src.services.loops_service import LoopsService
-
-                loops_service = LoopsService()
-                result = await loops_service.send_wiki_completion_email(
-                    email=email,
-                    wiki_url=wiki_url,
-                    project_name="Your Documents",
-                    add_to_audience=True,
-                    user_group="Public uploaders",
-                )
-
-                if result["success"]:
-                    logger.info(f"Wiki completion email sent successfully to {email}")
-                else:
-                    logger.error(f"Failed to send wiki completion email: {result['error']}")
-
-            except Exception as loops_error:
-                logger.error(f"Error initializing Loops service: {loops_error}")
-
+                
         except Exception as e:
             logger.error(f"Error sending completion email: {e}")
             # Don't raise - email failure shouldn't break wiki generation
+
+    async def _send_anonymous_completion_email(self, index_run_id: str) -> None:
+        """Send completion email for anonymous uploads if email is available."""
+        # Get email from indexing run
+        indexing_run_response = (
+            self.supabase.table("indexing_runs")
+            .select("email")
+            .eq("id", index_run_id)
+            .execute()
+        )
+
+        if not indexing_run_response.data:
+            logger.warning(f"No indexing run found for ID: {index_run_id}")
+            return
+
+        email = indexing_run_response.data[0].get("email")
+        if not email:
+            logger.info(f"No email found for indexing run: {index_run_id}")
+            return
+
+        # Generate wiki URL (public project URL)
+        wiki_url = f"https://specfinder.io/projects/{index_run_id}"
+
+        # Send email using Loops service
+        try:
+            from src.services.loops_service import LoopsService
+
+            loops_service = LoopsService()
+            result = await loops_service.send_wiki_completion_email(
+                email=email,
+                wiki_url=wiki_url,
+                project_name="Your Documents",
+                add_to_audience=True,
+                user_group="Public uploaders",
+            )
+
+            if result["success"]:
+                logger.info(f"Anonymous wiki completion email sent successfully to {email}")
+            else:
+                logger.error(f"Failed to send anonymous wiki completion email: {result['error']}")
+
+        except Exception as loops_error:
+            logger.error(f"Error initializing Loops service for anonymous email: {loops_error}")
+
+    async def _send_authenticated_completion_email(self, index_run_id: str) -> None:
+        """Send completion email for authenticated user projects."""
+        # Get indexing run details including user_id and project_id
+        indexing_run_response = (
+            self.supabase.table("indexing_runs")
+            .select("user_id, project_id")
+            .eq("id", index_run_id)
+            .execute()
+        )
+        
+        if not indexing_run_response.data:
+            logger.warning(f"No indexing run found for ID: {index_run_id}")
+            return
+        
+        user_id = indexing_run_response.data[0].get("user_id")
+        project_id = indexing_run_response.data[0].get("project_id")
+        
+        if not user_id:
+            logger.info(f"No user_id found for indexing run: {index_run_id}")
+            return
+        
+        # Get user email from auth.users table via admin client
+        try:
+            user_response = self.supabase.auth.admin.get_user_by_id(user_id)
+            if not user_response.user or not user_response.user.email:
+                logger.warning(f"Could not get email for user_id: {user_id}")
+                return
+            
+            user_email = user_response.user.email
+            
+            # Get project name if available
+            project_name = "Your Project"
+            if project_id:
+                project_response = (
+                    self.supabase.table("projects")
+                    .select("name")
+                    .eq("id", project_id)
+                    .execute()
+                )
+                if project_response.data:
+                    project_name = project_response.data[0].get("name", "Your Project")
+            
+            # Generate private wiki URL (authenticated route)
+            if project_id:
+                # Use project-based URL structure for authenticated users
+                wiki_url = f"https://specfinder.io/dashboard/projects/{project_id}/{index_run_id}"
+            else:
+                # Fallback to indexing run URL
+                wiki_url = f"https://specfinder.io/projects/{index_run_id}"
+            
+            # Send email using new authenticated method
+            from src.services.loops_service import LoopsService
+            loops_service = LoopsService()
+            
+            result = await loops_service.send_authenticated_wiki_completion_email(
+                email=user_email,
+                wiki_url=wiki_url,
+                project_name=project_name,
+                user_name=None,  # Could get from user_profiles if needed
+                add_to_audience=True,
+                user_group="Authenticated Users",
+            )
+            
+            if result["success"]:
+                logger.info(f"Authenticated wiki completion email sent successfully to {user_email}")
+            else:
+                logger.error(f"Failed to send authenticated completion email: {result['error']}")
+                
+        except Exception as e:
+            logger.error(f"Error getting user email for user_id {user_id}: {e}")
