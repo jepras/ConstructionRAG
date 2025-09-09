@@ -201,23 +201,24 @@ class RetrievalCore:
         Returns:
             List of matching chunks with similarity scores
         """
-        # Skip HNSW and go directly to Python similarity calculation
-        logger.info("🐍 Using Python similarity as primary search method (HNSW disabled)")
-        
-        # Commented out HNSW attempt - not working in production
-        # try:
-        #     # Try HNSW search first
-        #     results = await self.search_pgvector_hnsw(
-        #         query_embedding, indexing_run_id, allowed_document_ids, 0.0
-        #     )
-        #     
-        #     if results:
-        #         return self._post_process_results(results, language)
-        # except Exception as e:
-        #     logger.error(f"HNSW search failed: {e}")
-        
-        # Use Python similarity as primary method
+        # Try HNSW search first for better performance
         try:
+            # Try HNSW search first
+            logger.info("🚀 Attempting HNSW search for better performance")
+            results = await self.search_pgvector_hnsw(
+                query_embedding, indexing_run_id, allowed_document_ids, 0.0
+            )
+            
+            if results:
+                logger.info(f"✅ HNSW search successful - found {len(results)} results")
+                return self._post_process_results(results, language)
+        except Exception as e:
+            logger.error(f"HNSW search failed: {e}")
+            logger.info("⚠️ Falling back to Python similarity calculation")
+        
+        # Use Python similarity as fallback method
+        try:
+            logger.info("🐍 Using Python similarity calculation as fallback")
             python_results = await self.search_pgvector_fallback(
                 query_embedding, indexing_run_id, allowed_document_ids
             )

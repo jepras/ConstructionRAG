@@ -1,10 +1,12 @@
 """PDF validation service for pre-upload security and integrity checks."""
 
+import asyncio
 import hashlib
 import logging
 import re
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -49,6 +51,9 @@ class PDFValidationService:
     def __init__(self):
         """Initialize the PDF validation service."""
         self.validation_cache: Dict[str, Dict[str, Any]] = {}
+        # Thread pool for CPU-bound operations (PyMuPDF)
+        # Limit to 4 workers to avoid overwhelming the system
+        self.executor = ThreadPoolExecutor(max_workers=4)
     
     def _calculate_file_hash(self, file_content: bytes) -> str:
         """Calculate SHA-256 hash of file content for caching."""
@@ -164,14 +169,14 @@ class PDFValidationService:
         if re.search(r'[<>:"|?*]', filename):
             result["warnings"].append("Filename contains special characters that may cause issues")
     
-    async def _analyze_pdf_content(
+    def _analyze_pdf_content_sync(
         self,
         file_content: bytes,
         filename: str,
         result: Dict[str, Any],
         is_authenticated: bool,
     ):
-        """Analyze PDF content using PyMuPDF."""
+        """Synchronous PDF content analysis using PyMuPDF (CPU-bound)."""
         try:
             # Write to temporary file for PyMuPDF
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_file:
@@ -357,6 +362,24 @@ class PDFValidationService:
         except:
             return False
     
+    async def _analyze_pdf_content(
+        self,
+        file_content: bytes,
+        filename: str,
+        result: Dict[str, Any],
+        is_authenticated: bool,
+    ):
+        """Async wrapper for PDF content analysis - runs in thread pool."""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            self.executor,
+            self._analyze_pdf_content_sync,
+            file_content,
+            filename,
+            result,
+            is_authenticated
+        )
+    
     def _scan_for_security_threats(self, file_content: bytes, result: Dict[str, Any]):
         """Scan PDF content for security threats."""
         critical_found = []
@@ -485,7 +508,7 @@ class PDFValidationService:
         is_authenticated: bool = False,
     ) -> Dict[str, Any]:
         """
-        Validate a batch of PDF files.
+        Validate a batch of PDF files in parallel.
         
         Args:
             files: List of (filename, content) tuples
@@ -494,6 +517,21 @@ class PDFValidationService:
         Returns:
             Batch validation results
         """
+        import asyncio
+        
+        batch_start = time.time()
+        logger.info(f"Starting parallel validation of {len(files)} files")
+        
+        # Create validation tasks for all files to run in parallel
+        validation_tasks = [
+            self.validate_pdf(content, filename, is_authenticated)
+            for filename, content in files
+        ]
+        
+        # Run all validations concurrently
+        file_results = await asyncio.gather(*validation_tasks)
+        
+        # Process results
         results = {
             "files": [],
             "is_valid": True,
@@ -503,19 +541,18 @@ class PDFValidationService:
             "warnings": [],
         }
         
-        for filename, content in files:
-            file_result = await self.validate_pdf(content, filename, is_authenticated)
+        for file_result in file_results:
             results["files"].append(file_result)
             
             if not file_result["is_valid"]:
                 results["is_valid"] = False
                 results["errors"].extend(
-                    [f"{filename}: {error}" for error in file_result["errors"]]
+                    [f"{file_result['filename']}: {error}" for error in file_result["errors"]]
                 )
             
             if file_result.get("warnings"):
                 results["warnings"].extend(
-                    [f"{filename}: {warning}" for warning in file_result["warnings"]]
+                    [f"{file_result['filename']}: {warning}" for warning in file_result["warnings"]]
                 )
             
             # Aggregate metrics
@@ -535,9 +572,17 @@ class PDFValidationService:
                 results["total_processing_time_estimate"] / 60, 1
             )
         
+        batch_time = time.time() - batch_start
+        logger.info(f"Parallel validation completed in {batch_time:.2f}s for {len(files)} files")
+        
         return results
     
     def clear_cache(self):
         """Clear the validation cache."""
         self.validation_cache.clear()
         logger.info("Validation cache cleared")
+    
+    def __del__(self):
+        """Clean up thread pool executor on deletion."""
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
