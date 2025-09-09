@@ -64,7 +64,7 @@ export default function Home() {
             Any project detail - <span className="text-primary">instantly available</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            No more digging through a hell of nested folders and unsearchable pdfs to find what you need
+            Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents.
           </p>
         </div>
 
@@ -150,23 +150,29 @@ export default function Home() {
                   disabled={hasAsked}
                   onKeyPress={handleKeyPress}
                   placeholder={hasAsked ? "Ask anything about the project..." : "Ask anything"}
-                  className={`bg-input border-border text-foreground placeholder-muted-foreground pr-24 ${hasAsked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                  className={`bg-input border-border text-muted-foreground placeholder-muted-foreground pr-32 ${hasAsked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                 />
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
-                  <Button size="sm" variant="ghost" className="p-2" disabled={hasAsked} aria-disabled={hasAsked}>
-                    <Mic className="w-4 h-4" />
-                  </Button>
+                <div className="absolute right-0.5 top-1/2 transform -translate-y-1/2">
                   <Button
                     onClick={handleQuerySubmit}
                     size="sm"
                     variant="ghost"
                     disabled={isLoading || hasAsked}
                     aria-disabled={isLoading || hasAsked}
-                    className={`p-2 transition-all duration-300 ${!showResponse && !isLoading && !hasAsked
-                      ? 'border-2 border-primary animate-pulse bg-primary/10 hover:bg-primary/20'
+                    className={`group relative flex items-center justify-center px-3 py-2 rounded-lg transition-all duration-200 ${!showResponse && !isLoading && !hasAsked
+                      ? 'border border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 animate-pulse cursor-pointer'
                       : 'border border-transparent'} ${hasAsked ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
-                    <ArrowUp className="w-4 h-4" />
+                    <div className="flex items-center justify-between space-x-2 w-full">
+                      {!showResponse && !isLoading && !hasAsked && (
+                        <span className="text-xs font-bold text-white whitespace-nowrap">Click to ask</span>
+                      )}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${!showResponse && !isLoading && !hasAsked
+                        ? 'bg-primary/10 group-hover:bg-primary/20'
+                        : 'bg-transparent'}`}>
+                        <ArrowUp className="w-3 h-3 text-white" />
+                      </div>
+                    </div>
                   </Button>
                 </div>
               </div>
@@ -198,7 +204,7 @@ export default function Home() {
               </div>
 
               {/* PDF Content */}
-              <div className="p-6 bg-card text-card-foreground flex-1 relative overflow-hidden">
+              <div className="p-6 bg-card text-muted-foreground flex-1 relative overflow-hidden">
                 {pdfLoading && (
                   <div className="absolute inset-0 bg-card/90 flex items-center justify-center z-10">
                     <div className="flex flex-col items-center space-y-3">

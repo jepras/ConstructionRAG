@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, KeyboardEvent } from 'react';
-import { Mic, ArrowUp } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -41,33 +41,22 @@ export default function QueryInput({ onSubmit, disabled, placeholder = "Ask anyt
         placeholder={placeholder}
         disabled={disabled}
         className={cn(
-          "pr-24 transition-all duration-200",
+          "pr-12 transition-all duration-200",
           isFocused && "ring-2 ring-primary ring-offset-2"
         )}
+        style={{ paddingRight: '2.75rem' }}
       />
-      <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
-        <Button 
-          size="sm" 
-          variant="ghost" 
-          className="p-2"
-          disabled={disabled}
-          onClick={() => {
-            // TODO: Implement voice input
-            console.log('Voice input not yet implemented');
-          }}
-        >
-          <Mic className="w-4 h-4" />
-        </Button>
+      <div className="absolute inset-y-0 right-0.5 flex items-center">
         <Button
           onClick={handleSubmit}
           size="sm"
           variant="ghost"
           disabled={disabled || !query.trim()}
           className={cn(
-            "p-2 transition-all duration-300",
+            "p-2 transition-all duration-300 rounded-md",
             query.trim() && !disabled
-              ? "bg-primary hover:bg-primary/90 text-primary-foreground"
-              : ""
+              ? "bg-orange-500 hover:bg-orange-600 text-white shadow-sm"
+              : "bg-gray-100 hover:bg-gray-200 text-gray-400"
           )}
         >
           <ArrowUp className="w-4 h-4" />

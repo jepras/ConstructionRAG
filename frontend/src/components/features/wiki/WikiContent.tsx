@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -109,11 +110,42 @@ const components = {
       {children}
     </ol>
   ),
-  li: ({ children, ...props }: any) => (
-    <li className="leading-6" {...props}>
-      {children}
-    </li>
-  ),
+  li: ({ children, ...props }: any) => {
+    // Check if children contains nested lists (ul or ol elements)
+    // If so, we need to ensure proper nesting by wrapping non-list content
+    const hasNestedList = React.Children.toArray(children).some((child: any) => 
+      child?.type === 'ul' || child?.type === 'ol' || 
+      (child?.props && (child.props.className?.includes('list-') || child.type === components.ul || child.type === components.ol))
+    );
+
+    if (hasNestedList) {
+      // Separate text/inline content from nested lists
+      const nonListChildren: any[] = [];
+      const listChildren: any[] = [];
+      
+      React.Children.forEach(children, (child: any) => {
+        if (child?.type === 'ul' || child?.type === 'ol' || 
+            (child?.props && (child.props.className?.includes('list-') || child.type === components.ul || child.type === components.ol))) {
+          listChildren.push(child);
+        } else if (child) {
+          nonListChildren.push(child);
+        }
+      });
+
+      return (
+        <li className="leading-6" {...props}>
+          {nonListChildren.length > 0 && <div>{nonListChildren}</div>}
+          {listChildren}
+        </li>
+      );
+    }
+
+    return (
+      <li className="leading-6" {...props}>
+        {children}
+      </li>
+    );
+  },
 
   // Code blocks and inline code
   code: ({ className, children, ...props }: any) => {
