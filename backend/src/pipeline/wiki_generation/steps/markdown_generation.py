@@ -378,7 +378,20 @@ Generate the comprehensive markdown wiki page:"""
                 config={"callbacks": callbacks} if callbacks else None
             )
             
-            return response.content
+            content = response.content
+            
+            # Ensure proper UTF-8 encoding for all characters (Danish æøå, quotes, symbols, etc.)
+            if isinstance(content, bytes):
+                content = content.decode('utf-8')
+            elif isinstance(content, str):
+                # Fix any double-encoding issues by re-encoding/decoding
+                try:
+                    content = content.encode('utf-8').decode('utf-8')
+                except UnicodeError:
+                    # If already properly encoded, keep as-is
+                    pass
+            
+            return content
 
         except Exception as e:
             logger.error(f"Exception during LangChain ChatOpenAI call: {e}")

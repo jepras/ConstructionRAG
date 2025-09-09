@@ -197,6 +197,7 @@ async def create_upload(
     files: list[UploadFile] = File(...),  # noqa: B008
     email: str | None = Form(None),  # noqa: B008
     project_id: UUID | None = Form(None),  # noqa: B008
+    email_notifications_enabled: bool = Form(True),  # noqa: B008
     current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
 ):
@@ -266,6 +267,7 @@ async def create_upload(
                     "created_at": "now()",
                     "access_level": "public",
                     "email": email,
+                    "email_notifications_enabled": email_notifications_enabled,
                 }
             ).execute()
 
@@ -341,6 +343,7 @@ async def create_upload(
                 "user_id": current_user["id"],
                 "project_id": str(project_id),
                 "access_level": "private",
+                "email_notifications_enabled": email_notifications_enabled,
             }
         ).execute()
 

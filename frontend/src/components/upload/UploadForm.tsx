@@ -5,6 +5,7 @@ import { FileDropzone } from "./FileDropzone"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Globe, Lock, ExternalLink, Shield, Loader2 } from "lucide-react"
 import { useUploadFiles } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
@@ -24,6 +25,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [validationComplete, setValidationComplete] = useState(false)
   const [filesAreValid, setFilesAreValid] = useState(false)
   const [estimatedTime, setEstimatedTime] = useState(0)
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true)
   
   const uploadMutation = useUploadFiles()
 
@@ -60,6 +62,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
     })
     formData.append("email", email)
     formData.append("upload_type", "email")
+    formData.append("email_notifications_enabled", emailNotificationsEnabled.toString())
 
     uploadMutation.mutate(formData, {
       onSuccess: (response) => {
@@ -250,6 +253,21 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
             className="mt-1"
             required
           />
+        </div>
+        
+        <div className="flex items-center space-x-2 mt-4">
+          <Checkbox
+            id="email-notifications"
+            checked={emailNotificationsEnabled}
+            onCheckedChange={setEmailNotificationsEnabled}
+            disabled={uploadMutation.isPending}
+          />
+          <Label 
+            htmlFor="email-notifications"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            Send me email notifications when processing is complete and tips for getting the most out of the platform
+          </Label>
         </div>
       </div>
 

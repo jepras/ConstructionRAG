@@ -515,10 +515,10 @@ class WikiGenerationOrchestrator:
 
     async def _send_anonymous_completion_email(self, index_run_id: str) -> None:
         """Send completion email for anonymous uploads if email is available."""
-        # Get email from indexing run
+        # Get email and notification preference from indexing run
         indexing_run_response = (
             self.supabase.table("indexing_runs")
-            .select("email")
+            .select("email, email_notifications_enabled")
             .eq("id", index_run_id)
             .execute()
         )
@@ -528,8 +528,14 @@ class WikiGenerationOrchestrator:
             return
 
         email = indexing_run_response.data[0].get("email")
+        email_notifications_enabled = indexing_run_response.data[0].get("email_notifications_enabled", True)
+        
         if not email:
             logger.info(f"No email found for indexing run: {index_run_id}")
+            return
+            
+        if not email_notifications_enabled:
+            logger.info(f"Email notifications disabled for indexing run: {index_run_id}")
             return
 
         # Generate wiki URL (public project URL)
@@ -558,10 +564,10 @@ class WikiGenerationOrchestrator:
 
     async def _send_authenticated_completion_email(self, index_run_id: str) -> None:
         """Send completion email for authenticated user projects."""
-        # Get indexing run details including user_id and project_id
+        # Get indexing run details including user_id, project_id, and email notification preference
         indexing_run_response = (
             self.supabase.table("indexing_runs")
-            .select("user_id, project_id")
+            .select("user_id, project_id, email_notifications_enabled")
             .eq("id", index_run_id)
             .execute()
         )
@@ -572,9 +578,14 @@ class WikiGenerationOrchestrator:
         
         user_id = indexing_run_response.data[0].get("user_id")
         project_id = indexing_run_response.data[0].get("project_id")
+        email_notifications_enabled = indexing_run_response.data[0].get("email_notifications_enabled", True)
         
         if not user_id:
             logger.info(f"No user_id found for indexing run: {index_run_id}")
+            return
+            
+        if not email_notifications_enabled:
+            logger.info(f"Email notifications disabled for indexing run: {index_run_id}")
             return
         
         # Get user email from auth.users table via admin client
