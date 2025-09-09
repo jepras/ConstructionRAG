@@ -13,9 +13,17 @@ export default function UploadPage() {
 
   const handleUploadComplete = (runId: string) => {
     setIsUploaded(true)
-    // Scroll to top for better UX when showing success message
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // Scroll to top when isUploaded becomes true
+  useEffect(() => {
+    if (isUploaded) {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
+  }, [isUploaded])
 
   return (
     <div className="min-h-screen bg-background">

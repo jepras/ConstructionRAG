@@ -263,22 +263,16 @@ export default function QueryInterface({
               <p className="text-xs text-muted-foreground">Example questions:</p>
               <div className="flex flex-wrap gap-2 justify-center">
                 <button
-                  onClick={() => handleSubmit("What are the project requirements?")}
+                  onClick={() => handleSubmit("Hvad er omfanget af opgaven?")}
                   className="px-3 py-1 text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-full transition-colors"
                 >
-                  What are the project requirements?
+                  Hvad er omfanget af opgaven?
                 </button>
                 <button
-                  onClick={() => handleSubmit("What is the timeline for completion?")}
+                  onClick={() => handleSubmit("Hvilke krav og standarder skal overholdes?")}
                   className="px-3 py-1 text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-full transition-colors"
                 >
-                  What is the timeline?
-                </button>
-                <button
-                  onClick={() => handleSubmit("What materials are specified?")}
-                  className="px-3 py-1 text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-full transition-colors"
-                >
-                  What materials are specified?
+                  Hvilke krav og standarder skal overholdes?
                 </button>
               </div>
             </div>
@@ -295,6 +289,15 @@ export default function QueryInterface({
           ))
         )}
         <div ref={messagesEndRef} />
+        
+        {/* Language disclaimer - only show on start page */}
+        {messages.length === 0 && (
+          <div className="text-center px-6 pb-4">
+            <div className="inline-block px-4 py-2 bg-primary/5 border border-primary/20 rounded-lg text-muted-foreground text-sm">
+              kun dansk virker pt.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Input Area */}

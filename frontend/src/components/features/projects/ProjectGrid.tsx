@@ -53,11 +53,8 @@ export default function ProjectGrid() {
         id: wikiRun.id, // Use wiki run ID instead of indexing_run_id to ensure uniqueness
         name: wikiStructure.title || 'Name not found',
         description: wikiStructure.description || 'Construction project documentation',
-        stats: {
-          documents: 1, // Assume at least 1 document if wiki was generated
-          wikiPages: pagesMetadata.length || 0,
-          totalSize: formatFileSize(getTotalSize(pagesMetadata))
-        },
+        language: wikiRun.language || 'da', // Default to Danish if language not specified
+        accessLevel: wikiRun.access_level || 'public',
         slug: `${(wikiStructure.title || 'name-not-found').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${wikiRun.indexing_run_id}`
       };
     })

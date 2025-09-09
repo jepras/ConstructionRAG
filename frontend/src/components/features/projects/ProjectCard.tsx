@@ -2,20 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { FileText, BookOpen, HardDrive, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2, Globe, Lock } from 'lucide-react';
 import { usePrefetchProject } from '@/hooks/useApiQueries';
-
-export interface ProjectStats {
-  documents: number;
-  wikiPages: number;
-  totalSize: string;
-}
 
 export interface Project {
   id: string;
   name: string;
   description: string;
-  stats: ProjectStats;
+  language: string;
+  accessLevel: string;
   slug: string;
 }
 
@@ -58,17 +53,27 @@ export default function ProjectCard({ project }: ProjectCardProps) {
       
       <div className="flex items-center justify-between pt-4 border-t border-border/50">
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          {/* Danish flag for Danish projects */}
+          {(project.language === 'da' || project.language === 'danish') && (
+            <div className="flex items-center gap-1">
+              <span className="text-sm">🇩🇰</span>
+              <span>Danish</span>
+            </div>
+          )}
+          
+          {/* Access level indicator */}
           <div className="flex items-center gap-1">
-            <FileText className="w-3.5 h-3.5" />
-            <span>{project.stats.documents}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>{project.stats.wikiPages}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <HardDrive className="w-3.5 h-3.5" />
-            <span>{project.stats.totalSize}</span>
+            {project.accessLevel === 'public' ? (
+              <>
+                <Globe className="w-3.5 h-3.5" />
+                <span>Public</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                <span>Private</span>
+              </>
+            )}
           </div>
         </div>
         

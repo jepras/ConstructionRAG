@@ -105,7 +105,8 @@ async def list_indexing_runs_with_wikis(
                     *,
                     wiki_generation_runs!project_wikis_wiki_run_id_fkey(
                         wiki_structure,
-                        pages_metadata
+                        pages_metadata,
+                        language
                     )
                 """)
                 .eq("wiki_status", "completed")
@@ -198,7 +199,8 @@ async def list_user_projects_with_wikis(
                 *,
                 wiki_generation_runs!project_wikis_wiki_run_id_fkey(
                     wiki_structure,
-                    pages_metadata
+                    pages_metadata,
+                    language
                 ),
                 projects!inner(
                     name,
