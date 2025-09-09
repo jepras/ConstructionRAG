@@ -124,7 +124,7 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
       <div className="container mx-auto px-4">
         {/* Project title */}
         <div className="py-6 text-center">
-          <h1 className="text-3xl font-bold text-white">{projectName}</h1>
+          <h1 className="text-3xl font-bold text-white">Project Overview</h1>
         </div>
 
         {/* Navigation tabs with controls */}

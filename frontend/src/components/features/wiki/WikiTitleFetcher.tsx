@@ -6,6 +6,7 @@ import { useWikiTitle } from '@/components/providers/WikiTitleProvider';
 
 interface WikiTitleFetcherProps {
   indexingRunId: string;
+  initialTitle?: string; // Optional title to set immediately without API call
 }
 
 // Extract UUID from slug format: "project-name-{uuid}"
@@ -18,10 +19,17 @@ function extractUUIDFromSlug(slug: string): string {
   return match[0];
 }
 
-export default function WikiTitleFetcher({ indexingRunId }: WikiTitleFetcherProps) {
+export default function WikiTitleFetcher({ indexingRunId, initialTitle }: WikiTitleFetcherProps) {
   const { setWikiTitle } = useWikiTitle();
 
   useEffect(() => {
+    // If we have an initial title, use it immediately
+    if (initialTitle) {
+      setWikiTitle(initialTitle);
+      return;
+    }
+
+    // Otherwise, fetch the title via API (fallback for backward compatibility)
     async function fetchTitle() {
       if (!indexingRunId) return;
       
@@ -29,28 +37,12 @@ export default function WikiTitleFetcher({ indexingRunId }: WikiTitleFetcherProp
         // Extract the actual UUID from the slug
         const actualRunId = extractUUIDFromSlug(indexingRunId);
         
-        // Get wiki runs for this indexing run
-        const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
+        // Use the new batched endpoint for better performance
+        const wikiData = await apiClient.getWikiInitialData(actualRunId);
         
-        // Find the first completed wiki run
-        const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
-        
-        if (!completedWikiRun) {
-          // No wiki available, use a default title
-          setWikiTitle('Project');
-          return;
-        }
-
-        // Get wiki metadata to extract the title
-        try {
-          const wikiMetadata = await apiClient.getWikiMetadata(completedWikiRun.id);
-          if (wikiMetadata?.metadata?.wiki_structure?.title) {
-            setWikiTitle(wikiMetadata.metadata.wiki_structure.title);
-          } else {
-            setWikiTitle('Project');
-          }
-        } catch (error) {
-          console.log('Could not fetch wiki metadata, using default title');
+        if (wikiData.metadata?.metadata?.wiki_structure?.title) {
+          setWikiTitle(wikiData.metadata.metadata.wiki_structure.title);
+        } else {
           setWikiTitle('Project');
         }
       } catch (error) {
@@ -60,7 +52,7 @@ export default function WikiTitleFetcher({ indexingRunId }: WikiTitleFetcherProp
     }
 
     fetchTitle();
-  }, [indexingRunId, setWikiTitle]);
+  }, [indexingRunId, initialTitle, setWikiTitle]);
 
   return null;
 }

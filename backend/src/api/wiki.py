@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from ..config.database import get_supabase_client, get_supabase_admin_client
 from ..models.pipeline import UploadType
+from ..services.storage_service import UploadType as StorageUploadType
 from ..pipeline.wiki_generation.orchestrator import WikiGenerationOrchestrator
 from ..services.auth_service import get_current_user_optional
 from ..services.pipeline_read_service import PipelineReadService
@@ -565,3 +566,151 @@ async def get_wiki_run_status(
         logger.error(f"Unexpected error in get_wiki_run_status: {type(e).__name__}: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise AppError("Failed to get wiki run status", error_code=ErrorCode.INTERNAL_ERROR) from e
+
+
+@router.get("/initial/{indexing_run_id}", response_model=dict[str, Any])
+async def get_wiki_initial_data(
+    indexing_run_id: UUID,
+    current_user: dict[str, Any] | None = Depends(get_optional_user),
+):
+    """Get all initial wiki data in one call - wiki runs, pages, first page content, and metadata.
+    
+    This batched endpoint optimizes performance by combining multiple API calls into one,
+    reducing latency for initial wiki page renders.
+    """
+    try:
+        orchestrator = WikiGenerationOrchestrator()
+        storage_service = StorageService()
+
+        # Access control and upload type validation (reused from list_wiki_runs)
+        reader = PipelineReadService()
+        upload_type = None
+
+        if current_user:
+            allowed = reader.get_run_for_user(str(indexing_run_id), current_user["id"])
+            if not allowed:
+                raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
+            upload_type = allowed.get("upload_type", "user_project")
+        else:
+            from ..services.pipeline_service import PipelineService
+
+            pipeline_service = PipelineService(use_admin_client=True)
+            indexing_run = await pipeline_service.get_indexing_run(str(indexing_run_id))
+            if not indexing_run:
+                raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
+            upload_type = getattr(indexing_run, "upload_type", "user_project")
+            if upload_type != "email":
+                raise AppError(
+                    "Access denied: Authentication required for user project wikis",
+                    error_code=ErrorCode.ACCESS_DENIED,
+                )
+
+        # Get wiki runs for this indexing run
+        wiki_runs = await orchestrator.list_wiki_runs(str(indexing_run_id))
+        
+        # Find the first completed wiki run
+        completed_wiki_run = None
+        for wiki_run in wiki_runs:
+            if wiki_run.status == 'completed':
+                completed_wiki_run = wiki_run
+                break
+
+        if not completed_wiki_run:
+            return {
+                "indexing_run_id": str(indexing_run_id),
+                "wiki_run": None,
+                "pages": [],
+                "first_page_content": None,
+                "metadata": None,
+                "message": "No completed wiki found"
+            }
+
+        # Get pages from database (pages_metadata column)
+        pages = []
+        if completed_wiki_run.pages_metadata:
+            for page_meta in completed_wiki_run.pages_metadata:
+                pages.append({
+                    "filename": page_meta.filename,
+                    "title": page_meta.title,
+                    "size": page_meta.file_size,
+                    "storage_path": page_meta.storage_path,
+                    "storage_url": page_meta.storage_url,
+                    "order": page_meta.order,
+                })
+
+        # Sort pages by order and get first page content if available
+        pages.sort(key=lambda x: x["order"])
+        first_page_content = None
+        
+        if pages:
+            first_page = pages[0]
+            page_name = first_page["filename"].replace('.md', '')
+            
+            # Get first page content from storage using the correct method
+            if first_page["storage_path"]:
+                try:
+                    content = await storage_service.get_wiki_page_content(
+                        wiki_run_id=UUID(str(completed_wiki_run.id)),
+                        filename=first_page["filename"],
+                        upload_type=StorageUploadType(upload_type),
+                        user_id=UUID(str(completed_wiki_run.user_id)) if completed_wiki_run.user_id else None,
+                        project_id=UUID(str(completed_wiki_run.project_id)) if completed_wiki_run.project_id else None,
+                        index_run_id=UUID(str(indexing_run_id))
+                    )
+                    if content:
+                        first_page_content = {
+                            "filename": first_page["filename"],
+                            "title": first_page["title"],
+                            "content": content,
+                            "storage_path": first_page["storage_path"],
+                            "storage_url": first_page["storage_url"],
+                        }
+                except Exception as content_error:
+                    logger.warning(f"Could not load first page content: {content_error}")
+
+        # Get metadata from database (wiki_structure and pages_metadata columns)
+        metadata = {
+            "wiki_structure": completed_wiki_run.wiki_structure,
+            "pages_metadata": completed_wiki_run.pages_metadata,
+            "generated_at": (completed_wiki_run.completed_at.isoformat() if completed_wiki_run.completed_at else None),
+        }
+
+        # Build wiki run info
+        wiki_run_info = {
+            "id": str(completed_wiki_run.id),
+            "indexing_run_id": str(completed_wiki_run.indexing_run_id),
+            "upload_type": completed_wiki_run.upload_type,
+            "user_id": str(completed_wiki_run.user_id) if completed_wiki_run.user_id else None,
+            "project_id": str(completed_wiki_run.project_id) if completed_wiki_run.project_id else None,
+            "status": completed_wiki_run.status,
+            "created_at": (completed_wiki_run.created_at.isoformat() if completed_wiki_run.created_at else None),
+            "completed_at": (completed_wiki_run.completed_at.isoformat() if completed_wiki_run.completed_at else None),
+            "error_message": completed_wiki_run.error_message,
+        }
+
+        return {
+            "indexing_run_id": str(indexing_run_id),
+            "wiki_run": wiki_run_info,
+            "pages": pages,
+            "total_pages": len(pages),
+            "first_page_content": first_page_content,
+            "metadata": metadata,
+        }
+
+    except HTTPException as exc:
+        logger.error(f"HTTPException in get_wiki_initial_data: {exc}")
+        status = getattr(exc, "status_code", 500)
+        code = (
+            ErrorCode.NOT_FOUND
+            if status == 404
+            else ErrorCode.ACCESS_DENIED
+            if status == 403
+            else ErrorCode.INTERNAL_ERROR
+        )
+        raise AppError(str(getattr(exc, "detail", "Failed to get wiki initial data")), error_code=code) from exc
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in get_wiki_initial_data: {type(e).__name__}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise AppError("Failed to get wiki initial data", error_code=ErrorCode.INTERNAL_ERROR) from e

@@ -41,13 +41,10 @@ async function PublicWikiPageContent({
     // Extract the actual UUID from the slug
     const actualRunId = extractUUIDFromSlug(indexingRunId);
     
-    // Get wiki runs for this indexing run
-    const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
+    // Use the optimized batched endpoint (will be cached from first page load)
+    const wikiData = await apiClient.getWikiInitialData(actualRunId);
     
-    // Find the first completed wiki run
-    const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
-    
-    if (!completedWikiRun) {
+    if (!wikiData.wiki_run) {
       return (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Not Available</h2>
@@ -58,12 +55,7 @@ async function PublicWikiPageContent({
       );
     }
 
-    // Get wiki pages for the completed wiki run
-    const wikiPagesResponse = await apiClient.getWikiPages(completedWikiRun.id);
-    
-    // Extract pages array from response and sort by order
-    const backendPages = wikiPagesResponse.pages || [];
-    if (backendPages.length === 0) {
+    if (wikiData.pages.length === 0) {
       return (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Pages Not Found</h2>
@@ -74,13 +66,11 @@ async function PublicWikiPageContent({
       );
     }
     
-    // Sort pages by order and map to expected format
-    const sortedPages = backendPages
-      .sort((a, b) => a.order - b.order)
-      .map(page => ({
-        ...page,
-        name: page.filename.replace('.md', '') // Add name field for compatibility
-      }));
+    // Map pages to expected format (add name field for compatibility)
+    const sortedPages = wikiData.pages.map(page => ({
+      ...page,
+      name: page.filename.replace('.md', '') // Add name field for compatibility
+    }));
     
     // Check if the requested page exists
     const requestedPage = sortedPages.find(page => page.name === pageName);
@@ -95,8 +85,17 @@ async function PublicWikiPageContent({
       );
     }
 
-    // Get content for the requested page
-    const pageContent = await apiClient.getWikiPageContent(completedWikiRun.id, pageName);
+    // Get content for the requested page - this is the only API call we need to make!
+    let pageContent = await apiClient.getWikiPageContent(wikiData.wiki_run.id, pageName);
+
+    // Remove duplicate H1 heading if it matches the page title
+    if (pageContent.content && pageContent.title) {
+      const h1Pattern = new RegExp(`^#\\s+${pageContent.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\n`, 'i');
+      pageContent = {
+        ...pageContent,
+        content: pageContent.content.replace(h1Pattern, '')
+      };
+    }
 
     // For single-slug public projects, use the indexing run ID as the project slug
     const navigationSlug = indexingRunId;

@@ -24,27 +24,28 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-# Add backend src to path for imports
-backend_path = Path(__file__).parent / "src"
+# Add backend to path for imports
+backend_path = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_path))
 
 try:
-    from config.database import get_supabase_admin_client
-    from services.storage_service import StorageService, UploadType
-    from utils.exceptions import StorageError
-except ImportError as e:
+    from src.config.database import get_supabase_admin_client
+    from src.services.storage_service import StorageService, UploadType
+    from src.utils.exceptions import StorageError
+except Exception as e:
     print(f"Import error: {e}")
+    print(f"Error type: {type(e).__name__}")
+    print(f"Backend path: {backend_path}")
+    print(f"Path exists: {backend_path.exists()}")
+    import traceback
+    traceback.print_exc()
     print("Make sure you're running this script from the backend directory")
     sys.exit(1)
 
 
 # Configuration - Add indexing run IDs here for manual deletion
 INDEXING_RUNS_TO_DELETE = [
-    "8f9feb5b-579d-4c75-954a-3543ad8fc94f",
-    # "c7481c9b-80df-4c6c-9f29-f52288759fc3"
-    # "run-id-1",
-    # "run-id-2",
-    # Add specific indexing run IDs here
+    # Add specific indexing run IDs here if needed
 ]
 
 # Logging setup

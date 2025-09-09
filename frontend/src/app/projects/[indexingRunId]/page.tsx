@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
 import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
 import ProjectWikiClient from '@/components/features/wiki/ProjectWikiClient';
+import WikiTitleSetter from '@/components/features/wiki/WikiTitleSetter';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface PublicProjectPageProps {
@@ -26,18 +27,24 @@ function extractUUIDFromSlug(slug: string): string {
   return match[0];
 }
 
+// Extract wiki title from metadata
+function extractWikiTitle(metadata: any): string {
+  try {
+    return metadata?.metadata?.wiki_structure?.title || 'Project';
+  } catch {
+    return 'Project';
+  }
+}
+
 async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: string }) {
   try {
     // Extract the actual UUID from the slug
     const actualRunId = extractUUIDFromSlug(indexingRunId);
     
-    // Get wiki runs for this indexing run
-    const wikiRuns = await apiClient.getWikiRunsByIndexingRun(actualRunId);
+    // Get all wiki data in one batched call
+    const wikiData = await apiClient.getWikiInitialData(actualRunId);
     
-    // Find the first completed wiki run
-    const completedWikiRun = wikiRuns.find(run => run.status === 'completed');
-    
-    if (!completedWikiRun) {
+    if (!wikiData.wiki_run) {
       return (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Not Available</h2>
@@ -48,12 +55,7 @@ async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: stri
       );
     }
 
-    // Get wiki pages for the completed wiki run
-    const wikiPagesResponse = await apiClient.getWikiPages(completedWikiRun.id);
-    
-    // Extract pages array from response and sort by order
-    const backendPages = wikiPagesResponse.pages || [];
-    if (backendPages.length === 0) {
+    if (wikiData.pages.length === 0) {
       return (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Pages Not Found</h2>
@@ -64,31 +66,51 @@ async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: stri
       );
     }
     
-    // Sort pages by order and map to expected format
-    const sortedPages = backendPages
-      .sort((a, b) => a.order - b.order)
-      .map(page => ({
-        ...page,
-        name: page.filename.replace('.md', '') // Add name field for compatibility
-      }));
+    // Map pages to expected format (add name field for compatibility)
+    const sortedPages = wikiData.pages.map(page => ({
+      ...page,
+      name: page.filename.replace('.md', '') // Add name field for compatibility
+    }));
     
     const firstPage = sortedPages[0];
-    
-    // Get content for the first page (serves as overview)
-    const firstPageContent = await apiClient.getWikiPageContent(completedWikiRun.id, firstPage.name);
+    const firstPageContent = wikiData.first_page_content;
+
+    // Use default content if first page content is not available
+    let contentToDisplay = firstPageContent || {
+      filename: firstPage.filename,
+      title: firstPage.title,
+      content: 'Content is loading...',
+      storage_path: firstPage.storage_path,
+      storage_url: firstPage.storage_url,
+    };
+
+    // Remove duplicate H1 heading if it matches the page title
+    if (contentToDisplay.content && contentToDisplay.title) {
+      const h1Pattern = new RegExp(`^#\\s+${contentToDisplay.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\n`, 'i');
+      contentToDisplay = {
+        ...contentToDisplay,
+        content: contentToDisplay.content.replace(h1Pattern, '')
+      };
+    }
+
+    // Extract title from metadata
+    const wikiTitle = extractWikiTitle(wikiData.metadata);
 
     // For single-slug public projects, use the indexing run ID as both slug and runId
     const navigationSlug = indexingRunId;
 
     return (
-      <WikiLayout 
-        pages={sortedPages}
-        projectSlug={navigationSlug}
-        content={firstPageContent.content}
-        currentPage={firstPage.name}
-      >
-        <LazyWikiContent content={firstPageContent} />
-      </WikiLayout>
+      <>
+        <WikiTitleSetter title={wikiTitle} />
+        <WikiLayout 
+          pages={sortedPages}
+          projectSlug={navigationSlug}
+          content={contentToDisplay.content}
+          currentPage={firstPage.name}
+        >
+          <LazyWikiContent content={contentToDisplay} />
+        </WikiLayout>
+      </>
     );
   } catch (error) {
     console.error('Error loading public project wiki:', error);

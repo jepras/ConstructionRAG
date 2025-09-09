@@ -99,6 +99,16 @@ export interface WikiRun {
   completed_at?: string
 }
 
+export interface WikiInitialData {
+  indexing_run_id: string
+  wiki_run: WikiRun | null
+  pages: WikiPage[]
+  total_pages: number
+  first_page_content: WikiPageContent | null
+  metadata: WikiMetadata | null
+  message?: string
+}
+
 // Pipeline Configuration interfaces (matching actual API structure)
 export interface PipelineConfig {
   storage?: {
@@ -503,7 +513,11 @@ export class ApiClient {
   async getWikiMetadata(wikiRunId: string): Promise<WikiMetadata> {
     const headers = await this.getAuthHeaders()
     return this.request<WikiMetadata>(`/api/wiki/runs/${wikiRunId}/metadata`, {
-      headers
+      headers,
+      next: {
+        revalidate: 3600, // 1 hour cache for wiki metadata
+        tags: [`wiki-metadata-${wikiRunId}`, 'wiki-metadata']
+      }
     })
   }
 
@@ -521,6 +535,17 @@ export class ApiClient {
       next: {
         revalidate: 3600, // 1 hour cache for wiki runs
         tags: [`wiki-runs-${indexingRunId}`, 'wiki-runs']
+      }
+    })
+  }
+
+  async getWikiInitialData(indexingRunId: string): Promise<WikiInitialData> {
+    const headers = await this.getAuthHeaders()
+    return this.request<WikiInitialData>(`/api/wiki/initial/${indexingRunId}`, {
+      headers,
+      next: {
+        revalidate: 3600, // 1 hour cache for wiki initial data
+        tags: [`wiki-initial-${indexingRunId}`, 'wiki-initial']
       }
     })
   }
