@@ -400,6 +400,33 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Video Demo Section */}
+      <div className="container mx-auto px-6 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-bold mb-4">
+            See how it works in 15 seconds
+          </h2>
+          <p className="text-xl text-muted-foreground">
+            Watch how construction document processing transforms from hours to seconds
+          </p>
+        </div>
+        
+        <div className="max-w-4xl mx-auto">
+          <div className="relative">
+            <video 
+              className="w-full rounded-lg shadow-xl border border-border"
+              controls
+              poster="/video-poster.jpg"
+              preload="none"
+              muted
+            >
+              <source src="/demo-video.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
