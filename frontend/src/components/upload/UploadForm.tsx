@@ -105,7 +105,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
           </h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Visitors can upload a maximum of 5 PDFs. Unlimited (within reason) for users.
+          Visitors can upload a maximum of 5 PDFs. Almost unlimited for users.
         </p>
 
         <FileDropzone
@@ -244,7 +244,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
       <div className="bg-card border border-border rounded-lg p-6">
         <p className="text-sm text-muted-foreground mb-4">
-          It might take a few hours for our AI to crunch your PDFs, images & tables, depending on the content.
+          It can take anything from minutes to a few hours for our AI to crunch your PDFs, images & tables, depending on the complexity of your pdfs.
           Add your email and you can test this first thing tomorrow with your morning coffee on site!
         </p>
         <div>

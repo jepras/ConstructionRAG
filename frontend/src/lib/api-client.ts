@@ -57,13 +57,28 @@ export interface WikiPageContent {
 }
 
 export interface WikiMetadata {
-  id: string
-  indexing_run_id: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  created_at: string
-  completed_at?: string
-  pages_count: number
-  total_word_count: number
+  wiki_run_id: string
+  metadata: {
+    wiki_structure?: {
+      title?: string
+      description?: string
+      pages?: Array<{
+        id: string
+        title: string
+        description: string
+        queries: string[]
+        relevance_score: string
+      }>
+    }
+    pages_metadata?: Array<{
+      title: string
+      filename: string
+      storage_path: string
+      storage_url: string
+      file_size: number
+      order: number
+    }>
+  }
 }
 
 export interface WikiRunStatus {

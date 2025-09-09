@@ -6,6 +6,7 @@ import { WikiPage } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import WikiInfoBox from './WikiInfoBox';
 
 // Helper function to determine the base path based on current context
 function getBasePath(pathname: string): string {
@@ -126,6 +127,8 @@ export default function WikiNavigation({ pages, projectSlug, currentPage }: Wiki
   return (
     <div className="w-64 bg-card h-full flex flex-col">
       <div className="p-4 flex-1 overflow-y-auto">
+        <WikiInfoBox projectSlug={projectSlug} />
+        
         <h2 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wide pt-6 sticky top-0 bg-card">
           Sections
         </h2>

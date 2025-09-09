@@ -37,7 +37,9 @@ export default function PDFPageViewerSimple({
   const [documentLoadError, setDocumentLoadError] = useState<string | null>(null);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
+    const endTime = performance.now();
     console.log('PDFPageViewerSimple: Document loaded with', numPages, 'pages');
+    console.log(`PDF Document load time: ${(endTime - (window as any).pdfLoadStartTime || 0).toFixed(2)}ms`);
     setNumPages(numPages);
     setDocumentLoadError(null);
   }, []);
@@ -48,7 +50,9 @@ export default function PDFPageViewerSimple({
   }, []);
 
   const onPageLoadSuccess = useCallback((page: any) => {
+    const endTime = performance.now();
     console.log('PDFPageViewerSimple: Page', pageNumber, 'loaded successfully');
+    console.log(`PDF Page ${pageNumber} render time: ${(endTime - (window as any).pageRenderStartTime || 0).toFixed(2)}ms`);
     console.log('PDFPageViewerSimple: Page dimensions:', {
       width: page.width,
       height: page.height,
@@ -77,10 +81,20 @@ export default function PDFPageViewerSimple({
     [highlights]
   );
 
-  // Memoize options to prevent unnecessary reloads
+  // Memoize streaming-optimized options to prevent unnecessary reloads
   const documentOptions = useMemo(() => ({
-    cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
-    standardFontDataUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/standard_fonts/',
+    // Enable streaming for faster initial load
+    disableAutoFetch: true,     // Don't fetch all pages upfront
+    disableStream: false,       // Enable streaming mode
+    disableFontFace: true,      // Skip font loading initially for faster render
+    
+    // Defer heavy resources until needed
+    cMapUrl: undefined,         // Load character maps on demand
+    standardFontDataUrl: undefined, // Load fonts on demand
+    
+    // Optimize for single page viewing
+    enableXfa: false,           // Disable XFA form processing
+    verbosity: 0,              // Reduce logging overhead
   }), []);
 
   return (
@@ -89,6 +103,11 @@ export default function PDFPageViewerSimple({
         file={pdfUrl}
         onLoadSuccess={onDocumentLoadSuccess}
         onLoadError={onDocumentLoadError}
+        onSourceSuccess={() => {
+          // Track when PDF starts loading
+          (window as any).pdfLoadStartTime = performance.now();
+          console.log('PDF streaming started...');
+        }}
         loading={
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -113,6 +132,10 @@ export default function PDFPageViewerSimple({
             scale={scale}
             onLoadSuccess={onPageLoadSuccess}
             onLoadError={onPageLoadError}
+            onRenderSuccess={() => {
+              // Track when page rendering starts
+              (window as any).pageRenderStartTime = performance.now();
+            }}
             renderTextLayer={true}
             renderAnnotationLayer={false}
             customTextRenderer={textRenderer}

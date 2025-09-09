@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header';
 import ProjectHeader from '@/components/layout/ProjectHeader';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { WikiTitleProvider, useWikiTitle } from '@/components/providers/WikiTitleProvider';
+import WikiTitleFetcher from '@/components/features/wiki/WikiTitleFetcher';
 
 interface PublicProjectLayoutProps {
   children: ReactNode;
@@ -24,8 +25,8 @@ function PublicProjectLayoutContent({ children, params }: PublicProjectLayoutPro
     });
   }, [params]);
 
-  // Use wiki title if available, otherwise fallback to slug-based name
-  const displayName = wikiTitle || (indexingRunId ? `Project ${indexingRunId.slice(0, 8)}` : "Project");
+  // Use wiki title if available, otherwise show "Loading..."
+  const displayName = wikiTitle || "Loading...";
 
   // For public projects, use the indexing run ID as the project slug
   const projectSlug = indexingRunId;
@@ -34,11 +35,14 @@ function PublicProjectLayoutContent({ children, params }: PublicProjectLayoutPro
     <div className="min-h-screen bg-background">
       <Header variant={isAuthenticated ? "app" : "marketing"} />
       {indexingRunId && (
-        <ProjectHeader
-          projectSlug={projectSlug}
-          projectName={displayName}
-          runId={indexingRunId}
-        />
+        <>
+          <WikiTitleFetcher indexingRunId={indexingRunId} />
+          <ProjectHeader
+            projectSlug={projectSlug}
+            projectName={displayName}
+            runId={indexingRunId}
+          />
+        </>
       )}
       <main className="flex-1">
         <div className="container mx-auto px-4 py-6">

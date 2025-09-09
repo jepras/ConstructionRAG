@@ -173,6 +173,11 @@ export function SignUpForm() {
                     <SelectItem value="pro">Pro</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <Link href="/pricing" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
+                    Read about the different plans here
+                  </Link>
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-foreground">

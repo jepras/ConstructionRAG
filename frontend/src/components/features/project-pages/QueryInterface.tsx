@@ -257,7 +257,7 @@ export default function QueryInterface({
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">Start a Conversation</h3>
             <p className="text-muted-foreground text-sm max-w-md mx-auto">
-              Ask questions about the project documentation and get AI-powered answers with source citations.
+              Ask questions about the project documentation and get AI-powered answers with source citations. The system works best with specific questions rather than vague general ones.
             </p>
             <div className="mt-6 space-y-2">
               <p className="text-xs text-muted-foreground">Example questions:</p>

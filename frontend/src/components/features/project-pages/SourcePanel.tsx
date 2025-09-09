@@ -24,28 +24,49 @@ export default function SourcePanel({
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [showFullViewer, setShowFullViewer] = useState(false);
+  
+  // Cache PDF URLs to avoid refetching
+  const [pdfUrlCache, setPdfUrlCache] = useState<Map<string, string>>(new Map());
 
   // Load PDF URL when source changes
   useEffect(() => {
+    const currentDocId = selectedSource?.metadata?.document_id || selectedSource?.document_id;
+    const previousDocId = pdfUrl ? 'has-url' : 'no-url';
+    
     console.log('SourcePanel: Source changed', {
       selectedSource,
-      hasDocumentId: !!(selectedSource?.metadata?.document_id || selectedSource?.document_id),
-      documentId: selectedSource?.metadata?.document_id || selectedSource?.document_id,
-      indexingRunId
+      hasDocumentId: !!currentDocId,
+      documentId: currentDocId,
+      indexingRunId,
+      previousState: previousDocId,
+      cacheSize: pdfUrlCache.size
     });
 
     if (selectedSource?.metadata?.document_id || selectedSource?.document_id) {
       const loadPdfUrl = async () => {
+        const documentId = selectedSource.metadata?.document_id || selectedSource.document_id;
+        if (!documentId) {
+          setPdfError('No document ID found');
+          return;
+        }
+
+        // Create cache key
+        const cacheKey = `${documentId}-${indexingRunId || 'auth'}`;
+        
+        // Check cache first
+        if (pdfUrlCache.has(cacheKey)) {
+          console.log('SourcePanel: Using cached PDF URL for document:', documentId);
+          const cachedUrl = pdfUrlCache.get(cacheKey)!;
+          setPdfUrl(cachedUrl);
+          return;
+        }
+
+        const apiStartTime = performance.now();
         setLoadingPdf(true);
         setPdfError(null);
         
         try {
-          const documentId = selectedSource.metadata?.document_id || selectedSource.document_id;
           console.log('SourcePanel: Loading PDF for document:', documentId);
-          
-          if (!documentId) {
-            throw new Error('No document ID found');
-          }
 
           // Build URL with optional indexingRunId for anonymous access
           const params = new URLSearchParams();
@@ -64,6 +85,9 @@ export default function SourcePanel({
             credentials: 'include',
           });
 
+          const apiEndTime = performance.now();
+          console.log(`API response time: ${(apiEndTime - apiStartTime).toFixed(2)}ms`);
+
           console.log('SourcePanel: PDF endpoint response:', {
             ok: response.ok,
             status: response.status,
@@ -79,7 +103,7 @@ export default function SourcePanel({
           const data = await response.json();
           console.log('SourcePanel: PDF URL received:', {
             hasUrl: !!data.url,
-            url: data.url, // Log the actual URL for debugging
+            url: data.url,
             filename: data.filename,
             expiresIn: data.expires_in,
             fullResponse: data
@@ -90,6 +114,8 @@ export default function SourcePanel({
             throw new Error('No PDF URL in response');
           }
           
+          // Cache the URL
+          setPdfUrlCache(prev => new Map(prev.set(cacheKey, data.url)));
           setPdfUrl(data.url);
         } catch (error) {
           console.error('SourcePanel: Error loading PDF:', error);
@@ -258,6 +284,7 @@ export default function SourcePanel({
                   </div>
                 ) : pdfUrl ? (
                   <PDFPageViewer
+                    key={`${selectedSource.metadata?.document_id || selectedSource.document_id}-${selectedSource.page_number || selectedSource.metadata?.page_number || 1}`}
                     pdfUrl={pdfUrl}
                     pageNumber={selectedSource.page_number || selectedSource.metadata?.page_number || 1}
                     highlights={currentHighlights}

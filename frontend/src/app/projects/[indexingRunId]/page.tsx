@@ -4,7 +4,6 @@ import WikiLayout from '@/components/features/wiki/WikiLayout';
 import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
 import ProjectWikiClient from '@/components/features/wiki/ProjectWikiClient';
 import { Skeleton } from '@/components/ui/skeleton';
-import WikiTitleSetter from '@/components/features/wiki/WikiTitleSetter';
 
 interface PublicProjectPageProps {
   params: Promise<{ indexingRunId: string }>;
@@ -40,41 +39,28 @@ async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: stri
     
     if (!completedWikiRun) {
       return (
-        <>
-          <WikiTitleSetter title={null} />
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Not Available</h2>
-            <p className="text-muted-foreground">
-              This project doesn't have a wiki generated yet.
-            </p>
-          </div>
-        </>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Not Available</h2>
+          <p className="text-muted-foreground">
+            This project doesn't have a wiki generated yet.
+          </p>
+        </div>
       );
     }
 
     // Get wiki pages for the completed wiki run
     const wikiPagesResponse = await apiClient.getWikiPages(completedWikiRun.id);
     
-    // Extract wiki title from indexing run ID if it matches the known pattern
-    // This is a temporary solution until the backend API properly returns wiki structure
-    let wikiTitle: string | null = null;
-    if (indexingRunId.includes('klub-guldberg')) {
-      wikiTitle = 'Klub Guldberg Projekt Wiki';
-    }
-    
     // Extract pages array from response and sort by order
     const backendPages = wikiPagesResponse.pages || [];
     if (backendPages.length === 0) {
       return (
-        <>
-          <WikiTitleSetter title={wikiTitle} />
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Pages Not Found</h2>
-            <p className="text-muted-foreground">
-              No wiki pages are available for this project.
-            </p>
-          </div>
-        </>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Pages Not Found</h2>
+          <p className="text-muted-foreground">
+            No wiki pages are available for this project.
+          </p>
+        </div>
       );
     }
     
@@ -95,31 +81,25 @@ async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: stri
     const navigationSlug = indexingRunId;
 
     return (
-      <>
-        <WikiTitleSetter title={wikiTitle} />
-        <WikiLayout 
-          pages={sortedPages}
-          projectSlug={navigationSlug}
-          content={firstPageContent.content}
-          currentPage={firstPage.name}
-        >
-          <LazyWikiContent content={firstPageContent} />
-        </WikiLayout>
-      </>
+      <WikiLayout 
+        pages={sortedPages}
+        projectSlug={navigationSlug}
+        content={firstPageContent.content}
+        currentPage={firstPage.name}
+      >
+        <LazyWikiContent content={firstPageContent} />
+      </WikiLayout>
     );
   } catch (error) {
     console.error('Error loading public project wiki:', error);
     
     return (
-      <>
-        <WikiTitleSetter title={null} />
-        <div className="text-center py-12">
-          <h2 className="text-2xl font-semibold text-foreground mb-4">Project Not Found</h2>
-          <p className="text-muted-foreground">
-            The requested project could not be found or is not available.
-          </p>
-        </div>
-      </>
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-semibold text-foreground mb-4">Project Not Found</h2>
+        <p className="text-muted-foreground">
+          The requested project could not be found or is not available.
+        </p>
+      </div>
     );
   }
 }

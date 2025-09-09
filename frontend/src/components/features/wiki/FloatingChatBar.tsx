@@ -57,7 +57,8 @@ export default function FloatingChatBar({ projectSlug, isAuthenticated = false }
     <div className="fixed bottom-0 left-0 right-0 z-50 p-4">
       <div className="max-w-2xl mx-auto">
         <div className={cn(
-          "bg-primary/5 backdrop-blur-lg rounded-2xl shadow-2xl border border-primary/20",
+          "bg-primary/5 backdrop-blur-lg rounded-2xl shadow-2xl",
+          "border-2 border-primary/30 ring-1 ring-primary/10",
           "transition-all duration-200"
         )}>
           <div className="flex items-center gap-3 p-2">
