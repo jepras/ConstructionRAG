@@ -193,7 +193,7 @@ erDiagram
 **Email Storage Strategy**:
 - **Anonymous uploads**: Email stored in `indexing_runs.email` field
 - **Newsletter signups**: Managed directly in Loop.so (no local storage)
-- **Authenticated uploads**: User email available via Supabase Auth (future integration)
+- **Authenticated uploads**: User email accessible via `auth_service.get_current_user()` (available now)
 
 ## User Flows
 
@@ -411,12 +411,19 @@ erDiagram
 - Data variable injection working
 - User group assignment automatic
 
+**Email Access for Authenticated Users**:
+- User emails accessible via `AuthService.get_current_user()` method
+- Email stored reliably in Supabase `auth.users` table  
+- Available for notifications even when `user_profiles` is missing
+- No dependency on `user_profiles.email` field
+
 ### Current Gaps ❌
 
 **Authenticated User Notifications**:
-- No email notifications for authenticated uploads
+- No email notifications implemented for authenticated uploads yet
 - Wiki completion happens silently for projects
 - Users must manually check dashboard for completion
+- Email access infrastructure already available via auth service
 
 **Advanced Segmentation**:
 - No behavior-based user segmentation
@@ -475,10 +482,11 @@ flowchart TD
 
 ### Integration Opportunities
 
-**Supabase Auth Integration**:
-- Sync authenticated user emails with Loop.so
+**Enhanced Supabase Auth Integration**:
+- Sync authenticated user preferences with Loop.so
 - Merge anonymous and authenticated user journeys
 - Cross-platform notification preferences
+- Advanced user segmentation based on auth status
 
 **Analytics Integration**:
 - Email open/click tracking
@@ -489,6 +497,68 @@ flowchart TD
 - Template localization for Danish/English
 - User language preference detection
 - Localized unsubscribe pages
+
+## Email Access Implementation Guide
+
+### Current Working Patterns
+
+**For Anonymous Users** (implemented):
+```python
+# Email stored in indexing_runs table during upload
+indexing_run = get_indexing_run(run_id)
+user_email = indexing_run.email
+```
+
+**For Authenticated Users** (available now):
+```python
+# Email accessed via auth service
+user = await auth_service.get_current_user(access_token)
+user_email = user['email']  # From auth.users table
+```
+
+**For Newsletter Subscribers** (implemented):
+```python
+# Email handled directly by Loop.so API
+# No local storage, managed in Loop.so contacts
+```
+
+### Critical Implementation Notes
+
+⚠️ **Important**: Do NOT rely on `user_profiles.email` for authenticated users. Due to foreign key constraint timing issues during signup, the `user_profiles` table may not be populated immediately after user creation.
+
+✅ **Recommended**: Always use `auth_service.get_current_user()` for authenticated user emails, which accesses the reliable `auth.users` table.
+
+### Email Access Methods Comparison
+
+| Method | Reliability | Use Case | Implementation |
+|--------|-------------|----------|----------------|
+| `indexing_runs.email` | ✅ High | Anonymous uploads | `indexing_run.email` |
+| `auth_service.get_current_user()` | ✅ High | Authenticated users | `user['email']` |
+| `user_profiles.email` | ❌ Unreliable | Not recommended | May be missing |
+| Loop.so API | ✅ High | Newsletter only | External service |
+
+### Future-Proof Email Implementation
+
+When implementing authenticated user notifications:
+
+```python
+async def get_user_email_for_notification(indexing_run_id: str, access_token: str = None) -> str:
+    """
+    Get user email for notifications with fallback strategy
+    """
+    # Get indexing run details
+    indexing_run = await get_indexing_run(indexing_run_id)
+    
+    if indexing_run.upload_type == "email":
+        # Anonymous upload - use stored email
+        return indexing_run.email
+    elif indexing_run.upload_type == "user_project" and access_token:
+        # Authenticated upload - use auth service
+        user = await auth_service.get_current_user(access_token)
+        return user['email']
+    else:
+        raise ValueError("Cannot determine user email for notification")
+```
 
 ## Troubleshooting
 

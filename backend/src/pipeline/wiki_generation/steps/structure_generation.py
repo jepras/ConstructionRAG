@@ -5,6 +5,9 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
+
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 from src.models import StepResult
@@ -33,22 +36,30 @@ class StructureGenerationStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        # Load OpenRouter API key from settings
-        try:
-            settings = get_settings()
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-        except Exception as e:
-            logger.error(f"Failed to load OpenRouter API key: {e}")
-            raise
-
         # Read generation settings from SoT (wiki.generation) with config fallback
         wiki_cfg = ConfigService().get_effective_config("wiki")
         gen_cfg = wiki_cfg.get("generation", {})
         defaults_cfg = ConfigService().get_effective_config("defaults")
         global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
         self.model = gen_cfg.get("model", global_default_model)
+        
+        # Initialize LangChain OpenAI client with OpenRouter configuration
+        try:
+            settings = get_settings()
+            self.openrouter_api_key = settings.openrouter_api_key
+            if not self.openrouter_api_key:
+                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
+            
+            # Create LangChain ChatOpenAI client configured for OpenRouter
+            self.llm_client = ChatOpenAI(
+                model=self.model,
+                openai_api_key=self.openrouter_api_key,
+                openai_api_base="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://constructionrag.com"},
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
+            raise
         self.language = config.get("language", "danish")
         self.max_tokens = config.get("structure_max_tokens", 6000)
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
@@ -240,40 +251,21 @@ IMPORTANT FORMATTING INSTRUCTIONS:
         return prompt
 
     async def _call_openrouter_api(self, prompt: str, max_tokens: int = 6000) -> str:
-        """Call OpenRouter API with the given prompt."""
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://constructionrag.com",
-            "X-Title": "ConstructionRAG Wiki Generator",
-        }
-
-        data = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": self.config.get("temperature", 0.3),
-        }
+        """Call OpenRouter API via LangChain ChatOpenAI with the given prompt."""
+        if not self.llm_client:
+            raise Exception("LangChain ChatOpenAI client not configured")
 
         try:
-            import requests
-
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=self.api_timeout,  # Add timeout
-            )
-
-            if response.status_code != 200:
-                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
-
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        except requests.exceptions.Timeout:
-            raise Exception(f"OpenRouter API request timed out after {self.api_timeout} seconds")
+            # Create message for LangChain
+            message = HumanMessage(content=prompt)
+            
+            # Make async call to LangChain ChatOpenAI
+            response = await self.llm_client.ainvoke([message])
+            return response.content
+            
         except Exception as e:
-            raise Exception(f"OpenRouter API error: {e}")
+            logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
+            raise Exception(f"LangChain API error: {e}")
 
     def _parse_json_response(self, llm_response: str) -> dict[str, Any]:
         """Parse JSON response from LLM, handling markdown code blocks."""

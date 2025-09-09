@@ -2,10 +2,13 @@
 
 import ast
 import logging
+import time
 from datetime import datetime
 from typing import Any
 
 import numpy as np
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
@@ -15,6 +18,7 @@ from src.models import StepResult
 from src.pipeline.indexing.steps.embedding import VoyageEmbeddingClient
 from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
+from src.services.posthog_service import posthog_service
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 
@@ -37,16 +41,6 @@ class OverviewGenerationStep(PipelineStep):
         self.storage_service = storage_service or StorageService()
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
-
-        # Load OpenRouter API key from settings
-        try:
-            settings = get_settings()
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-        except Exception as e:
-            logger.error(f"Failed to load OpenRouter API key: {e}")
-            raise
 
         # Configure embedding client for queries via SoT (align with retrieval)
         voyage_settings = get_settings()
@@ -76,6 +70,24 @@ class OverviewGenerationStep(PipelineStep):
         self.max_chunks_in_prompt = config.get("max_chunks_in_prompt", 10)  # Reduced from 15
         self.content_preview_length = config.get("content_preview_length", 600)  # Reduced from 800
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
+        
+        # Initialize LangChain OpenAI client with OpenRouter configuration - AFTER all attributes are set
+        try:
+            settings = get_settings()
+            self.openrouter_api_key = settings.openrouter_api_key
+            if not self.openrouter_api_key:
+                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
+            
+            # Create LangChain ChatOpenAI client configured for OpenRouter
+            self.llm_client = ChatOpenAI(
+                model=self.model,
+                openai_api_key=self.openrouter_api_key,
+                openai_api_base="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://constructionrag.com"},
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
+            raise
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute overview generation step."""
@@ -83,6 +95,7 @@ class OverviewGenerationStep(PipelineStep):
 
         try:
             metadata = input_data["metadata"]
+            indexing_run_id = input_data.get("index_run_id")  # Get for analytics correlation
             print(
                 f"🔍 [DEBUG] OverviewGenerationStep.execute() - Processing {metadata.get('total_documents', 0)} documents"
             )
@@ -99,7 +112,7 @@ class OverviewGenerationStep(PipelineStep):
             )
 
             # Generate LLM overview
-            project_overview = await self._generate_llm_overview(overview_data, metadata)
+            project_overview = await self._generate_llm_overview(overview_data, metadata, indexing_run_id)
 
             # Create step result
             result = StepResult(
@@ -401,7 +414,7 @@ class OverviewGenerationStep(PipelineStep):
         similar_chunks.sort(key=lambda x: x["similarity_score"], reverse=True)
         return similar_chunks[: self.max_chunks_per_query]
 
-    async def _generate_llm_overview(self, overview_data: dict[str, Any], metadata: dict[str, Any]) -> str:
+    async def _generate_llm_overview(self, overview_data: dict[str, Any], metadata: dict[str, Any], indexing_run_id: str = None) -> str:
         """Generate project overview using LLM."""
         if not self.openrouter_api_key:
             raise ValueError("OpenRouter API key not configured")
@@ -409,8 +422,8 @@ class OverviewGenerationStep(PipelineStep):
         # Prepare prompt
         prompt = self._create_overview_prompt(overview_data, metadata)
 
-        # Call LLM
-        response = await self._call_openrouter_api(prompt, max_tokens=2000)
+        # Call LLM with analytics tracking
+        response = await self._call_openrouter_api(prompt, max_tokens=2000, indexing_run_id=indexing_run_id)
 
         return response
 
@@ -466,57 +479,50 @@ Generer projektoversigten på dansk:"""
 
         return prompt
 
-    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 4000) -> str:
-        """Call OpenRouter API with the given prompt."""
+    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 4000, indexing_run_id: str = None) -> str:
+        """Call OpenRouter API via LangChain ChatOpenAI with the given prompt and capture analytics."""
         print(
-            f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - OpenRouter API key: {'✓' if self.openrouter_api_key else '✗'}"
+            f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain client configured: {'✓' if self.llm_client else '✗'}"
         )
 
-        if not self.openrouter_api_key:
-            raise Exception("OpenRouter API key not configured")
+        if not self.llm_client:
+            raise Exception("LangChain ChatOpenAI client not configured")
 
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://constructionrag.com",
-            "X-Title": "ConstructionRAG Wiki Generator",
-        }
-
-        data = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": self.config.get("temperature", 0.3),
-        }
-
+        start_time = time.time()
+        
         try:
-            import requests
-
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=self.api_timeout,  # Add timeout
+            # Create message for LangChain
+            message = HumanMessage(content=prompt)
+            
+            # Make async call to LangChain ChatOpenAI
+            response = await self.llm_client.ainvoke([message])
+            content = response.content
+            
+            # Calculate latency
+            latency_ms = (time.time() - start_time) * 1000
+            
+            # Capture LLM analytics in PostHog
+            posthog_service.capture_llm_generation(
+                model=self.model,
+                input_prompt=prompt,
+                output_content=content,
+                latency_ms=latency_ms,
+                pipeline_step="wiki_overview_generation",
+                indexing_run_id=indexing_run_id,
+                additional_properties={
+                    "max_tokens": max_tokens,
+                    "step_type": "overview_generation"
+                }
             )
-
-            if response.status_code != 200:
-                print(
-                    f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - API error: {response.status_code} - {response.text}"
-                )
-                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
-
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
+            
             print(
-                f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - API call successful, content length: {len(content)}"
+                f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - API call successful, content length: {len(content)}, latency: {latency_ms:.0f}ms"
             )
             return content
 
-        except requests.exceptions.Timeout:
-            print(
-                f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - Request timed out after {self.api_timeout}s"
-            )
-            raise Exception(f"OpenRouter API request timed out after {self.api_timeout} seconds")
         except Exception as e:
-            logger.error(f"Exception during OpenRouter API call: {e}")
+            print(
+                f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain API error: {e}"
+            )
+            logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
             raise

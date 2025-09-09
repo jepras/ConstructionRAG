@@ -1,16 +1,26 @@
-import posthog
 from typing import Optional, Dict, Any
 import traceback
 import sys
+import time
+import uuid
+from datetime import datetime
 
 from src.config.settings import get_settings
+
+# Optional PostHog import - graceful fallback if not available
+try:
+    import posthog
+    POSTHOG_AVAILABLE = True
+except ImportError:
+    posthog = None
+    POSTHOG_AVAILABLE = False
 
 
 class PostHogService:
     """PostHog service for analytics and error tracking."""
     
     _instance: Optional['PostHogService'] = None
-    _client: Optional[posthog.Client] = None
+    _client: Optional[Any] = None
     
     def __new__(cls):
         if cls._instance is None:
@@ -20,6 +30,9 @@ class PostHogService:
     
     def _initialize(self):
         """Initialize PostHog client."""
+        if not POSTHOG_AVAILABLE:
+            return
+            
         settings = get_settings()
         
         if settings.posthog_api_key:
@@ -34,7 +47,7 @@ class PostHogService:
     
     def is_enabled(self) -> bool:
         """Check if PostHog is configured and enabled."""
-        return self._client is not None
+        return POSTHOG_AVAILABLE and self._client is not None
     
     def capture_exception(
         self, 
@@ -97,6 +110,66 @@ class PostHogService:
             )
         except Exception:
             # Silently fail
+            pass
+    
+    def capture_llm_generation(
+        self,
+        model: str,
+        input_prompt: str,
+        output_content: str,
+        latency_ms: float,
+        pipeline_step: Optional[str] = None,
+        indexing_run_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        additional_properties: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Capture LLM generation event in PostHog $ai_generation format."""
+        if not self.is_enabled():
+            return
+            
+        # Build standard PostHog $ai_generation event properties
+        properties = {
+            # Model and provider info
+            "$ai_model": model,
+            "$ai_provider": "openrouter",
+            
+            # Input and output content (full prompt/response tracking)
+            "$ai_input": input_prompt,
+            "$ai_output_choices": [{"message": {"content": output_content}}],
+            
+            # Performance metrics
+            "$ai_response_time_ms": latency_ms,
+            "$ai_timestamp": datetime.utcnow().isoformat(),
+            
+            # Token usage (estimated - OpenRouter doesn't always provide this)
+            "$ai_input_tokens": len(input_prompt.split()) * 1.3,  # Rough estimate
+            "$ai_output_tokens": len(output_content.split()) * 1.3,  # Rough estimate
+            
+            # Cost estimation (rough - would need model-specific pricing)
+            "$ai_cost_usd": (len(input_prompt) + len(output_content)) * 0.000001,  # Very rough estimate
+            
+            # Correlation IDs for pipeline tracing
+            "pipeline_step": pipeline_step,
+            "indexing_run_id": indexing_run_id,
+            
+            # Generation ID for tracking
+            "generation_id": str(uuid.uuid4()),
+        }
+        
+        # Add any additional properties
+        if additional_properties:
+            properties.update(additional_properties)
+        
+        distinct_id = user_id or f"backend-{hash(sys.argv[0])}"
+        
+        try:
+            self._client.capture(
+                distinct_id=distinct_id,
+                event="$ai_generation",
+                properties=properties
+            )
+        except Exception:
+            # Silently fail - don't let analytics break the pipeline
             pass
     
     def shutdown(self) -> None:

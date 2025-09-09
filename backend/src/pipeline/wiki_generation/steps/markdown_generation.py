@@ -1,14 +1,19 @@
 """Markdown generation step for wiki generation pipeline."""
 
 import logging
+import time
 from datetime import datetime
 from typing import Any
+
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
 from src.models import StepResult
 from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
+from src.services.posthog_service import posthog_service
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 
@@ -32,17 +37,6 @@ class MarkdownGenerationStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        # Load OpenRouter API key from settings
-        try:
-            settings = get_settings()
-
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-        except Exception as e:
-            logger.error(f"Failed to load OpenRouter API key: {e}")
-            raise
-
         wiki_cfg = ConfigService().get_effective_config("wiki")
         gen_cfg = wiki_cfg.get("generation", {})
         defaults_cfg = ConfigService().get_effective_config("defaults")
@@ -52,6 +46,24 @@ class MarkdownGenerationStep(PipelineStep):
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
+        
+        # Initialize LangChain OpenAI client with OpenRouter configuration - AFTER all attributes are set
+        try:
+            settings = get_settings()
+            self.openrouter_api_key = settings.openrouter_api_key
+            if not self.openrouter_api_key:
+                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
+            
+            # Create LangChain ChatOpenAI client configured for OpenRouter
+            self.llm_client = ChatOpenAI(
+                model=self.model,
+                openai_api_key=self.openrouter_api_key,
+                openai_api_base="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://constructionrag.com"},
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
+            raise
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute markdown generation step."""
@@ -338,38 +350,40 @@ Generate the comprehensive markdown wiki page:"""
 
         return prompt
 
-    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 8000) -> str:
-        """Call OpenRouter API with the given prompt."""
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://constructionrag.com",
-            "X-Title": "ConstructionRAG Wiki Generator",
-        }
+    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 8000, indexing_run_id: str = None) -> str:
+        """Call OpenRouter API via LangChain ChatOpenAI with the given prompt and capture analytics."""
+        if not self.llm_client:
+            raise Exception("LangChain ChatOpenAI client not configured")
 
-        data = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": self.config.get("temperature", 0.3),
-        }
-
+        start_time = time.time()
+        
         try:
-            import requests
-
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=self.api_timeout,  # Add timeout
+            # Create message for LangChain
+            message = HumanMessage(content=prompt)
+            
+            # Make async call to LangChain ChatOpenAI
+            response = await self.llm_client.ainvoke([message])
+            content = response.content
+            
+            # Calculate latency
+            latency_ms = (time.time() - start_time) * 1000
+            
+            # Capture LLM analytics in PostHog
+            posthog_service.capture_llm_generation(
+                model=self.model,
+                input_prompt=prompt,
+                output_content=content,
+                latency_ms=latency_ms,
+                pipeline_step="wiki_markdown_generation",
+                indexing_run_id=indexing_run_id,
+                additional_properties={
+                    "max_tokens": max_tokens,
+                    "step_type": "markdown_generation"
+                }
             )
+            
+            return content
 
-            if response.status_code != 200:
-                raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
-
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        except requests.exceptions.Timeout:
-            raise Exception(f"OpenRouter API request timed out after {self.api_timeout} seconds")
         except Exception as e:
-            raise Exception(f"OpenRouter API error: {e}")
+            logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
+            raise Exception(f"LangChain API error: {e}")
