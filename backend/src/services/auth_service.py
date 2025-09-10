@@ -39,7 +39,10 @@ class AuthService:
 
             response = self.supabase_client.auth.sign_up({"email": email, "password": password})
 
-            logger.info("Supabase auth response received", has_user=bool(response.user))
+            logger.info("Supabase auth response received", 
+                       has_user=bool(response.user),
+                       user_id=response.user.id if response.user else None,
+                       user_email=response.user.email if response.user else None)
 
             if response.user:
                 logger.info("User created in auth.users", user_id=response.user.id)
@@ -49,8 +52,15 @@ class AuthService:
                     await self._create_user_profile(response.user.id, email)
                     logger.info("User profile created successfully", user_id=response.user.id)
                 except Exception as profile_error:
-                    logger.error("Failed to create user profile", error=str(profile_error))
+                    logger.error("Failed to create user profile", 
+                               user_id=response.user.id, 
+                               error=str(profile_error),
+                               error_type=type(profile_error).__name__)
                     # Don't fail the signup if profile creation fails
+
+                logger.info("Signup process completed successfully", 
+                           user_id=response.user.id, 
+                           email=email)
 
                 return {
                     "success": True,
@@ -62,11 +72,14 @@ class AuthService:
                     "expires_at": None,
                 }
             else:
-                logger.error("No user returned from Supabase auth.sign_up")
+                logger.error("No user returned from Supabase auth.sign_up", email=email)
                 raise AuthenticationError("Failed to create user")
 
         except Exception as e:
-            logger.error("Sign up failed", email=email, error=str(e))
+            logger.error("Sign up failed", 
+                        email=email, 
+                        error=str(e),
+                        error_type=type(e).__name__)
             raise AuthenticationError("Sign up failed")
 
     async def sign_in(self, email: str, password: str) -> dict[str, Any]:

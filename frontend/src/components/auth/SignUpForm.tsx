@@ -105,7 +105,7 @@ export function SignUpForm() {
           </CardHeader>
           <CardContent>
             <div className="p-3 text-sm text-primary bg-primary/10 border border-primary/20 rounded-md text-center">
-              Please check your email and click the confirmation link to activate your account.
+              Please check your email and click the confirmation link to activate your account.<br />Also check your spam - especially if your are using Outlook.
             </div>
           </CardContent>
           <CardFooter>

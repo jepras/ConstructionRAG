@@ -48,13 +48,16 @@ class AuthResponse(BaseModel):
 @router.post("/signup", response_model=AuthResponse, tags=["Authentication"])
 async def sign_up(request: SignUpRequest):
     """Sign up a new user"""
+    logger.info("Signup request received", email=request.email)
     try:
         result = await auth_service.sign_up(request.email, request.password)
+        logger.info("Signup successful", email=request.email, user_id=result.get("user_id"))
         return AuthResponse(**result)
-    except HTTPException:
+    except HTTPException as e:
+        logger.error("Signup HTTP exception", email=request.email, status_code=e.status_code, detail=e.detail)
         raise
     except Exception as e:
-        logger.error("Sign up error", error=str(e))
+        logger.error("Signup unexpected error", email=request.email, error=str(e), error_type=type(e).__name__)
         raise AppError("Sign up failed")
 
 
