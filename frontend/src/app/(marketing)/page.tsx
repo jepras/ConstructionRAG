@@ -407,11 +407,8 @@ export default function Home() {
       <div className="container mx-auto px-6 py-16">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold mb-4">
-            See how it works in 15 seconds
+            How it works in 20 seconds
           </h2>
-          <p className="text-xl text-muted-foreground">
-            Watch how construction document processing transforms from hours to seconds
-          </p>
         </div>
         
         <div className="max-w-4xl mx-auto">
