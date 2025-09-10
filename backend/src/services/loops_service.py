@@ -2,6 +2,7 @@
 Loops service for sending transactional emails.
 """
 
+import json
 import os
 import logging
 from typing import Dict, Any, Optional
@@ -17,6 +18,7 @@ class LoopsService:
     WIKI_COMPLETION_TEMPLATE_ID = "cmfb0g26t89llxf0i592li27q"
     NEWSLETTER_CONFIRMATION_TEMPLATE_ID = "cmfb5sk790boz4o0igafcmfm4"
     AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID = "cmfc9jow3ajs80f0is1ebv0c6"
+    ERROR_NOTIFICATION_TEMPLATE_ID = "PLACEHOLDER_TEMPLATE_ID"  # Replace with actual template ID from Loops.so
 
     def __init__(self):
         self.api_key = os.getenv("LOOPS_API_KEY")
@@ -343,3 +345,167 @@ class LoopsService:
             error_msg = f"Unexpected error sending newsletter confirmation to {email}: {str(e)}"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
+
+    async def send_error_notification(
+        self,
+        error_stage: str,
+        error_message: str,
+        indexing_run_id: str,
+        user_email: str = None,
+        project_name: str = "Unknown Project",
+        debug_info: str = None,
+    ) -> Dict[str, Any]:
+        """
+        Send an error notification email to the admin when upload processing fails.
+
+        Args:
+            error_stage: Stage where error occurred (upload/beam_processing/wiki_generation)
+            error_message: Technical error details
+            indexing_run_id: Correlation ID for debugging
+            user_email: Email of user who uploaded (optional)
+            project_name: Name of the project/documents processed
+            debug_info: Additional debugging context (logs URL, etc.)
+
+        Returns:
+            Dict containing success status and response details
+        """
+        try:
+            admin_email = "jeprasher@gmail.com"
+            
+            payload = {
+                "transactionalId": self.ERROR_NOTIFICATION_TEMPLATE_ID,
+                "email": admin_email,
+                "dataVariables": {
+                    "errorStage": error_stage,
+                    "errorMessage": error_message,
+                    "indexingRunId": indexing_run_id,
+                    "userEmail": user_email or "Anonymous",
+                    "projectName": project_name,
+                    "debugInfo": debug_info or f"Check Railway logs for: {indexing_run_id}",
+                },
+            }
+
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            logger.info(f"Sending error notification for {error_stage} failure in run {indexing_run_id}")
+            logger.info(f"Error: {error_message}")
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.api_url, 
+                    json=payload, 
+                    headers=headers,
+                    timeout=30.0
+                )
+
+                response_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ Error notification sent successfully for run {indexing_run_id}")
+                    return {
+                        "success": True,
+                        "message": "Error notification sent successfully",
+                        "response": response_data,
+                    }
+                else:
+                    error_msg = f"❌ Error notification failed - Status: {response.status_code}, Response: {response_data}"
+                    logger.error(error_msg)
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "status_code": response.status_code,
+                    }
+
+        except httpx.TimeoutException:
+            error_msg = f"Timeout sending error notification for run {indexing_run_id}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except httpx.RequestError as e:
+            error_msg = f"Request error sending error notification for run {indexing_run_id}: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except Exception as e:
+            error_msg = f"Unexpected error sending error notification for run {indexing_run_id}: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+    @staticmethod
+    def extract_project_name_from_documents(indexing_run_id: str) -> str:
+        """
+        Extract project name from document filenames or metadata.
+        
+        Args:
+            indexing_run_id: The indexing run ID to extract project name for
+            
+        Returns:
+            Extracted project name or "Unknown Project" as fallback
+        """
+        try:
+            from src.config.database import get_supabase_admin_client
+            
+            admin_db = get_supabase_admin_client()
+            
+            # Get documents for this indexing run
+            docs_result = admin_db.rpc('get_documents_for_indexing_run', {
+                'run_id': indexing_run_id
+            }).execute()
+            
+            if not docs_result.data:
+                # Fallback: get documents directly
+                run_docs = admin_db.table("indexing_run_documents").select("document_id").eq("indexing_run_id", indexing_run_id).execute()
+                if run_docs.data:
+                    doc_ids = [row["document_id"] for row in run_docs.data]
+                    docs_result = admin_db.table("documents").select("filename").in_("id", doc_ids).limit(5).execute()
+            
+            if docs_result.data:
+                # Extract common project name from filenames
+                filenames = [doc.get("filename", "") for doc in docs_result.data]
+                if filenames:
+                    # Simple heuristic: use first part of filename before common separators
+                    first_filename = filenames[0]
+                    for separator in [" - ", "_", "-", ".", " "]:
+                        if separator in first_filename:
+                            project_part = first_filename.split(separator)[0].strip()
+                            if len(project_part) > 3:  # Reasonable project name length
+                                return project_part.title()
+                    
+                    # If no separators, use first 30 chars of filename
+                    if len(first_filename) > 30:
+                        return first_filename[:30].strip() + "..."
+                    
+                    return first_filename.replace(".pdf", "").replace(".PDF", "").strip()
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract project name for run {indexing_run_id}: {e}")
+        
+        return "Unknown Project"
+
+    @staticmethod 
+    def format_error_context(stage: str, step: str, error: str, context: Dict[str, Any]) -> str:
+        """
+        Format error context as readable JSON for email notifications.
+        
+        Args:
+            stage: The stage where error occurred
+            step: The specific step that failed
+            error: The error message
+            context: Additional context dictionary
+            
+        Returns:
+            Formatted JSON string
+        """
+        error_obj = {
+            "stage": stage,
+            "step": step,
+            "error": error,
+            "context": context
+        }
+        
+        try:
+            return json.dumps(error_obj, indent=2, default=str)
+        except Exception:
+            # Fallback to string representation
+            return str(error_obj)

@@ -28,6 +28,11 @@ router = APIRouter(prefix="/wiki", tags=["Wiki"])
 class WebhookRequest(BaseModel):
     indexing_run_id: str
 
+class ErrorWebhookRequest(BaseModel):
+    indexing_run_id: str
+    error_message: str
+    error_stage: str = "beam_processing"
+
 @router.post("/internal/webhook", response_model=dict[str, Any])
 async def trigger_wiki_from_beam(
     request: WebhookRequest,
@@ -95,6 +100,101 @@ async def trigger_wiki_from_beam(
     except Exception as e:
         logger.error(f"Unexpected error in webhook: {type(e).__name__}: {e}")
         raise AppError("Failed to process webhook", error_code=ErrorCode.INTERNAL_ERROR) from e
+
+
+@router.post("/internal/error-webhook", response_model=dict[str, Any])
+async def handle_beam_error(
+    request: ErrorWebhookRequest,
+    x_api_key: str = Header(..., alias="X-API-Key"),
+):
+    """Internal error webhook endpoint for Beam to report processing failures.
+    
+    This endpoint is called by Beam when indexing processing fails, allowing us
+    to update the database and send error notifications.
+    """
+    try:
+        # Verify API key
+        expected_api_key = os.getenv("BEAM_WEBHOOK_API_KEY")
+        if not expected_api_key:
+            logger.error("BEAM_WEBHOOK_API_KEY environment variable not configured")
+            raise AppError("Webhook authentication not configured", error_code=ErrorCode.INTERNAL_ERROR)
+        
+        if x_api_key != expected_api_key:
+            logger.warning(f"Invalid API key provided for error webhook: {x_api_key[:10]}...")
+            raise AppError("Invalid API key", error_code=ErrorCode.UNAUTHORIZED)
+        
+        indexing_run_id = request.indexing_run_id
+        error_message = request.error_message
+        error_stage = request.error_stage
+        
+        logger.error(f"Beam processing failed for run {indexing_run_id}: {error_message}")
+        
+        # Fetch indexing run details using admin client
+        admin_db = get_supabase_admin_client()
+        run_result = admin_db.table("indexing_runs").select("*").eq("id", str(indexing_run_id)).execute()
+        
+        if not run_result.data:
+            logger.error(f"Indexing run {indexing_run_id} not found for error webhook")
+            raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
+        
+        run_data = run_result.data[0]
+        upload_type = run_data.get("upload_type")
+        user_email = run_data.get("email") if upload_type == "email" else None
+        
+        # Extract project name from documents
+        try:
+            from ..services.loops_service import LoopsService
+            project_name = LoopsService.extract_project_name_from_documents(indexing_run_id)
+        except Exception:
+            project_name = "Unknown Project"
+        
+        # Create structured error context
+        error_context = {
+            "stage": error_stage,
+            "step": "beam_processing",
+            "error": error_message,
+            "context": {
+                "indexing_run_id": indexing_run_id,
+                "user_email": user_email,
+                "upload_type": upload_type,
+                "project_name": project_name,
+                "timestamp": "now()"
+            }
+        }
+        
+        # Update indexing run status
+        admin_db.table("indexing_runs").update({
+            "status": "failed",
+            "error_message": str(error_context),
+            "completed_at": "now()"
+        }).eq("id", indexing_run_id).execute()
+        
+        # Send error notification
+        try:
+            from ..services.loops_service import LoopsService
+            loops_service = LoopsService()
+            await loops_service.send_error_notification(
+                error_stage=error_stage,
+                error_message=error_message,
+                indexing_run_id=indexing_run_id,
+                user_email=user_email,
+                project_name=project_name,
+                debug_info=f"Beam processing failed. Railway logs: https://railway.app/logs?filter={indexing_run_id}"
+            )
+        except Exception as notification_error:
+            logger.error(f"Failed to send error notification: {notification_error}")
+        
+        return {
+            "message": "Error webhook processed successfully",
+            "indexing_run_id": str(indexing_run_id),
+            "status": "failed",
+        }
+        
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in error webhook: {type(e).__name__}: {e}")
+        raise AppError("Failed to process error webhook", error_code=ErrorCode.INTERNAL_ERROR) from e
 
 
 async def get_optional_user(

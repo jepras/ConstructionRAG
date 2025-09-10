@@ -13,6 +13,7 @@ from src.models import (
 )
 from src.models.pipeline import UploadType
 from src.services.config_service import ConfigService
+from src.services.loops_service import LoopsService
 from src.services.storage_service import StorageService
 
 from .models import (
@@ -241,15 +242,67 @@ class WikiGenerationOrchestrator:
             return final_wiki_run
 
         except Exception as e:
-            logger.error(f"Wiki generation pipeline failed: {e}")
-            logger.error(f"Wiki generation pipeline failed: {e}")
+            error_message = f"Wiki generation pipeline failed: {str(e)}"
+            logger.error(error_message)
+
+            # Get user email and project context for notification
+            user_email = None
+            project_name = LoopsService.extract_project_name_from_documents(index_run_id)
+            
+            try:
+                # Get indexing run details for context
+                indexing_run_response = self.supabase.table("indexing_runs").select("*").eq("id", index_run_id).execute()
+                if indexing_run_response.data:
+                    run_data = indexing_run_response.data[0]
+                    upload_type = run_data.get("upload_type")
+                    user_email = run_data.get("email") if upload_type == "email" else None
+                    
+                # Create structured error context
+                error_context = {
+                    "stage": "wiki_generation",
+                    "step": "wiki_orchestrator",
+                    "error": str(e),
+                    "context": {
+                        "indexing_run_id": index_run_id,
+                        "user_email": user_email,
+                        "upload_type": upload_type if 'upload_type' in locals() else None,
+                        "project_name": project_name,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                }
+                
+            except Exception as context_error:
+                logger.error(f"Failed to get context for error notification: {context_error}")
+                error_context = {
+                    "stage": "wiki_generation",
+                    "step": "wiki_orchestrator",
+                    "error": str(e),
+                    "context": {
+                        "indexing_run_id": index_run_id,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                }
 
             # Update wiki run status to failed
             if "wiki_run" in locals():
                 print(
                     f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Updating wiki run status to failed for run: {wiki_run.id}"
                 )
-                await self._update_wiki_run_status(wiki_run.id, "failed", str(e))
+                await self._update_wiki_run_status(wiki_run.id, "failed", str(error_context))
+
+            # Send error notification
+            try:
+                loops_service = LoopsService()
+                await loops_service.send_error_notification(
+                    error_stage="wiki_generation",
+                    error_message=error_message,
+                    indexing_run_id=index_run_id,
+                    user_email=user_email,
+                    project_name=project_name,
+                    debug_info=f"Wiki generation failed. Railway logs: https://railway.app/logs?filter={index_run_id}"
+                )
+            except Exception as notification_error:
+                logger.error(f"Failed to send error notification: {notification_error}")
 
             raise
 

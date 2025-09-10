@@ -20,6 +20,7 @@ from src.middleware.request_id import get_request_id
 from src.models.pipeline import UploadType
 from src.services.auth_service import get_current_user_optional, optional_security
 from src.services.document_read_service import DocumentReadService
+from src.services.loops_service import LoopsService
 from src.services.storage_service import StorageService
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError, StorageError, ValidationError
@@ -389,6 +390,57 @@ async def create_upload(
     except (AppError, StorageError):
         raise
     except Exception as e:  # noqa: BLE001
+        # Enhanced error handling with notification
+        error_message = f"Upload failed: {str(e)}"
+        logger.error(f"Upload processing error for run {index_run_id}: {error_message}")
+        
+        # Store structured error in database if indexing_run was created
+        try:
+            from src.config.database import get_supabase_admin_client
+            admin_db = get_supabase_admin_client()
+            
+            # Get user email for context
+            user_email = email if project_id is None else (current_user.get('email') if current_user else None)
+            project_name = LoopsService.extract_project_name_from_documents(index_run_id)
+            
+            # Store error in indexing_runs table
+            error_context = {
+                "stage": "upload",
+                "step": "document_storage",
+                "error": str(e),
+                "context": {
+                    "indexing_run_id": index_run_id,
+                    "user_email": user_email,
+                    "document_count": len(files),
+                    "project_name": project_name,
+                    "timestamp": "now()",
+                    "upload_type": "email" if project_id is None else "user_project"
+                }
+            }
+            
+            admin_db.table("indexing_runs").update({
+                "status": "failed",
+                "error_message": LoopsService.format_error_context("upload", "document_storage", str(e), error_context["context"]),
+                "completed_at": "now()"
+            }).eq("id", index_run_id).execute()
+            
+            # Send error notification
+            try:
+                loops_service = LoopsService()
+                await loops_service.send_error_notification(
+                    error_stage="upload",
+                    error_message=error_message,
+                    indexing_run_id=index_run_id,
+                    user_email=user_email,
+                    project_name=project_name,
+                    debug_info=f"Railway logs: https://railway.app/logs?filter={index_run_id}"
+                )
+            except Exception as notification_error:
+                logger.error(f"Failed to send error notification: {notification_error}")
+                
+        except Exception as db_error:
+            logger.error(f"Failed to update database with error: {db_error}")
+        
         raise AppError(
             "Failed to create upload",
             error_code=ErrorCode.INTERNAL_ERROR,

@@ -75,6 +75,58 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
         # Don't fail the indexing pipeline if wiki generation fails
 
 
+async def trigger_error_webhook(indexing_run_id: str, error_message: str, webhook_url: str = None, webhook_api_key: str = None):
+    """
+    Trigger error notification webhook for a failed indexing run.
+
+    Args:
+        indexing_run_id: The failed indexing run ID
+        error_message: The error message to report
+        webhook_url: The base webhook URL (will be modified to error-webhook endpoint)
+        webhook_api_key: API key for webhook authentication
+    """
+    try:
+        if not webhook_url or not webhook_api_key:
+            print("⚠️ Webhook URL or API key not provided, skipping error notification")
+            return
+
+        # Convert from success webhook URL to error webhook URL
+        error_webhook_url = webhook_url.replace("/internal/webhook", "/internal/error-webhook")
+        
+        payload = {
+            "indexing_run_id": indexing_run_id,
+            "error_message": error_message,
+            "error_stage": "beam_processing"
+        }
+
+        print(f"🚨 Triggering error webhook for run: {indexing_run_id}")
+        print(f"Error: {error_message}")
+
+        # Set up headers with API key authentication
+        headers = {"Content-Type": "application/json", "X-API-Key": webhook_api_key}
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(error_webhook_url, json=payload, headers=headers)
+
+                if response.status_code == 200:
+                    print("✅ Error webhook triggered successfully")
+                else:
+                    print(f"⚠️ Error webhook trigger failed: {response.status_code}")
+                    print(f"Response: {response.text}")
+
+            except httpx.TimeoutException as timeout_error:
+                print(f"⏰ Error webhook timed out: {timeout_error}")
+            except httpx.RequestError as req_error:
+                print(f"🌐 Error webhook request error: {req_error}")
+            except Exception as http_error:
+                print(f"💥 Unexpected error webhook HTTP error: {http_error}")
+
+    except Exception as e:
+        print(f"⚠️ Error triggering error webhook: {type(e).__name__}: {e}")
+        # Don't fail further if error notification fails
+
+
 async def run_indexing_pipeline_on_beam(
     indexing_run_id: str,
     document_ids: list[str],
@@ -194,11 +246,16 @@ async def run_indexing_pipeline_on_beam(
             print(f"🔄 Processing completed: {'✅ Success' if success else '❌ Failed'}")
             log_resources("After Document Processing")
         except Exception as orchestrator_error:
-            print(f"❌ Orchestrator error: {orchestrator_error}")
+            error_message = f"Orchestrator error: {str(orchestrator_error)}"
+            print(f"❌ {error_message}")
+            
+            # Trigger error webhook
+            await trigger_error_webhook(indexing_run_id, error_message, webhook_url, webhook_api_key)
+            
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
-                "error": f"Orchestrator error: {str(orchestrator_error)}",
+                "error": error_message,
             }
 
         if success:
@@ -228,16 +285,26 @@ async def run_indexing_pipeline_on_beam(
                 },
             }
         else:
-            print("❌ Indexing pipeline failed")
+            error_message = "Indexing pipeline failed during processing"
+            print(f"❌ {error_message}")
+            
+            # Trigger error webhook
+            await trigger_error_webhook(indexing_run_id, error_message, webhook_url, webhook_api_key)
+            
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
                 "document_count": len(document_inputs),
-                "error": "Indexing pipeline failed during processing",
+                "error": error_message,
             }
 
     except Exception as e:
-        print(f"💥 Critical error: {e}")
+        error_message = f"Critical error during indexing pipeline execution: {str(e)}"
+        print(f"💥 {error_message}")
+        
+        # Trigger error webhook for critical failures
+        await trigger_error_webhook(indexing_run_id, error_message, webhook_url, webhook_api_key)
+        
         return {
             "status": "failed",
             "error": str(e),
