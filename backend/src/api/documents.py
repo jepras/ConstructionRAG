@@ -435,6 +435,11 @@ async def create_upload(
                     project_name=project_name,
                     debug_info=f"Railway logs: https://railway.app/logs?filter={index_run_id}"
                 )
+                
+                # Also send user error notification if we have their email
+                if user_email:
+                    await loops_service.send_user_error_notification(user_email)
+                    
             except Exception as notification_error:
                 logger.error(f"Failed to send error notification: {notification_error}")
                 

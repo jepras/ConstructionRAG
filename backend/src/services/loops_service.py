@@ -18,7 +18,8 @@ class LoopsService:
     WIKI_COMPLETION_TEMPLATE_ID = "cmfb0g26t89llxf0i592li27q"
     NEWSLETTER_CONFIRMATION_TEMPLATE_ID = "cmfb5sk790boz4o0igafcmfm4"
     AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID = "cmfc9jow3ajs80f0is1ebv0c6"
-    ERROR_NOTIFICATION_TEMPLATE_ID = "cmfe2w96f00c6vs0if2nvyuha"  # Replace with actual template ID from Loops.so
+    ERROR_NOTIFICATION_TEMPLATE_ID = "cmfe2w96f00c6vs0if2nvyuha"  # Admin error notifications
+    USER_ERROR_NOTIFICATION_TEMPLATE_ID = "cmfe3lbsp0vew120inwjgly3h"  # User error notifications
 
     def __init__(self):
         self.api_key = os.getenv("LOOPS_API_KEY")
@@ -436,6 +437,68 @@ class LoopsService:
             return {"success": False, "error": error_msg}
         except Exception as e:
             error_msg = f"Unexpected error sending error notification for run {indexing_run_id}: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+    async def send_user_error_notification(self, user_email: str) -> Dict[str, Any]:
+        """
+        Send a simple error notification email to the user when their upload fails.
+        
+        Args:
+            user_email: User's email address
+            
+        Returns:
+            Dict containing success status and response details
+        """
+        try:
+            payload = {
+                "transactionalId": self.USER_ERROR_NOTIFICATION_TEMPLATE_ID,
+                "email": user_email,
+                "dataVariables": {}  # No template variables needed
+            }
+
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            logger.info(f"Sending user error notification to {user_email}")
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
+
+                response_data = (
+                    response.json()
+                    if response.headers.get("content-type", "").startswith("application/json")
+                    else response.text
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"✅ User error notification sent successfully to {user_email}")
+                    return {
+                        "success": True,
+                        "message": "User error notification sent successfully",
+                        "response": response_data,
+                    }
+                else:
+                    error_msg = f"❌ User error notification failed - Status: {response.status_code}, Response: {response_data}"
+                    logger.error(error_msg)
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "status_code": response.status_code,
+                    }
+
+        except httpx.TimeoutException:
+            error_msg = f"Timeout sending user error notification to {user_email}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except httpx.RequestError as e:
+            error_msg = f"Request error sending user error notification to {user_email}: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except Exception as e:
+            error_msg = f"Unexpected error sending user error notification to {user_email}: {str(e)}"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
 
