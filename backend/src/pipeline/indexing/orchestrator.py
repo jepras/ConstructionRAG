@@ -496,9 +496,18 @@ class IndexingOrchestrator:
                 )
                 return False
 
-            # Phase 2: Batch embed all chunks from successful documents
-            if successful_document_ids:
-                await self._batch_embed_all_chunks(indexing_run.id, progress_tracker)
+            # Phase 2: Embedding now handled per-document above (no batch embedding needed)
+            # Batch embedding has been moved to per-document processing for better parallelization
+
+            # Generate embedding summary
+            total_documents = len(document_inputs)
+            successful_embeddings = len(successful_document_ids)  # Assumes embeddings succeeded if document succeeded
+            failed_embeddings = len(failed_document_ids)
+            
+            print(f"📊 EMBEDDING SUMMARY:")
+            print(f"  ✅ Successful: {successful_embeddings}")
+            print(f"  ❌ Failed: {failed_embeddings}")
+            print(f"  📄 Total documents: {total_documents}")
 
             # Update final status
             if failed_document_ids:
@@ -587,8 +596,8 @@ class IndexingOrchestrator:
         try:
             current_data = document_input
 
-            # Process through individual steps (partition → metadata → enrichment → chunking)
-            for step in self.steps[:-1]:  # Exclude embedding step
+            # Process through all individual steps (partition → metadata → enrichment → chunking → embedding)
+            for step in self.steps:  # Include ALL steps including embedding
                 step_executor = StepExecutor(step, progress_tracker)
 
                 print(
@@ -600,6 +609,19 @@ class IndexingOrchestrator:
                     result = await step.execute(
                         current_data, indexing_run_id, document_input.document_id
                     )
+                elif isinstance(step, EmbeddingStep):
+                    # Enhanced logging for embedding step
+                    print(f"🔗 Starting embedding for document {document_input.document_id}")
+                    result = await step.execute(
+                        current_data, 
+                        indexing_run_id=indexing_run_id, 
+                        document_id=document_input.document_id
+                    )
+                    if result.status == "completed":
+                        embeddings_count = result.summary_stats.get("embeddings_generated", 0)
+                        print(f"✅ Embedding completed for document {document_input.document_id}: {embeddings_count} embeddings")
+                    else:
+                        print(f"❌ Embedding failed for document {document_input.document_id}: {result.error_message}")
                 else:
                     result = await step_executor.execute_with_tracking(current_data)
 
