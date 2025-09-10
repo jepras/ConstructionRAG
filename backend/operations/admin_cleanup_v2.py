@@ -11,9 +11,9 @@ This script handles comprehensive cleanup including:
 - Automatic oldest-X cleanup mode
 
 Usage:
-    python admin_cleanup_v2.py --dry-run  # Preview what would be deleted
-    python admin_cleanup_v2.py --confirm   # Execute actual deletions
-    python admin_cleanup_v2.py --oldest 50 --confirm  # Delete oldest 50 runs
+    python operations/admin_cleanup_v2.py --dry-run  # Preview what would be deleted
+    python operations/admin_cleanup_v2.py --confirm   # Execute actual deletions
+    python operations/admin_cleanup_v2.py --oldest 4 --confirm  # Delete oldest x runs
 """
 
 import asyncio

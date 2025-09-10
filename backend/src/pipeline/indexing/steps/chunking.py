@@ -30,13 +30,10 @@ class IntelligentChunker:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        
 
         # Configuration parameters
         self.min_content_length = config.get("min_content_length", 20)
-        self.exclude_categories = config.get(
-            "exclude_categories", ["Header", "Footer", "PageBreak", "Title"]
-        )
+        self.exclude_categories = config.get("exclude_categories", ["Header", "Footer", "PageBreak", "Title"])
         self.enable_list_grouping = config.get("enable_list_grouping", True)
         self.max_list_items_per_group = config.get("max_list_items_per_group", 10)
         self.include_section_titles = config.get("include_section_titles", False)  # Changed default to False
@@ -44,7 +41,7 @@ class IntelligentChunker:
         self.format_images_with_context = config.get("format_images_with_context", True)
         self.prioritize_vlm_captions = config.get("prioritize_vlm_captions", True)
         self.fallback_to_original_text = config.get("fallback_to_original_text", True)
-        
+
         # Semantic chunking parameters
         self.strategy = config.get("strategy", "semantic")  # HARDCODED: Force semantic strategy
         self.chunk_size = config.get("chunk_size", 1000)
@@ -52,20 +49,20 @@ class IntelligentChunker:
         self.separators = config.get("separators", ["\n\n", "\n", " ", ""])
         self.min_chunk_size = config.get("min_chunk_size", 100)
         self.max_chunk_size = config.get("max_chunk_size", 1200)  # HARDCODED: Force aggressive splitting
-        
+
         # BEAM DEBUG: Print configuration as received
         print(f"🔧 BEAM CHUNKING CONFIG:")
         print(f"  strategy: {self.strategy} (config value: {config.get('strategy', 'NOT_SET')})")
         print(f"  max_chunk_size: {self.max_chunk_size} (config value: {config.get('max_chunk_size', 'NOT_SET')})")
         print(f"  chunk_size: {self.chunk_size}")
         print(f"  overlap: {self.overlap}")
-        
+
         # FORCE HARDCODED VALUES FOR BEAM TESTING
-        self.strategy = "semantic" 
+        self.strategy = "semantic"
         self.max_chunk_size = 1000  # Force split anything over 1000 chars
-        self.chunk_size = 800       # Force smaller target chunk size
-        self.overlap = 200          # Ensure good overlap
-        
+        self.chunk_size = 800  # Force smaller target chunk size
+        self.overlap = 200  # Ensure good overlap
+
         print(f"🔧 BEAM FORCED VALUES:")
         print(f"  strategy: {self.strategy} (HARDCODED)")
         print(f"  max_chunk_size: {self.max_chunk_size} (HARDCODED - will split chunks > 1000 chars)")
@@ -76,7 +73,7 @@ class IntelligentChunker:
         """Extract structural metadata from element, handling various formats"""
         element_type = el.get("element_type", "unknown")
         element_id = el.get("id", el.get("element_id", "unknown"))
-        
+
         # Try to get structural_metadata from various possible locations
         # 1. Directly as a dict
         if "structural_metadata" in el:
@@ -86,7 +83,7 @@ class IntelligentChunker:
                 meta = meta.model_dump()
             elif hasattr(meta, "dict"):
                 meta = meta.model_dump(exclude_none=True)
-            
+
             bbox = meta.get("bbox")
             return meta
 
@@ -153,10 +150,7 @@ class IntelligentChunker:
                     return enrichment_meta["table_image_caption"]
 
             # For full-page images, use VLM caption
-            elif (
-                el.get("element_type") == "full_page_image"
-                or el.get("content_type") == "full_page_with_images"
-            ):
+            elif el.get("element_type") == "full_page_image" or el.get("content_type") == "full_page_with_images":
                 if enrichment_meta.get("full_page_image_caption"):
                     return enrichment_meta["full_page_image_caption"]
 
@@ -179,9 +173,7 @@ class IntelligentChunker:
         struct_meta = el.get("structural_metadata")
         if struct_meta:
             # Handle combined list elements
-            if hasattr(struct_meta, "narrative_text") and hasattr(
-                struct_meta, "list_texts"
-            ):
+            if hasattr(struct_meta, "narrative_text") and hasattr(struct_meta, "list_texts"):
                 narrative = struct_meta.narrative_text or ""
                 list_texts = struct_meta.list_texts or []
                 if narrative and list_texts:
@@ -208,11 +200,7 @@ class IntelligentChunker:
                 return struct_meta.html_text
 
         # Check if we have extracted metadata with narrative_text and list_texts (for combined lists)
-        if (
-            extracted_meta
-            and "narrative_text" in extracted_meta
-            and "list_texts" in extracted_meta
-        ):
+        if extracted_meta and "narrative_text" in extracted_meta and "list_texts" in extracted_meta:
             narrative = extracted_meta.get("narrative_text", "")
             list_texts = extracted_meta.get("list_texts", [])
             if narrative and list_texts:
@@ -226,18 +214,13 @@ class IntelligentChunker:
         meta = el.get("structural_metadata")
         if meta and (
             getattr(meta, "content_type", None) == "full_page_with_images"
-            or (
-                hasattr(meta, "model_dump")
-                and meta.model_dump().get("content_type") == "full_page_with_images"
-            )
+            or (hasattr(meta, "model_dump") and meta.model_dump().get("content_type") == "full_page_with_images")
         ):
             return "[IMAGE PAGE]"
 
         return ""
 
-    def filter_noise_elements(
-        self, elements: List[Dict[str, Any]]
-    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    def filter_noise_elements(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Filter out noise elements and return filtering statistics"""
         logger.debug(f"Starting with {len(elements)} elements")
 
@@ -294,9 +277,7 @@ class IntelligentChunker:
         logger.debug(f"After filtering: {len(filtered_elements)} elements")
         return filtered_elements, filtering_stats
 
-    def group_list_items(
-        self, elements: List[Dict[str, Any]]
-    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    def group_list_items(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Group consecutive list items with their narrative introduction and return grouping statistics"""
         if not self.enable_list_grouping:
             return elements, {"list_grouping_enabled": False}
@@ -337,10 +318,7 @@ class IntelligentChunker:
                     j = i + 1
 
                     # Collect all consecutive ListItems (up to max limit)
-                    while (
-                        j < len(elements)
-                        and len(list_items) <= self.max_list_items_per_group
-                    ):
+                    while j < len(elements) and len(list_items) <= self.max_list_items_per_group:
                         j_el = elements[j]
                         j_meta = self.extract_structural_metadata(j_el)
                         j_category = j_meta.get("element_category", "unknown")
@@ -352,31 +330,24 @@ class IntelligentChunker:
                             break
 
                     logger.debug(
-                        f"Combined list: {len(list_items)} items (1 narrative + {len(list_items)-1} list items)"
+                        f"Combined list: {len(list_items)} items (1 narrative + {len(list_items) - 1} list items)"
                     )
 
                     # Track grouping statistics
                     grouping_stats["groups_created"] += 1
-                    grouping_stats["total_list_items_grouped"] += (
-                        len(list_items) - 1
-                    )  # Exclude narrative text
+                    grouping_stats["total_list_items_grouped"] += len(list_items) - 1  # Exclude narrative text
 
                     # Store example of grouped list (up to 2 examples)
                     if len(grouping_stats["group_examples"]) < 2:
                         narrative_text = self.extract_text_content(list_items[0])
-                        list_texts = [
-                            self.extract_text_content(item) for item in list_items[1:]
-                        ]
+                        list_texts = [self.extract_text_content(item) for item in list_items[1:]]
                         grouping_stats["group_examples"].append(
                             {
                                 "narrative_text": (
-                                    narrative_text[:200] + "..."
-                                    if len(narrative_text) > 200
-                                    else narrative_text
+                                    narrative_text[:200] + "..." if len(narrative_text) > 200 else narrative_text
                                 ),
                                 "list_items": [
-                                    text[:100] + "..." if len(text) > 100 else text
-                                    for text in list_texts[:3]
+                                    text[:100] + "..." if len(text) > 100 else text for text in list_texts[:3]
                                 ],  # Show first 3 list items
                                 "total_list_items": len(list_texts),
                                 "page_number": meta.get("page_number"),
@@ -393,38 +364,29 @@ class IntelligentChunker:
                             "page_number": meta.get("page_number"),
                             "content_type": "text",
                             "element_category": "List",
-                            "section_title_inherited": meta.get(
-                                "section_title_inherited"
-                            ),
+                            "section_title_inherited": meta.get("section_title_inherited"),
                             "text_complexity": meta.get("text_complexity", "medium"),
                             "content_length": 0,  # Will be calculated
                             "has_numbers": meta.get("has_numbers", False),
                             "has_tables_on_page": meta.get("has_tables_on_page", False),
                             "has_images_on_page": meta.get("has_images_on_page", False),
-                            "section_title_category": meta.get(
-                                "section_title_category"
-                            ),
+                            "section_title_category": meta.get("section_title_category"),
                             "section_title_pattern": meta.get("section_title_pattern"),
                             "processing_strategy": meta.get("processing_strategy"),
                             "image_filepath": meta.get("image_filepath"),
                             "page_context": meta.get("page_context", "unknown"),
                             # Store narrative and list texts separately for composition
                             "narrative_text": self.extract_text_content(list_items[0]),
-                            "list_texts": [
-                                self.extract_text_content(item)
-                                for item in list_items[1:]
-                            ],
+                            "list_texts": [self.extract_text_content(item) for item in list_items[1:]],
                         },
                     }
 
                     # Calculate content length
-                    narrative_text = combined_element["structural_metadata"][
-                        "narrative_text"
-                    ]
+                    narrative_text = combined_element["structural_metadata"]["narrative_text"]
                     list_texts = combined_element["structural_metadata"]["list_texts"]
-                    combined_element["structural_metadata"]["content_length"] = len(
-                        narrative_text
-                    ) + len("\n\n".join(list_texts))
+                    combined_element["structural_metadata"]["content_length"] = len(narrative_text) + len(
+                        "\n\n".join(list_texts)
+                    )
 
                     grouped_elements.append(combined_element)
                     i = j  # Skip to after the list items
@@ -437,11 +399,7 @@ class IntelligentChunker:
         # Calculate success rate
         if grouping_stats["list_items_found"] > 0:
             grouping_stats["grouping_success_rate"] = round(
-                (
-                    grouping_stats["total_list_items_grouped"]
-                    / grouping_stats["list_items_found"]
-                )
-                * 100,
+                (grouping_stats["total_list_items_grouped"] / grouping_stats["list_items_found"]) * 100,
                 2,
             )
         else:
@@ -455,7 +413,6 @@ class IntelligentChunker:
         category = meta.get("element_category", "unknown")
         element_type = el.get("element_type", "text")
         section_title = meta.get("section_title_inherited", "Unknown Section")
-        
 
         # Check if this is a split element with pre-computed content
         if "split_content" in el:
@@ -464,7 +421,7 @@ class IntelligentChunker:
                 return f"Section: {section_title}\n\n{content}"
             else:
                 return content
-            
+
         # Check if this is a merged element
         if "merged_content" in el:
             content = el["merged_content"]
@@ -486,7 +443,7 @@ class IntelligentChunker:
                 content = chr(10).join(list_texts)
             else:
                 content = "[Empty list]"
-            
+
             if self.include_section_titles:
                 return f"Section: {section_title}\n\n{content}"
             else:
@@ -509,10 +466,7 @@ class IntelligentChunker:
             else:
                 return text_content
 
-        elif (
-            element_type == "full_page_image"
-            or meta.get("content_type") == "full_page_with_images"
-        ):
+        elif element_type == "full_page_image" or meta.get("content_type") == "full_page_with_images":
             text_content = self.extract_text_content(el, meta)
             if self.format_images_with_context:
                 if self.include_section_titles:
@@ -533,10 +487,7 @@ class IntelligentChunker:
         elif category == "UncategorizedText":
             # Handle uncategorized text that might be table references
             text_content = self.extract_text_content(el, meta)
-            if any(
-                keyword in text_content.lower()
-                for keyword in ["tabel", "table", "figur", "figure"]
-            ):
+            if any(keyword in text_content.lower() for keyword in ["tabel", "table", "figur", "figure"]):
                 if self.include_section_titles:
                     return f"Context: {section_title}\n\nType: Reference\n\nContent: {text_content}"
                 else:
@@ -552,14 +503,20 @@ class IntelligentChunker:
             text_content = self.extract_text_content(el, meta)
             return text_content
 
-    def apply_semantic_text_splitting_to_chunks(self, chunks: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    def apply_semantic_text_splitting_to_chunks(
+        self, chunks: List[Dict[str, Any]]
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Apply semantic text splitting to composed chunks that exceed max_chunk_size"""
-        
+
         # BEAM DEBUG: Print configuration and chunk analysis
-        print(f"🔍 BEAM CHUNKING: strategy={self.strategy}, max_chunk_size={self.max_chunk_size}, chunk_size={self.chunk_size}")
+        print(
+            f"🔍 BEAM CHUNKING: strategy={self.strategy}, max_chunk_size={self.max_chunk_size}, chunk_size={self.chunk_size}"
+        )
         chunk_sizes = [len(chunk["content"]) for chunk in chunks]
-        print(f"🔍 BEAM CHUNKING: {len(chunks)} chunks, sizes: min={min(chunk_sizes) if chunk_sizes else 0}, max={max(chunk_sizes) if chunk_sizes else 0}, avg={sum(chunk_sizes)/len(chunk_sizes) if chunk_sizes else 0:.1f}")
-        
+        print(
+            f"🔍 BEAM CHUNKING: {len(chunks)} chunks, sizes: min={min(chunk_sizes) if chunk_sizes else 0}, max={max(chunk_sizes) if chunk_sizes else 0}, avg={sum(chunk_sizes) / len(chunk_sizes) if chunk_sizes else 0:.1f}"
+        )
+
         # Print details about large chunks
         large_chunks = [i for i, size in enumerate(chunk_sizes) if size > 1000]
         if large_chunks:
@@ -567,14 +524,20 @@ class IntelligentChunker:
             for i in large_chunks[:3]:  # Print details for first 3 large chunks
                 chunk = chunks[i]
                 content_preview = chunk["content"][:200] + "..." if len(chunk["content"]) > 200 else chunk["content"]
-                print(f"🔍 BEAM LARGE CHUNK {i}: {len(chunk['content'])} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'")
-        
+                print(
+                    f"🔍 BEAM LARGE CHUNK {i}: {len(chunk['content'])} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'"
+                )
+
         if self.strategy != "semantic" or RecursiveCharacterTextSplitter is None:
-            print(f"🔍 BEAM CHUNKING: Semantic splitting disabled - strategy={self.strategy}, RecursiveCharacterTextSplitter available={RecursiveCharacterTextSplitter is not None}")
+            print(
+                f"🔍 BEAM CHUNKING: Semantic splitting disabled - strategy={self.strategy}, RecursiveCharacterTextSplitter available={RecursiveCharacterTextSplitter is not None}"
+            )
             return chunks, {"semantic_splitting_enabled": False}
-            
-        print(f"🔍 BEAM CHUNKING: Applying semantic text splitting to chunks larger than {self.max_chunk_size} characters...")
-        
+
+        print(
+            f"🔍 BEAM CHUNKING: Applying semantic text splitting to chunks larger than {self.max_chunk_size} characters..."
+        )
+
         # Initialize text splitter
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
@@ -583,9 +546,9 @@ class IntelligentChunker:
             length_function=len,
             is_separator_regex=False,
         )
-        
+
         print(f"🔍 BEAM CHUNKING: Text splitter initialized with chunk_size={self.chunk_size}, overlap={self.overlap}")
-        
+
         split_chunks = []
         splitting_stats = {
             "chunks_processed": 0,
@@ -595,59 +558,61 @@ class IntelligentChunker:
             "largest_chunk_before": 0,
             "largest_chunk_after": 0,
         }
-        
+
         for chunk_idx, chunk in enumerate(chunks):
             splitting_stats["chunks_processed"] += 1
             content = chunk["content"]
             content_length = len(content)
-            
+
             # Track largest chunk sizes
             if content_length > splitting_stats["largest_chunk_before"]:
                 splitting_stats["largest_chunk_before"] = content_length
-            
+
             # BEAM DEBUG: Print processing of each chunk
             if content_length > 500:  # Print chunks that might need splitting
                 content_preview = content[:100] + "..." if len(content) > 100 else content
-                print(f"🔍 BEAM PROCESSING CHUNK {chunk_idx}: {content_length} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'")
-            
+                print(
+                    f"🔍 BEAM PROCESSING CHUNK {chunk_idx}: {content_length} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'"
+                )
+
             # FORCE SPLIT: Change threshold to 1000 chars instead of max_chunk_size
             split_threshold = 1000  # HARDCODED: Force split anything over 1000 chars
             if content_length <= split_threshold:
                 if content_length > 500:  # Print decision for potentially splittable chunks
-                    print(f"🔍 BEAM SKIPPING CHUNK {chunk_idx}: {content_length} <= {split_threshold} (HARDCODED threshold)")
+                    print(
+                        f"🔍 BEAM SKIPPING CHUNK {chunk_idx}: {content_length} <= {split_threshold} (HARDCODED threshold)"
+                    )
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
                 if content_length > splitting_stats["largest_chunk_after"]:
                     splitting_stats["largest_chunk_after"] = content_length
                 continue
-                
+
             # Split large content
-            print(f"🔍 BEAM SPLITTING CHUNK {chunk_idx}: {content_length} chars > {split_threshold} (HARDCODED threshold)")
+
             try:
                 text_chunks = text_splitter.split_text(content)
-                print(f"🔍 BEAM SPLIT RESULT {chunk_idx}: {len(text_chunks)} chunks, sizes: {[len(tc) for tc in text_chunks]}")
-                
+
                 if len(text_chunks) <= 1:
                     # No splitting occurred
-                    print(f"🔍 BEAM NO SPLITTING OCCURRED for chunk {chunk_idx}: {len(text_chunks)} chunks returned")
+
                     split_chunks.append(chunk)
                     splitting_stats["chunks_unchanged"] += 1
                     if content_length > splitting_stats["largest_chunk_after"]:
                         splitting_stats["largest_chunk_after"] = content_length
                     continue
-                    
+
                 splitting_stats["chunks_split"] += 1
                 splitting_stats["total_new_chunks"] += len(text_chunks)
-                print(f"🔍 BEAM SUCCESSFULLY SPLIT chunk {chunk_idx}: {content_length} chars -> {len(text_chunks)} chunks")
-                
+
                 # Create new chunks from splits
                 original_bbox = chunk["metadata"].get("bbox")
-                
+
                 for i, chunk_text in enumerate(text_chunks):
                     new_chunk = chunk.copy()
                     new_chunk["chunk_id"] = f"{chunk['chunk_id']}_split_{i}"
                     new_chunk["content"] = chunk_text
-                    
+
                     # Update metadata for split chunk
                     new_metadata = chunk["metadata"].copy()
                     new_metadata["content_length"] = len(chunk_text)
@@ -655,34 +620,36 @@ class IntelligentChunker:
                     new_metadata["split_index"] = i
                     new_metadata["total_splits"] = len(text_chunks)
                     new_metadata["original_chunk_id"] = chunk["chunk_id"]
-                    
+
                     # EXPLICIT FIX: Ensure bbox is preserved in split chunks
                     if original_bbox is not None:
                         new_metadata["bbox"] = original_bbox
-                    
+
                     new_chunk["metadata"] = new_metadata
-                    
+
                     # Verify bbox is preserved
                     split_bbox = new_metadata.get("bbox")
-                    
+
                     split_chunks.append(new_chunk)
-                    
+
                     # Track largest chunk after splitting
                     if len(chunk_text) > splitting_stats["largest_chunk_after"]:
                         splitting_stats["largest_chunk_after"] = len(chunk_text)
-                    
+
             except Exception as e:
                 print(f"🔍 BEAM ERROR: Failed to split chunk {chunk.get('chunk_id', 'unknown')}: {e}")
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
                 if content_length > splitting_stats["largest_chunk_after"]:
                     splitting_stats["largest_chunk_after"] = content_length
-                
+
         splitting_stats["semantic_splitting_enabled"] = True
-        
+
         # BEAM DEBUG: Final summary
         final_sizes = [len(chunk["content"]) for chunk in split_chunks]
-        print(f"🔍 BEAM FINAL CHUNKING SUMMARY: {len(split_chunks)} chunks, sizes: min={min(final_sizes) if final_sizes else 0}, max={max(final_sizes) if final_sizes else 0}, avg={sum(final_sizes)/len(final_sizes) if final_sizes else 0:.1f}")
+        print(
+            f"🔍 BEAM FINAL CHUNKING SUMMARY: {len(split_chunks)} chunks, sizes: min={min(final_sizes) if final_sizes else 0}, max={max(final_sizes) if final_sizes else 0}, avg={sum(final_sizes) / len(final_sizes) if final_sizes else 0:.1f}"
+        )
         print(f"🔍 BEAM Semantic splitting complete: {splitting_stats}")
         logger.info(f"Semantic splitting complete: {splitting_stats}")
         return split_chunks, splitting_stats
@@ -691,9 +658,9 @@ class IntelligentChunker:
         """Merge small adjacent chunks to enforce minimum chunk size"""
         if not elements:
             return elements, {"merging_enabled": False, "no_elements": True}
-            
+
         logger.info(f"Merging small chunks (min_size: {self.min_chunk_size})...")
-        
+
         merged_elements = []
         current_merge_group = []
         merging_stats = {
@@ -702,15 +669,15 @@ class IntelligentChunker:
             "merge_groups_created": 0,
             "final_elements": 0,
         }
-        
+
         for el in elements:
             merging_stats["elements_processed"] += 1
-            
+
             # Get element content and metadata
             meta = self.extract_structural_metadata(el)
             content = self.compose_final_content(el, meta)
             content_length = len(content)
-            
+
             if content_length < self.min_chunk_size:
                 merging_stats["small_elements_found"] += 1
                 current_merge_group.append(el)
@@ -722,35 +689,35 @@ class IntelligentChunker:
                         merged_elements.append(merged_element)
                         merging_stats["merge_groups_created"] += 1
                     current_merge_group = []
-                
+
                 # Add current large element as-is
                 merged_elements.append(el)
-                
+
         # Handle remaining merge group
         if current_merge_group:
             merged_element = self._merge_element_group(current_merge_group)
             if merged_element:
                 merged_elements.append(merged_element)
                 merging_stats["merge_groups_created"] += 1
-                
+
         merging_stats["final_elements"] = len(merged_elements)
         merging_stats["merging_enabled"] = True
         logger.info(f"Chunk merging complete: {merging_stats}")
-        
+
         return merged_elements, merging_stats
 
     def _merge_element_group(self, elements: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Merge a group of small elements into one"""
         if not elements:
             return None
-            
+
         if len(elements) == 1:
             return elements[0]
-            
+
         # Use the first element as base
         base_element = elements[0].copy()
         base_meta = self.extract_structural_metadata(base_element)
-        
+
         # Combine content from all elements (extract raw text without section headers)
         combined_content_parts = []
         for el in elements:
@@ -759,25 +726,23 @@ class IntelligentChunker:
             raw_content = self.extract_text_content(el, meta)
             if raw_content.strip():
                 combined_content_parts.append(raw_content.strip())
-                
+
         combined_content = "\n\n".join(combined_content_parts)
-        
+
         # Update metadata for merged element
         base_meta["element_id"] = f"merged_{base_meta.get('element_id', 'unknown')}"
         base_meta["content_length"] = len(combined_content)
         base_meta["is_merged"] = True
         base_meta["merged_count"] = len(elements)
         base_meta["element_category"] = "MergedContent"
-        
+
         # Store merged content
         base_element["merged_content"] = combined_content
         base_element["structural_metadata"] = base_meta
-        
+
         return base_element
 
-    def create_final_chunks(
-        self, elements: List[Dict[str, Any]]
-    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    def create_final_chunks(self, elements: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Main orchestrator: transform elements into final chunks with processing statistics"""
         logger.info("=== INTELLIGENT CHUNKING PIPELINE ===")
 
@@ -803,19 +768,20 @@ class IntelligentChunker:
 
             # Compose content
             content = self.compose_final_content(el, meta)
-            
+
             # BEAM DEBUG: Print content composition for large content
             if len(content) > 1000:
                 content_preview = content[:200] + "..." if len(content) > 200 else content
-                print(f"🔍 BEAM COMPOSING LARGE CONTENT: {len(content)} chars, type={meta.get('element_category', 'unknown')}, preview='{content_preview}'")
+                print(
+                    f"🔍 BEAM COMPOSING LARGE CONTENT: {len(content)} chars, type={meta.get('element_category', 'unknown')}, preview='{content_preview}'"
+                )
 
             # Create chunk object with composed content
             chunk_bbox = meta.get("bbox")
             chunk_id = str(uuid.uuid4())
             element_type = el.get("element_type", "unknown")
             element_category = meta.get("element_category", "unknown")
-            
-            
+
             chunk = {
                 "chunk_id": chunk_id,
                 "content": content,
@@ -841,7 +807,6 @@ class IntelligentChunker:
                     "structural_metadata": meta,
                 },
             }
-            
 
             composed_chunks.append(chunk)
 
@@ -882,9 +847,7 @@ class IntelligentChunker:
 
             # Collect section headers distribution
             section_title = meta.get("section_title_inherited", "Unknown Section")
-            section_headers_distribution[section_title] = (
-                section_headers_distribution.get(section_title, 0) + 1
-            )
+            section_headers_distribution[section_title] = section_headers_distribution.get(section_title, 0) + 1
 
             # Collect examples for each type (up to 2 per type)
             if cat not in type_examples:
@@ -892,11 +855,7 @@ class IntelligentChunker:
             if len(type_examples[cat]) < 2:
                 type_examples[cat].append(
                     {
-                        "content_preview": (
-                            c["content"][:300] + "..."
-                            if len(c["content"]) > 300
-                            else c["content"]
-                        ),
+                        "content_preview": (c["content"][:300] + "..." if len(c["content"]) > 300 else c["content"]),
                         "page_number": meta.get("page_number"),
                         "section_title": meta.get("section_title_inherited"),
                         "size": len(c["content"]),
@@ -917,12 +876,8 @@ class IntelligentChunker:
 
         # Find shortest and longest chunks
         sorted_chunks = sorted(chunks, key=lambda x: len(x["content"]))
-        shortest_chunks = (
-            sorted_chunks[:3] if len(sorted_chunks) >= 3 else sorted_chunks
-        )
-        longest_chunks = (
-            sorted_chunks[-3:] if len(sorted_chunks) >= 3 else sorted_chunks
-        )
+        shortest_chunks = sorted_chunks[:3] if len(sorted_chunks) >= 3 else sorted_chunks
+        longest_chunks = sorted_chunks[-3:] if len(sorted_chunks) >= 3 else sorted_chunks
 
         shortest_examples = [
             {
@@ -1020,9 +975,7 @@ class ChunkingStep(PipelineStep):
         chunking_config = config.get("chunking", {})
         self.chunker = IntelligentChunker(chunking_config)
 
-    async def execute(
-        self, input_data: Any, indexing_run_id: UUID = None, document_id: UUID = None
-    ) -> StepResult:
+    async def execute(self, input_data: Any, indexing_run_id: UUID = None, document_id: UUID = None) -> StepResult:
         """Execute the chunking step with enriched data from previous step"""
         start_time = datetime.now()
 
@@ -1061,23 +1014,21 @@ class ChunkingStep(PipelineStep):
                 bbox_before = None
                 if "structural_metadata" in page_info:
                     bbox_before = page_info["structural_metadata"].get("bbox")
-                
+
                 page_info["element_type"] = "full_page_image"
                 page_info["page_number"] = int(page_num)
-                
+
                 # Check bbox after modification
                 bbox_after = None
                 if "structural_metadata" in page_info:
                     bbox_after = page_info["structural_metadata"].get("bbox")
-                
+
                 all_elements.append(page_info)
 
             logger.info(f"Processing {len(all_elements)} total elements")
 
             # Create chunks using intelligent chunking
-            final_chunks, processing_stats = self.chunker.create_final_chunks(
-                all_elements
-            )
+            final_chunks, processing_stats = self.chunker.create_final_chunks(all_elements)
 
             # Generate analysis and validation
             analysis = self.chunker.analyze_chunks(final_chunks)
@@ -1090,9 +1041,7 @@ class ChunkingStep(PipelineStep):
             summary_stats = {
                 "total_elements_processed": len(all_elements),
                 "total_chunks_created": len(final_chunks),
-                "chunk_type_distribution": analysis.get(
-                    "content_type_distribution", {}
-                ),
+                "chunk_type_distribution": analysis.get("content_type_distribution", {}),
                 "chunk_size_distribution": analysis.get("chunk_size_distribution", {}),
                 "average_chunk_size": analysis.get("average_chars_per_chunk", 0),
                 "validation_results": validation,
@@ -1100,9 +1049,7 @@ class ChunkingStep(PipelineStep):
                 "shortest_chunks": analysis.get("shortest_chunks", []),
                 "longest_chunks": analysis.get("longest_chunks", []),
                 "chunk_type_examples": analysis.get("chunk_type_examples", {}),
-                "section_headers_distribution": analysis.get(
-                    "section_headers_distribution", {}
-                ),
+                "section_headers_distribution": analysis.get("section_headers_distribution", {}),
                 "very_small_chunks": analysis.get("very_small_chunks", 0),
                 "very_large_chunks": analysis.get("very_large_chunks", 0),
                 "list_grouping_stats": processing_stats.get("grouping_stats", {}),
@@ -1115,18 +1062,12 @@ class ChunkingStep(PipelineStep):
                     {
                         "chunk_id": chunk["chunk_id"],
                         "content_preview": (
-                            chunk["content"][:200] + "..."
-                            if len(chunk["content"]) > 200
-                            else chunk["content"]
+                            chunk["content"][:200] + "..." if len(chunk["content"]) > 200 else chunk["content"]
                         ),
                         "metadata": {
-                            "element_category": chunk["metadata"].get(
-                                "element_category"
-                            ),
+                            "element_category": chunk["metadata"].get("element_category"),
                             "page_number": chunk["metadata"].get("page_number"),
-                            "section_title": chunk["metadata"].get(
-                                "section_title_inherited"
-                            ),
+                            "section_title": chunk["metadata"].get("section_title_inherited"),
                         },
                     }
                     for chunk in final_chunks[:3]  # First 3 chunks as samples
@@ -1134,12 +1075,8 @@ class ChunkingStep(PipelineStep):
                 "shortest_chunks": analysis.get("shortest_chunks", []),
                 "longest_chunks": analysis.get("longest_chunks", []),
                 "chunk_type_examples": analysis.get("chunk_type_examples", {}),
-                "list_grouping_examples": processing_stats.get(
-                    "grouping_stats", {}
-                ).get("group_examples", []),
-                "noise_filtering_examples": processing_stats.get(
-                    "filtering_stats", {}
-                ).get("filtered_elements", [])[
+                "list_grouping_examples": processing_stats.get("grouping_stats", {}).get("group_examples", []),
+                "noise_filtering_examples": processing_stats.get("filtering_stats", {}).get("filtered_elements", [])[
                     :3
                 ],  # Show first 3 filtered items
             }
@@ -1149,9 +1086,7 @@ class ChunkingStep(PipelineStep):
 
             # Store chunks in database for embedding step
             if indexing_run_id and document_id:
-                await self.store_chunks_in_database(
-                    final_chunks, indexing_run_id, document_id
-                )
+                await self.store_chunks_in_database(final_chunks, indexing_run_id, document_id)
             else:
                 logger.warning("No run information provided, skipping database storage")
 
@@ -1184,9 +1119,7 @@ class ChunkingStep(PipelineStep):
                 details={"reason": str(e)},
             ) from e
 
-    async def store_chunks_in_database(
-        self, chunks: List[Dict[str, Any]], indexing_run_id: UUID, document_id: UUID
-    ):
+    async def store_chunks_in_database(self, chunks: List[Dict[str, Any]], indexing_run_id: UUID, document_id: UUID):
         """Store chunks in document_chunks table for embedding step"""
         if not self.db:
             logger.warning("No database client available, skipping chunk storage")
@@ -1235,9 +1168,7 @@ class ChunkingStep(PipelineStep):
             table_elements = enriched_data.get("table_elements", [])
             extracted_pages = enriched_data.get("extracted_pages", {})
 
-            total_elements = (
-                len(text_elements) + len(table_elements) + len(extracted_pages)
-            )
+            total_elements = len(text_elements) + len(table_elements) + len(extracted_pages)
 
             if total_elements == 0:
                 logger.warning("No elements found in enriched data")
@@ -1269,9 +1200,7 @@ class ChunkingStep(PipelineStep):
             # Rough estimate: 0.1 seconds per element
             estimated_seconds = max(5, total_elements * 0.1)
 
-            logger.info(
-                f"Estimated chunking duration: {estimated_seconds:.1f} seconds for {total_elements} elements"
-            )
+            logger.info(f"Estimated chunking duration: {estimated_seconds:.1f} seconds for {total_elements} elements")
             return int(estimated_seconds)
 
         except Exception as e:

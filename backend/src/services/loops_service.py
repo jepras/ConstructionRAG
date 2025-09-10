@@ -13,12 +13,12 @@ logger = logging.getLogger(__name__)
 
 class LoopsService:
     """Service for sending transactional emails via Loops.so API."""
-    
+
     # Hardcoded template IDs (these are not secrets, just template references)
     WIKI_COMPLETION_TEMPLATE_ID = "cmfb0g26t89llxf0i592li27q"
     NEWSLETTER_CONFIRMATION_TEMPLATE_ID = "cmfb5sk790boz4o0igafcmfm4"
     AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID = "cmfc9jow3ajs80f0is1ebv0c6"
-    ERROR_NOTIFICATION_TEMPLATE_ID = "PLACEHOLDER_TEMPLATE_ID"  # Replace with actual template ID from Loops.so
+    ERROR_NOTIFICATION_TEMPLATE_ID = "cmfe2w96f00c6vs0if2nvyuha"  # Replace with actual template ID from Loops.so
 
     def __init__(self):
         self.api_key = os.getenv("LOOPS_API_KEY")
@@ -26,10 +26,12 @@ class LoopsService:
 
         if not self.api_key:
             raise ValueError("LOOPS_API_KEY environment variable not set")
-        
+
         # Log configuration (truncated for security)
         api_key_preview = self.api_key[:4] + "..." if self.api_key else "None"
-        logger.info(f"LoopsService initialized - API Key: {api_key_preview}, Templates: Wiki({self.WIKI_COMPLETION_TEMPLATE_ID[:4]}...), Newsletter({self.NEWSLETTER_CONFIRMATION_TEMPLATE_ID[:4]}...), Authenticated({self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID[:4]}...)")
+        logger.info(
+            f"LoopsService initialized - API Key: {api_key_preview}, Templates: Wiki({self.WIKI_COMPLETION_TEMPLATE_ID[:4]}...), Newsletter({self.NEWSLETTER_CONFIRMATION_TEMPLATE_ID[:4]}...), Authenticated({self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID[:4]}...)"
+        )
 
     async def send_wiki_completion_email(
         self,
@@ -65,7 +67,7 @@ class LoopsService:
             # Add to audience if requested
             if add_to_audience:
                 payload["addToAudience"] = True
-                
+
             # Add user group if specified
             if user_group:
                 payload["userGroup"] = user_group
@@ -77,18 +79,19 @@ class LoopsService:
 
             # Log the request details (without sensitive info)
             logger.info(f"Sending email to {email} with transactional ID: {self.WIKI_COMPLETION_TEMPLATE_ID[:4]}...")
-            logger.info(f"Payload: email={email}, wikiUrl={wiki_url}, projectName={project_name}, addToAudience={add_to_audience}, userGroup={user_group}")
+            logger.info(
+                f"Payload: email={email}, wikiUrl={wiki_url}, projectName={project_name}, addToAudience={add_to_audience}, userGroup={user_group}"
+            )
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.api_url, 
-                    json=payload, 
-                    headers=headers,
-                    timeout=30.0
+                response = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
+
+                response_data = (
+                    response.json()
+                    if response.headers.get("content-type", "").startswith("application/json")
+                    else response.text
                 )
 
-                response_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-                
                 if response.status_code == 200:
                     logger.info(f"✅ Loops API responded successfully (200) - Response: {response_data}")
                     logger.info(f"Wiki completion email sent successfully to {email}")
@@ -156,7 +159,7 @@ class LoopsService:
             # Add to audience if requested
             if add_to_audience:
                 payload["addToAudience"] = True
-                
+
             # Add user group if specified
             if user_group:
                 payload["userGroup"] = user_group
@@ -167,19 +170,22 @@ class LoopsService:
             }
 
             # Log the request details (without sensitive info)
-            logger.info(f"Sending authenticated wiki completion email to {email} with template ID: {self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID[:4]}...")
-            logger.info(f"Payload: email={email}, wikiUrl={wiki_url}, projectName={project_name}, userName={user_name}, addToAudience={add_to_audience}, userGroup={user_group}")
+            logger.info(
+                f"Sending authenticated wiki completion email to {email} with template ID: {self.AUTHENTICATED_WIKI_COMPLETION_TEMPLATE_ID[:4]}..."
+            )
+            logger.info(
+                f"Payload: email={email}, wikiUrl={wiki_url}, projectName={project_name}, userName={user_name}, addToAudience={add_to_audience}, userGroup={user_group}"
+            )
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.api_url, 
-                    json=payload, 
-                    headers=headers,
-                    timeout=30.0
+                response = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
+
+                response_data = (
+                    response.json()
+                    if response.headers.get("content-type", "").startswith("application/json")
+                    else response.text
                 )
 
-                response_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-                
                 if response.status_code == 200:
                     logger.info(f"✅ Authenticated wiki completion email sent successfully to {email}")
                     return {
@@ -242,12 +248,7 @@ class LoopsService:
             }
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.api_url, 
-                    json=payload, 
-                    headers=headers,
-                    timeout=30.0
-                )
+                response = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
 
                 if response.status_code == 200:
                     logger.info(f"Transactional email sent successfully to {email}")
@@ -257,7 +258,9 @@ class LoopsService:
                         "response": response.json(),
                     }
                 else:
-                    error_msg = f"Failed to send email to {email}. Status: {response.status_code}, Response: {response.text}"
+                    error_msg = (
+                        f"Failed to send email to {email}. Status: {response.status_code}, Response: {response.text}"
+                    )
                     logger.error(error_msg)
                     return {
                         "success": False,
@@ -305,18 +308,19 @@ class LoopsService:
             }
 
             # Log the request details (without sensitive info)
-            logger.info(f"Sending newsletter confirmation to {email} with ID: {self.NEWSLETTER_CONFIRMATION_TEMPLATE_ID[:4]}...")
+            logger.info(
+                f"Sending newsletter confirmation to {email} with ID: {self.NEWSLETTER_CONFIRMATION_TEMPLATE_ID[:4]}..."
+            )
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.api_url, 
-                    json=payload, 
-                    headers=headers,
-                    timeout=30.0
+                response = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
+
+                response_data = (
+                    response.json()
+                    if response.headers.get("content-type", "").startswith("application/json")
+                    else response.text
                 )
 
-                response_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-                
                 if response.status_code == 200:
                     logger.info(f"✅ Newsletter confirmation sent successfully to {email}")
                     return {
@@ -325,7 +329,9 @@ class LoopsService:
                         "response": response_data,
                     }
                 else:
-                    error_msg = f"❌ Newsletter confirmation failed - Status: {response.status_code}, Response: {response_data}"
+                    error_msg = (
+                        f"❌ Newsletter confirmation failed - Status: {response.status_code}, Response: {response_data}"
+                    )
                     logger.error(error_msg)
                     return {
                         "success": False,
@@ -371,7 +377,7 @@ class LoopsService:
         """
         try:
             admin_email = "jeprasher@gmail.com"
-            
+
             payload = {
                 "transactionalId": self.ERROR_NOTIFICATION_TEMPLATE_ID,
                 "email": admin_email,
@@ -394,15 +400,14 @@ class LoopsService:
             logger.info(f"Error: {error_message}")
 
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.api_url, 
-                    json=payload, 
-                    headers=headers,
-                    timeout=30.0
+                response = await client.post(self.api_url, json=payload, headers=headers, timeout=30.0)
+
+                response_data = (
+                    response.json()
+                    if response.headers.get("content-type", "").startswith("application/json")
+                    else response.text
                 )
 
-                response_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
-                
                 if response.status_code == 200:
                     logger.info(f"✅ Error notification sent successfully for run {indexing_run_id}")
                     return {
@@ -411,7 +416,9 @@ class LoopsService:
                         "response": response_data,
                     }
                 else:
-                    error_msg = f"❌ Error notification failed - Status: {response.status_code}, Response: {response_data}"
+                    error_msg = (
+                        f"❌ Error notification failed - Status: {response.status_code}, Response: {response_data}"
+                    )
                     logger.error(error_msg)
                     return {
                         "success": False,
@@ -436,30 +443,33 @@ class LoopsService:
     def extract_project_name_from_documents(indexing_run_id: str) -> str:
         """
         Extract project name from document filenames or metadata.
-        
+
         Args:
             indexing_run_id: The indexing run ID to extract project name for
-            
+
         Returns:
             Extracted project name or "Unknown Project" as fallback
         """
         try:
             from src.config.database import get_supabase_admin_client
-            
+
             admin_db = get_supabase_admin_client()
-            
+
             # Get documents for this indexing run
-            docs_result = admin_db.rpc('get_documents_for_indexing_run', {
-                'run_id': indexing_run_id
-            }).execute()
-            
+            docs_result = admin_db.rpc("get_documents_for_indexing_run", {"run_id": indexing_run_id}).execute()
+
             if not docs_result.data:
                 # Fallback: get documents directly
-                run_docs = admin_db.table("indexing_run_documents").select("document_id").eq("indexing_run_id", indexing_run_id).execute()
+                run_docs = (
+                    admin_db.table("indexing_run_documents")
+                    .select("document_id")
+                    .eq("indexing_run_id", indexing_run_id)
+                    .execute()
+                )
                 if run_docs.data:
                     doc_ids = [row["document_id"] for row in run_docs.data]
                     docs_result = admin_db.table("documents").select("filename").in_("id", doc_ids).limit(5).execute()
-            
+
             if docs_result.data:
                 # Extract common project name from filenames
                 filenames = [doc.get("filename", "") for doc in docs_result.data]
@@ -471,39 +481,34 @@ class LoopsService:
                             project_part = first_filename.split(separator)[0].strip()
                             if len(project_part) > 3:  # Reasonable project name length
                                 return project_part.title()
-                    
+
                     # If no separators, use first 30 chars of filename
                     if len(first_filename) > 30:
                         return first_filename[:30].strip() + "..."
-                    
+
                     return first_filename.replace(".pdf", "").replace(".PDF", "").strip()
-            
+
         except Exception as e:
             logger.warning(f"Failed to extract project name for run {indexing_run_id}: {e}")
-        
+
         return "Unknown Project"
 
-    @staticmethod 
+    @staticmethod
     def format_error_context(stage: str, step: str, error: str, context: Dict[str, Any]) -> str:
         """
         Format error context as readable JSON for email notifications.
-        
+
         Args:
             stage: The stage where error occurred
             step: The specific step that failed
             error: The error message
             context: Additional context dictionary
-            
+
         Returns:
             Formatted JSON string
         """
-        error_obj = {
-            "stage": stage,
-            "step": step,
-            "error": error,
-            "context": context
-        }
-        
+        error_obj = {"stage": stage, "step": step, "error": error, "context": context}
+
         try:
             return json.dumps(error_obj, indent=2, default=str)
         except Exception:
