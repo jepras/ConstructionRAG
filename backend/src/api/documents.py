@@ -214,7 +214,7 @@ async def create_upload(
         )
 
     # Different limits for anonymous vs authenticated uploads
-    max_files_limit = 5 if project_id is None else 20  # 5 for email uploads, 20 for project uploads
+    max_files_limit = 5 if project_id is None else 200  # 5 for email uploads, 200 for project uploads
     if len(files) > max_files_limit:
         upload_type = "anonymous" if project_id is None else "authenticated"
         raise ValidationError(

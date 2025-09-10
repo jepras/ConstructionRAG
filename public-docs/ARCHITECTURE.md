@@ -1,8 +1,8 @@
-# ConstructionRAG System Architecture
+# Specfinder System Architecture
 
 ## System Overview
 
-ConstructionRAG implements a distributed document processing architecture that transforms construction PDFs into an intelligent, searchable knowledge base. The system separates compute-intensive processing from user-facing services to ensure scalability and responsiveness.
+Specfinder implements a distributed document processing architecture that transforms construction PDFs into an intelligent, searchable knowledge base. The system separates compute-intensive processing from user-facing services to ensure scalability and responsiveness.
 
 ## High-Level Architecture
 

@@ -174,7 +174,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
           onRemoveFile={handleRemoveFile}
           onValidationComplete={handleValidationComplete}
           onValidationErrors={handleValidationStateChange}
-          maxFiles={20}
+          maxFiles={200}
           disabled={createProjectMutation.isPending}
           showValidation={true}
         />

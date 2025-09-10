@@ -38,6 +38,7 @@ except Exception as e:
     print(f"Backend path: {backend_path}")
     print(f"Path exists: {backend_path.exists()}")
     import traceback
+
     traceback.print_exc()
     print("Make sure you're running this script from the backend directory")
     sys.exit(1)
@@ -45,6 +46,7 @@ except Exception as e:
 
 # Configuration - Add indexing run IDs here for manual deletion
 INDEXING_RUNS_TO_DELETE = [
+    "4357e6bf-9ae1-4162-9772-816c21d49982"
     # Add specific indexing run IDs here if needed
 ]
 

@@ -3,9 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
-import { Search, Upload, MessageSquare, Download, Info, ArrowUp, Mic } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Upload, MessageSquare, Download, Info, ArrowUp, Mic, Play } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import HowItWorksCard, { ProcessingDiagram } from "@/components/HowItWorksCard";
 import { DragDropVisual } from "@/components/DragDropVisual";
 
@@ -17,6 +18,8 @@ export default function Home() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasAsked, setHasAsked] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleQuerySubmit = () => {
     if (query.trim() && !isLoading && !hasAsked) {
@@ -412,13 +415,41 @@ export default function Home() {
         </div>
         
         <div className="max-w-4xl mx-auto">
-          <div className="relative">
+          <div className="relative rounded-lg shadow-xl border border-border overflow-hidden bg-black">
+            {/* Custom poster overlay */}
+            {!videoPlaying && (
+              <div 
+                className="absolute inset-0 z-10 cursor-pointer group"
+                onClick={() => {
+                  setVideoPlaying(true);
+                  videoRef.current?.play();
+                }}
+              >
+                <Image
+                  src="/video-poster.jpg"
+                  alt="Video preview"
+                  fill
+                  className="object-cover"
+                  priority
+                />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
+                  <div className="w-20 h-20 bg-white/90 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Play className="w-10 h-10 text-black ml-1" fill="currentColor" />
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <video 
-              className="w-full rounded-lg shadow-xl border border-border"
-              controls
+              ref={videoRef}
+              className="w-full aspect-video"
+              controls={videoPlaying}
               poster="/video-poster.jpg"
-              preload="none"
+              preload="metadata"
               muted
+              onPlay={() => setVideoPlaying(true)}
+              onPause={() => setVideoPlaying(false)}
+              onEnded={() => setVideoPlaying(false)}
             >
               <source src="/demo-video.mp4" type="video/mp4" />
               Your browser does not support the video tag.
