@@ -22,7 +22,9 @@ from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 from src.services.storage_service import StorageService
 
-logger = logging.getLogger(__name__)
+# Initialize structured logger
+from src.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class IntelligentChunker:
@@ -50,12 +52,16 @@ class IntelligentChunker:
         self.min_chunk_size = config.get("min_chunk_size", 100)
         self.max_chunk_size = config.get("max_chunk_size", 1200)  # HARDCODED: Force aggressive splitting
 
-        # BEAM DEBUG: Print configuration as received
-        print(f"🔧 BEAM CHUNKING CONFIG:")
-        print(f"  strategy: {self.strategy} (config value: {config.get('strategy', 'NOT_SET')})")
-        print(f"  max_chunk_size: {self.max_chunk_size} (config value: {config.get('max_chunk_size', 'NOT_SET')})")
-        print(f"  chunk_size: {self.chunk_size}")
-        print(f"  overlap: {self.overlap}")
+        # Log configuration as received
+        logger.info("chunking_config_received", extra={
+            "step": "chunking",
+            "config_received": {
+                "strategy": config.get('strategy', 'NOT_SET'),
+                "max_chunk_size": config.get('max_chunk_size', 'NOT_SET'),
+                "chunk_size": self.chunk_size,
+                "overlap": self.overlap
+            }
+        })
 
         # FORCE HARDCODED VALUES FOR BEAM TESTING
         self.strategy = "semantic"
@@ -63,11 +69,16 @@ class IntelligentChunker:
         self.chunk_size = 800  # Force smaller target chunk size
         self.overlap = 200  # Ensure good overlap
 
-        print(f"🔧 BEAM FORCED VALUES:")
-        print(f"  strategy: {self.strategy} (HARDCODED)")
-        print(f"  max_chunk_size: {self.max_chunk_size} (HARDCODED - will split chunks > 1000 chars)")
-        print(f"  chunk_size: {self.chunk_size} (HARDCODED - target chunk size)")
-        print(f"  overlap: {self.overlap} (HARDCODED - overlap size)")
+        logger.info("chunking_config_forced", extra={
+            "step": "chunking",
+            "forced_values": {
+                "strategy": self.strategy,
+                "max_chunk_size": self.max_chunk_size,
+                "chunk_size": self.chunk_size,
+                "overlap": self.overlap
+            },
+            "reason": "beam_testing_hardcoded_values"
+        })
 
     def extract_structural_metadata(self, el: dict) -> dict:
         """Extract structural metadata from element, handling various formats"""
@@ -597,7 +608,6 @@ class IntelligentChunker:
                         splitting_stats["largest_chunk_after"] = len(chunk_text)
 
             except Exception as e:
-                print(f"🔍 BEAM ERROR: Failed to split chunk {chunk.get('chunk_id', 'unknown')}: {e}")
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
                 if content_length > splitting_stats["largest_chunk_after"]:
@@ -607,10 +617,6 @@ class IntelligentChunker:
 
         # BEAM DEBUG: Final summary
         final_sizes = [len(chunk["content"]) for chunk in split_chunks]
-        print(
-            f"🔍 BEAM FINAL CHUNKING SUMMARY: {len(split_chunks)} chunks, sizes: min={min(final_sizes) if final_sizes else 0}, max={max(final_sizes) if final_sizes else 0}, avg={sum(final_sizes) / len(final_sizes) if final_sizes else 0:.1f}"
-        )
-        print(f"🔍 BEAM Semantic splitting complete: {splitting_stats}")
         logger.info(f"Semantic splitting complete: {splitting_stats}")
         return split_chunks, splitting_stats
 

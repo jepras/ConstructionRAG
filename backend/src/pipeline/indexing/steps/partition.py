@@ -13,8 +13,9 @@ from collections import Counter
 from uuid import UUID, uuid4
 import logging
 
-# Initialize logger first
-logger = logging.getLogger(__name__)
+# Initialize structured logger
+from src.utils.logging import get_logger
+logger = get_logger(__name__)
 
 # PDF processing
 import fitz  # PyMuPDF
@@ -137,11 +138,6 @@ class PartitionStep(PipelineStep):
                 f"scanned: {analysis['is_likely_scanned']} "
                 f"(confidence: {analysis['detection_confidence']:.2f})"
             )
-            print(
-                f"📊 Document analysis: {analysis['avg_text_per_page']:.1f} chars/page, "
-                f"scanned: {analysis['is_likely_scanned']} "
-                f"(confidence: {analysis['detection_confidence']:.2f})"
-            )
 
             return analysis
 
@@ -162,8 +158,15 @@ class PartitionStep(PipelineStep):
             raise PipelineError("Unstructured library not available for scanned document processing")
 
         try:
-            logger.info("Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images")
-            print("🔄 Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images")
+            logger.info("partition_strategy_selected", extra={
+                "document_id": str(document_input.document_id),
+                "run_id": str(document_input.run_id),
+                "step": "partition",
+                "strategy": "hybrid_ocr_images",
+                "ocr_method": "unstructured",
+                "image_method": "pymupdf",
+                "reason": "default_hybrid_strategy"
+            })
 
             # Run Unstructured processing in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
@@ -353,11 +356,6 @@ class PartitionStep(PipelineStep):
 
             logger.info(
                 f"Hybrid processing complete: {len(result['text_elements'])} text (OCR), "
-                f"{len(result['table_elements'])} tables, "
-                f"{len(result['extracted_pages'])} full pages"
-            )
-            print(
-                f"✅ Hybrid processing complete: {len(result['text_elements'])} text (OCR), "
                 f"{len(result['table_elements'])} tables, "
                 f"{len(result['extracted_pages'])} full pages"
             )
@@ -738,8 +736,13 @@ class PartitionStep(PipelineStep):
             # Check if we have an explicit OCR strategy configured
             if self.ocr_strategy != "auto":
                 # Use the explicitly configured strategy
-                logger.info(f"Using explicitly configured OCR strategy: {self.ocr_strategy}")
-                print(f"🎯 Using explicitly configured OCR strategy: {self.ocr_strategy}")
+                logger.info("partition_strategy_configured", extra={
+                    "document_id": str(document_input.document_id),
+                    "run_id": str(document_input.run_id),
+                    "step": "partition",
+                    "strategy": self.ocr_strategy,
+                    "reason": "explicitly_configured"
+                })
 
                 if self.ocr_strategy == "hybrid_ocr_images":
                     if UNSTRUCTURED_AVAILABLE:
@@ -769,12 +772,17 @@ class PartitionStep(PipelineStep):
 
             # Step 2: Choose processing strategy based on detection
             if doc_analysis["is_likely_scanned"] and UNSTRUCTURED_AVAILABLE:
-                logger.info(
-                    f"Document detected as SCANNED (confidence: {doc_analysis['detection_confidence']:.2f}) - using Hybrid: Unstructured OCR + PyMuPDF images"
-                )
-                print(
-                    f"🎯 Document detected as SCANNED (confidence: {doc_analysis['detection_confidence']:.2f}) - using Hybrid: Unstructured OCR + PyMuPDF images"
-                )
+                logger.info("document_type_detected", extra={
+                    "document_id": str(document_input.document_id),
+                    "run_id": str(document_input.run_id),
+                    "step": "partition",
+                    "document_type": "scanned",
+                    "detection_confidence": doc_analysis['detection_confidence'],
+                    "strategy": "hybrid_ocr_images",
+                    "ocr_method": "unstructured",
+                    "image_method": "pymupdf",
+                    "reason": "scanned_document_detection"
+                })
                 try:
                     result = await self._process_with_unstructured(filepath, document_input)
                     result["metadata"]["hybrid_detection"] = doc_analysis
@@ -790,9 +798,6 @@ class PartitionStep(PipelineStep):
             else:
                 logger.info(
                     f"Document detected as REGULAR (confidence: {doc_analysis['detection_confidence']:.2f}) - using PyMuPDF only"
-                )
-                print(
-                    f"🎯 Document detected as REGULAR (confidence: {doc_analysis['detection_confidence']:.2f}) - using PyMuPDF only"
                 )
 
             result = await self._partition_document_async(filepath, document_input)
@@ -855,37 +860,29 @@ class PartitionStep(PipelineStep):
             1 for analysis in stage1_results["page_analysis"].values() if analysis.get("needs_extraction", False)
         )
 
-        print(f"📊 DOCUMENT ANALYSIS COMPLETE")
-        print(f"   📄 Total pages: {stage1_results['document_metadata'].get('total_pages', 0)}")
-        print(f"   🖼️  Total images detected: {total_images}")
-        print(f"   ✅ Meaningful images: {meaningful_images}")
-        print(f"   📋 Tables detected: {len(stage1_results['table_locations'])}")
-        print(f"   📄 Pages needing extraction: {pages_needing_extraction}")
+        logger.info("document_analysis_completed", extra={
+            "step": "partition",
+            "filename": os.path.basename(filepath),
+            "analysis_results": {
+                "total_pages": stage1_results['document_metadata'].get('total_pages', 0),
+                "total_images_detected": total_images,
+                "meaningful_images": meaningful_images,
+                "tables_detected": len(stage1_results['table_locations']),
+                "pages_needing_extraction": pages_needing_extraction
+            }
+        })
 
         # Stage 3: Full page extraction (ALWAYS FIRST - no conditions)
         extracted_pages = []
         if self.extract_images:
-            print(f"📄 FULL PAGE EXTRACTION")
             extracted_pages = partitioner.stage4_full_page_extraction(filepath, stage1_results["page_analysis"])
-            for page_num, page_info in extracted_pages.items():
-                print(f"   ✅ Page {page_num}: {page_info['complexity']} → Full page extracted")
-            print(f"📄 Full page extraction complete: {len(extracted_pages)} pages")
-        else:
-            print(f"📄 Full page extraction: DISABLED")
 
         # Stage 4: Table metadata processing (ALWAYS metadata only - no individual images)
         enhanced_tables = []
         if self.extract_tables:
-            print(f"📋 TABLE METADATA PROCESSING (No individual images)")
-            print(f"   📋 Tables to process: {len(stage1_results['table_locations'])}")
 
             enhanced_tables = partitioner.stage3_create_table_elements_only(filepath, stage1_results["table_locations"])
 
-            for table_info in stage1_results["table_locations"]:
-                print(f"   ✅ Table on page {table_info['page']}: Metadata only (covered by full page)")
-            print(f"📋 Table metadata complete: {len(enhanced_tables)} elements")
-        else:
-            print(f"📋 Table processing: DISABLED")
 
         # Return all raw results for async post-processing
         return {
@@ -961,11 +958,9 @@ class PartitionStep(PipelineStep):
 
             # 5. SKIP table image upload - Full-page-only approach
             if enhanced_tables:
-                print(f"📋 BEAM: Table metadata preserved for {len(enhanced_tables)} tables")
                 logger.info(
                     f"Table metadata preserved for {len(enhanced_tables)} tables - no individual images uploaded (full-page approach)"
                 )
-                print(f"📋 BEAM: Table images BLOCKED - content will be captured in full-page extractions")
 
                 # Clear any individual table image paths to prevent confusion
                 cleared_count = 0
@@ -973,7 +968,6 @@ class PartitionStep(PipelineStep):
                     if table_element["metadata"].pop("image_path", None):
                         cleared_count += 1
 
-                print(f"📋 BEAM: Cleared individual image paths from {cleared_count}/{len(enhanced_tables)} tables")
 
             # 6. Prepare metadata
             metadata = {
@@ -1291,7 +1285,6 @@ class UnifiedPartitionerV2:
 
                 decision = "EXTRACT" if needs_extraction else "SKIP"
                 reason_str = ", ".join(reason) if reason else "no meaningful content"
-                print(f"📄 BEAM: Page {page_index}: {decision} ({reason_str})")
 
             # Store table locations
             for i, table in enumerate(tables):
@@ -1403,7 +1396,6 @@ class UnifiedPartitionerV2:
             page_info = page_analysis.get(page_index, {})
             if page_info.get("needs_extraction", False):
                 logger.info(f"🔄 SKIPPING text extraction on page {page_index} - will be handled by VLM captions")
-                print(f"🔄 BEAM: SKIPPING text extraction on page {page_index} - has visual content")
                 continue
 
             # Get text blocks with detailed metadata

@@ -453,12 +453,10 @@ class EnrichmentStep(PipelineStep):
         table_elements = enriched_data.get("table_elements", [])
         extracted_pages = enriched_data.get("extracted_pages", {})
 
-        print(f"🤖 BEAM: VLM processing decision - {len(table_elements)} table elements found")
         logger.info(f"Processing {len(table_elements)} table elements...")
 
         # Debug the data types to fix the comparison issue
         extracted_page_keys = list(extracted_pages.keys())
-        print(f"🤖 BEAM: Full page extractions available for pages: {extracted_page_keys}")
 
         # Separate tables that need VLM processing from those that don't
         tables_to_process = []
@@ -473,9 +471,6 @@ class EnrichmentStep(PipelineStep):
 
             if has_full_page:
                 if tables_skipped < 3:  # Only log first 3 skips in detail
-                    print(
-                        f"🤖 BEAM: SKIPPING table VLM {i + 1}/{len(table_elements)} (ID: {table_id}, page {table_page}) - full-page extraction exists"
-                    )
                 logger.info(
                     f"Skipping VLM for table {i + 1}/{len(table_elements)} on page {table_page} - full-page extraction exists"
                 )
@@ -491,7 +486,6 @@ class EnrichmentStep(PipelineStep):
 
         # Process tables in parallel batches
         if tables_to_process:
-            print(f"🤖 BEAM: Processing {len(tables_to_process)} tables in parallel batches")
             logger.info(f"Processing {len(tables_to_process)} tables with VLM in parallel batches...")
 
             # Create tasks for parallel processing
@@ -504,9 +498,6 @@ class EnrichmentStep(PipelineStep):
             for i in range(0, len(tasks), batch_size):
                 batch = tasks[i : i + batch_size]
                 batch_end = min(i + batch_size, len(tasks))
-                print(
-                    f"🤖 BEAM: Processing table batch {i // batch_size + 1} (tables {i + 1}-{batch_end} of {len(tasks)})"
-                )
 
                 # Process batch in parallel
                 batch_results = await asyncio.gather(*batch)
@@ -517,11 +508,9 @@ class EnrichmentStep(PipelineStep):
 
         tables_processed_with_vlm = len(tables_to_process)
 
-        print(f"🤖 BEAM: Table VLM summary - {tables_processed_with_vlm} processed, {tables_skipped} skipped")
 
         # Process full-page images
         extracted_pages = enriched_data.get("extracted_pages", {})
-        print(f"🖼️  BEAM: Full-page VLM processing - {len(extracted_pages)} pages to process")
         logger.info(f"Processing {len(extracted_pages)} full-page images...")
 
         pages_processed = 0
@@ -543,9 +532,6 @@ class EnrichmentStep(PipelineStep):
                 batch_nums = page_nums[i : i + batch_size]
                 batch_end = min(i + batch_size, len(page_tasks))
 
-                print(
-                    f"🖼️  BEAM: Processing page batch {i // batch_size + 1} (pages {i + 1}-{batch_end} of {len(page_tasks)})"
-                )
                 logger.info(f"Processing pages {batch_nums} in parallel...")
 
                 # Process batch in parallel
@@ -556,9 +542,6 @@ class EnrichmentStep(PipelineStep):
                     extracted_pages[batch_nums[j]]["enrichment_metadata"] = enrichment_metadata
                     pages_processed += 1
 
-        print(
-            f"🤖 BEAM: VLM enrichment complete! {pages_processed} full-page images processed, {tables_processed_with_vlm} individual tables processed"
-        )
         logger.info("VLM enrichment complete!")
         return enriched_data
 

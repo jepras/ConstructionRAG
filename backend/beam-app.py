@@ -13,10 +13,16 @@ from uuid import UUID
 import httpx
 from beam import Image, env, task_queue
 
+# Structured logging
+from src.utils.logging import get_logger
+
 # Version tracking for debugging deployments
 BEAM_VERSION = "2.2.0"  # Update this when making changes
 DEPLOYMENT_DATE = "2025-09-01"
 CHANGES = "Added resource monitoring and removed GPU to optimize costs"
+
+# Initialize logger
+logger = get_logger(__name__)
 
 # Resource monitoring
 from src.config.database import get_supabase_admin_client
@@ -40,16 +46,23 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
     """
     try:
         if not webhook_url:
-            print("⚠️ Webhook URL not provided, skipping wiki generation")
+            logger.warning("wiki_webhook_url_missing", extra={
+                "run_id": indexing_run_id
+            })
             return
 
         if not webhook_api_key:
-            print("⚠️ Webhook API key not provided, skipping wiki generation")
+            logger.warning("wiki_webhook_api_key_missing", extra={
+                "run_id": indexing_run_id
+            })
             return
 
         payload = {"indexing_run_id": indexing_run_id}
 
-        print(f"🔄 Triggering wiki generation via webhook for run: {indexing_run_id}")
+        logger.info("wiki_webhook_triggered", extra={
+            "run_id": indexing_run_id,
+            "webhook_url": webhook_url
+        })
 
         # Set up headers with API key authentication
         headers = {"Content-Type": "application/json", "X-API-Key": webhook_api_key}
@@ -59,19 +72,38 @@ async def trigger_wiki_generation(indexing_run_id: str, webhook_url: str, webhoo
                 response = await client.post(webhook_url, json=payload, headers=headers)
 
                 if response.status_code == 200:
-                    print("✅ Wiki generation triggered successfully via webhook")
+                    logger.info("wiki_webhook_success", extra={
+                        "run_id": indexing_run_id,
+                        "status_code": response.status_code
+                    })
                 else:
-                    print(f"⚠️ Wiki generation webhook trigger failed: {response.status_code}")
+                    logger.warning("wiki_webhook_failed", extra={
+                        "run_id": indexing_run_id,
+                        "status_code": response.status_code
+                    })
 
             except httpx.TimeoutException as timeout_error:
-                print(f"⏰ Request timed out: {timeout_error}")
+                logger.error("wiki_webhook_timeout", extra={
+                    "run_id": indexing_run_id,
+                    "error": str(timeout_error)
+                })
             except httpx.RequestError as req_error:
-                print(f"🌐 Request error: {req_error}")
+                logger.error("wiki_webhook_request_error", extra={
+                    "run_id": indexing_run_id,
+                    "error": str(req_error)
+                })
             except Exception as http_error:
-                print(f"💥 Unexpected HTTP error: {http_error}")
+                logger.error("wiki_webhook_unexpected_error", extra={
+                    "run_id": indexing_run_id,
+                    "error": str(http_error)
+                })
 
     except Exception as e:
-        print(f"⚠️ Error triggering wiki generation: {type(e).__name__}: {e}")
+        logger.error("wiki_generation_error", extra={
+            "run_id": indexing_run_id,
+            "error_type": type(e).__name__,
+            "error": str(e)
+        })
         # Don't fail the indexing pipeline if wiki generation fails
 
 
@@ -87,7 +119,11 @@ async def trigger_error_webhook(indexing_run_id: str, error_message: str, webhoo
     """
     try:
         if not webhook_url or not webhook_api_key:
-            print("⚠️ Webhook URL or API key not provided, skipping error notification")
+            logger.warning("error_webhook_not_configured", extra={
+                "run_id": indexing_run_id,
+                "webhook_url_provided": bool(webhook_url),
+                "webhook_api_key_provided": bool(webhook_api_key)
+            })
             return
 
         # Convert from success webhook URL to error webhook URL
@@ -99,8 +135,11 @@ async def trigger_error_webhook(indexing_run_id: str, error_message: str, webhoo
             "error_stage": "beam_processing"
         }
 
-        print(f"🚨 Triggering error webhook for run: {indexing_run_id}")
-        print(f"Error: {error_message}")
+        logger.error("error_webhook_triggered", extra={
+            "run_id": indexing_run_id,
+            "error_message": error_message,
+            "error_webhook_url": error_webhook_url
+        })
 
         # Set up headers with API key authentication
         headers = {"Content-Type": "application/json", "X-API-Key": webhook_api_key}
@@ -110,20 +149,39 @@ async def trigger_error_webhook(indexing_run_id: str, error_message: str, webhoo
                 response = await client.post(error_webhook_url, json=payload, headers=headers)
 
                 if response.status_code == 200:
-                    print("✅ Error webhook triggered successfully")
+                    logger.info("error_webhook_success", extra={
+                        "run_id": indexing_run_id,
+                        "status_code": response.status_code
+                    })
                 else:
-                    print(f"⚠️ Error webhook trigger failed: {response.status_code}")
-                    print(f"Response: {response.text}")
+                    logger.warning("error_webhook_failed", extra={
+                        "run_id": indexing_run_id,
+                        "status_code": response.status_code,
+                        "response_text": response.text
+                    })
 
             except httpx.TimeoutException as timeout_error:
-                print(f"⏰ Error webhook timed out: {timeout_error}")
+                logger.error("error_webhook_timeout", extra={
+                    "run_id": indexing_run_id,
+                    "error": str(timeout_error)
+                })
             except httpx.RequestError as req_error:
-                print(f"🌐 Error webhook request error: {req_error}")
+                logger.error("error_webhook_request_error", extra={
+                    "run_id": indexing_run_id,
+                    "error": str(req_error)
+                })
             except Exception as http_error:
-                print(f"💥 Unexpected error webhook HTTP error: {http_error}")
+                logger.error("error_webhook_unexpected_error", extra={
+                    "run_id": indexing_run_id,
+                    "error": str(http_error)
+                })
 
     except Exception as e:
-        print(f"⚠️ Error triggering error webhook: {type(e).__name__}: {e}")
+        logger.error("error_webhook_trigger_failed", extra={
+            "run_id": indexing_run_id,
+            "error_type": type(e).__name__,
+            "error": str(e)
+        })
         # Don't fail further if error notification fails
 
 
@@ -153,33 +211,54 @@ async def run_indexing_pipeline_on_beam(
         Dict containing processing results and statistics
     """
     try:
-        print(f"🚀 Starting Beam indexing pipeline for run: {indexing_run_id}")
-        print(f"📄 Processing {len(document_ids)} documents")
-        print(f"⚙️ BEAM VERSION: v{BEAM_VERSION} ({DEPLOYMENT_DATE})")
-        print(f"📝 Changes: {CHANGES}")
+        logger.info("pipeline_started", extra={
+            "run_id": indexing_run_id,
+            "document_count": len(document_ids),
+            "beam_version": BEAM_VERSION,
+            "deployment_date": DEPLOYMENT_DATE,
+            "changes": CHANGES,
+            "user_id": user_id,
+            "project_id": project_id
+        })
 
         # Log initial resources
         log_resources("Pipeline Start")
 
         # Initialize services
-        print("🔧 Initializing services...")
+        logger.info("services_initializing", extra={
+            "run_id": indexing_run_id,
+            "step": "initialization"
+        })
         db = get_supabase_admin_client()
         storage_service = StorageService()
-        print("✅ Services initialized")
+        logger.info("services_initialized", extra={
+            "run_id": indexing_run_id,
+            "step": "initialization"
+        })
 
         # Quick database connectivity test
         try:
             test_run = db.table("indexing_runs").select("id").eq("id", str(indexing_run_id)).execute()
             if not test_run.data:
-                print(f"❌ Indexing run {indexing_run_id} not found in database")
+                logger.error("indexing_run_not_found", extra={
+                    "run_id": indexing_run_id,
+                    "error_type": "database_validation"
+                })
                 return {
                     "status": "failed",
                     "indexing_run_id": indexing_run_id,
                     "error": f"Indexing run {indexing_run_id} not found",
                 }
-            print(f"✅ Found indexing run: {indexing_run_id}")
+            logger.info("indexing_run_validated", extra={
+                "run_id": indexing_run_id,
+                "step": "initialization"
+            })
         except Exception as db_error:
-            print(f"❌ Database connection failed: {db_error}")
+            logger.error("database_connection_failed", extra={
+                "run_id": indexing_run_id,
+                "error_type": "database_connectivity",
+                "error": str(db_error)
+            }, exc_info=True)
             return {
                 "status": "failed",
                 "indexing_run_id": indexing_run_id,
@@ -188,13 +267,21 @@ async def run_indexing_pipeline_on_beam(
 
         # Create document inputs for the pipeline
         document_inputs = []
-        print(f"📋 Preparing {len(document_ids)} documents...")
+        logger.info("document_preparation_started", extra={
+            "run_id": indexing_run_id,
+            "document_count": len(document_ids)
+        })
 
         for i, doc_id in enumerate(document_ids):
             try:
                 doc_result = db.table("documents").select("*").eq("id", doc_id).execute()
                 if not doc_result.data:
-                    print(f"❌ Document {doc_id} not found")
+                    logger.warning("document_not_found", extra={
+                        "run_id": indexing_run_id,
+                        "document_id": doc_id,
+                        "document_index": i + 1,
+                        "total_documents": len(document_ids)
+                    })
                     continue
 
                 doc_data = doc_result.data[0]
@@ -212,42 +299,72 @@ async def run_indexing_pipeline_on_beam(
                 document_inputs.append(document_input)
 
             except Exception as doc_error:
-                print(f"❌ Error processing document {doc_id}: {doc_error}")
+                logger.error("document_preparation_error", extra={
+                    "run_id": indexing_run_id,
+                    "document_id": doc_id,
+                    "error": str(doc_error)
+                }, exc_info=True)
                 continue
 
         if not document_inputs:
-            print("❌ No valid documents found for processing")
+            logger.error("no_valid_documents", extra={
+                "run_id": indexing_run_id,
+                "requested_document_count": len(document_ids),
+                "valid_document_count": 0
+            })
             return {
                 "status": "failed",
                 "error": "No valid documents found",
                 "indexing_run_id": indexing_run_id,
             }
 
-        print(f"✅ Prepared {len(document_inputs)} documents")
+        logger.info("document_preparation_completed", extra={
+            "run_id": indexing_run_id,
+            "requested_document_count": len(document_ids),
+            "prepared_document_count": len(document_inputs)
+        })
 
         # Initialize orchestrator
-        print("🔧 Initializing orchestrator...")
+        logger.info("orchestrator_initializing", extra={
+            "run_id": indexing_run_id,
+            "upload_type": "email" if not user_id else "user_project",
+            "use_test_storage": False
+        })
         orchestrator = IndexingOrchestrator(
             db=db,
             storage=storage_service,
             use_test_storage=False,
             upload_type=(UploadType.EMAIL if not user_id else UploadType.USER_PROJECT),
         )
-        print("✅ Orchestrator ready")
+        logger.info("orchestrator_ready", extra={
+            "run_id": indexing_run_id,
+            "step": "initialization"
+        })
 
         # Process documents using the unified method
-        print("🔄 Starting document processing...")
+        logger.info("document_processing_started", extra={
+            "run_id": indexing_run_id,
+            "document_count": len(document_inputs)
+        })
         log_resources("Before Document Processing")
 
         try:
             success = await orchestrator.process_documents(
                 document_inputs, existing_indexing_run_id=UUID(indexing_run_id)
             )
-            print(f"🔄 Processing completed: {'✅ Success' if success else '❌ Failed'}")
+            logger.info("document_processing_completed", extra={
+                "run_id": indexing_run_id,
+                "status": "success" if success else "failed",
+                "document_count": len(document_inputs)
+            })
             log_resources("After Document Processing")
         except Exception as orchestrator_error:
             error_message = f"Orchestrator error: {str(orchestrator_error)}"
-            print(f"❌ {error_message}")
+            logger.error("orchestrator_processing_error", extra={
+                "run_id": indexing_run_id,
+                "error_type": "orchestrator_failure",
+                "error": error_message
+            }, exc_info=True)
             
             # Trigger error webhook
             await trigger_error_webhook(indexing_run_id, error_message, webhook_url, webhook_api_key)
@@ -259,20 +376,32 @@ async def run_indexing_pipeline_on_beam(
             }
 
         if success:
-            print("✅ Indexing pipeline completed successfully")
+            logger.info("pipeline_completed_successfully", extra={
+                "run_id": indexing_run_id,
+                "document_count": len(document_inputs),
+                "status": "success"
+            })
 
             # Log final resource usage
             monitor = get_monitor()
             summary = monitor.get_summary()
-            print("\n📊 RESOURCE USAGE SUMMARY:")
-            print(f"  Peak CPU: {summary['peak_cpu_percent']:.1f}%")
-            print(f"  Peak RAM: {summary['peak_ram_percent']:.1f}%")
+            logger.info("pipeline_resource_summary", extra={
+                "run_id": indexing_run_id,
+                "resource_usage": {
+                    "peak_cpu_percent": summary["peak_cpu_percent"],
+                    "peak_ram_percent": summary["peak_ram_percent"]
+                }
+            })
 
             # Trigger wiki generation via webhook
             if webhook_url and webhook_api_key:
                 await trigger_wiki_generation(indexing_run_id, webhook_url, webhook_api_key)
             else:
-                print("⚠️ Webhook URL or API key not provided, skipping wiki generation")
+                logger.warning("webhook_not_configured", extra={
+                    "run_id": indexing_run_id,
+                    "webhook_url_provided": bool(webhook_url),
+                    "webhook_api_key_provided": bool(webhook_api_key)
+                })
 
             return {
                 "status": "completed",
@@ -286,7 +415,12 @@ async def run_indexing_pipeline_on_beam(
             }
         else:
             error_message = "Indexing pipeline failed during processing"
-            print(f"❌ {error_message}")
+            logger.error("pipeline_processing_failed", extra={
+                "run_id": indexing_run_id,
+                "document_count": len(document_inputs),
+                "error_type": "processing_failure",
+                "error": error_message
+            })
             
             # Trigger error webhook
             await trigger_error_webhook(indexing_run_id, error_message, webhook_url, webhook_api_key)
@@ -300,7 +434,11 @@ async def run_indexing_pipeline_on_beam(
 
     except Exception as e:
         error_message = f"Critical error during indexing pipeline execution: {str(e)}"
-        print(f"💥 {error_message}")
+        logger.error("pipeline_critical_error", extra={
+            "run_id": indexing_run_id,
+            "error_type": "critical_failure",
+            "error": error_message
+        }, exc_info=True)
         
         # Trigger error webhook for critical failures
         await trigger_error_webhook(indexing_run_id, error_message, webhook_url, webhook_api_key)
@@ -351,14 +489,15 @@ def process_documents(
         project_id: Project ID the documents belong to (optional for email uploads)
     """
     # Log version information at the start of every run
-    print("=" * 60)
-    print(f"🚀 BEAM INDEXING PIPELINE v{BEAM_VERSION}")
-    print(f"📅 Deployment Date: {DEPLOYMENT_DATE}")
-    print(f"📝 Changes: {CHANGES}")
-    print(f"🕐 Run started at: {datetime.now().isoformat()}")
-    print(f"📦 Indexing Run ID: {indexing_run_id}")
-    print(f"📄 Documents to process: {len(document_ids)}")
-    print("=" * 60)
+    logger.info("beam_task_started", extra={
+        "beam_version": BEAM_VERSION,
+        "deployment_date": DEPLOYMENT_DATE,
+        "changes": CHANGES,
+        "run_id": indexing_run_id,
+        "document_count": len(document_ids),
+        "start_time": datetime.now().isoformat(),
+        "environment": "remote_beam"
+    })
 
     if env.is_remote():
         try:
@@ -380,7 +519,11 @@ def process_documents(
             else:
                 error_type = "failure"
             
-            print(f"💥 Beam task {error_type}: {str(e)}")
+            logger.error("beam_task_failed", extra={
+                "run_id": indexing_run_id,
+                "error_type": error_type,
+                "error": str(e)
+            }, exc_info=True)
             
             # Call error webhook for timeout/cancellation/expiration
             if webhook_url and webhook_api_key:
@@ -392,13 +535,23 @@ def process_documents(
                         webhook_api_key
                     ))
                 except Exception as webhook_error:
-                    print(f"⚠️ Failed to trigger error webhook: {webhook_error}")
+                    logger.error("webhook_trigger_failed", extra={
+                        "run_id": indexing_run_id,
+                        "webhook_error": str(webhook_error)
+                    })
             else:
-                print("⚠️ Webhook URL or API key not provided, skipping error notification")
+                logger.warning("webhook_not_configured_for_error", extra={
+                    "run_id": indexing_run_id,
+                    "webhook_url_provided": bool(webhook_url),
+                    "webhook_api_key_provided": bool(webhook_api_key)
+                })
             
             # Re-raise to let Beam know it failed
             raise
     else:
         # Local development - just return success
-        print(f"Local development mode - would process {len(document_ids)} documents")
+        logger.info("local_development_mode", extra={
+            "run_id": indexing_run_id,
+            "document_count": len(document_ids)
+        })
         return {"status": "local_dev_mode", "document_count": len(document_ids)}

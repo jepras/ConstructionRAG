@@ -85,10 +85,20 @@ class AuthService:
     async def sign_in(self, email: str, password: str) -> dict[str, Any]:
         """Sign in an existing user"""
         try:
+            logger.info("Starting sign in process", email=email)
             response = self.supabase_client.auth.sign_in_with_password({"email": email, "password": password})
+            
+            logger.info("Supabase auth response received", 
+                       has_user=bool(response.user),
+                       has_session=bool(response.session),
+                       user_id=response.user.id if response.user else None,
+                       user_email=response.user.email if response.user else None)
 
             if response.user and response.session:
-                logger.info("User signed in successfully", email=email)
+                logger.info("User signed in successfully", 
+                           email=email, 
+                           user_id=response.user.id,
+                           session_expires_at=response.session.expires_at)
 
                 return {
                     "success": True,
@@ -100,10 +110,17 @@ class AuthService:
                     "expires_at": str(response.session.expires_at),
                 }
             else:
+                logger.error("Sign in failed - missing user or session", 
+                           email=email,
+                           has_user=bool(response.user),
+                           has_session=bool(response.session))
                 raise AuthenticationError("Invalid credentials")
 
         except Exception as e:
-            logger.error("Sign in failed", email=email, error=str(e))
+            logger.error("Sign in failed with exception", 
+                        email=email, 
+                        error=str(e),
+                        error_type=type(e).__name__)
             raise AuthenticationError("Invalid credentials")
 
     async def sign_out(self, access_token: str) -> dict[str, Any]:

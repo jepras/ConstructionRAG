@@ -17,7 +17,9 @@ from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
 from src.services.storage_service import StorageService
 
-logger = logging.getLogger(__name__)
+# Initialize structured logger
+from src.utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class VoyageEmbeddingClient:
@@ -71,14 +73,12 @@ class VoyageEmbeddingClient:
         token_batches = self.split_batch_by_tokens(texts, max_tokens=100000)
         log_msg = f"📊 Split {len(texts)} texts into {len(token_batches)} token-limited batches"
         logger.info(log_msg)
-        print(log_msg)
         
         # Process each token-limited batch
         for token_batch_idx, token_batch in enumerate(token_batches):
             estimated_tokens = sum(self.estimate_tokens(text) for text in token_batch)
             log_msg = f"🔄 Processing token batch {token_batch_idx + 1}/{len(token_batches)}: {len(token_batch)} texts, ~{estimated_tokens:,} estimated tokens"
             logger.info(log_msg)
-            print(log_msg)
             
             # Further split by batch_size within token limits
             for i in range(0, len(token_batch), batch_size):
@@ -90,7 +90,6 @@ class VoyageEmbeddingClient:
                 try:
                     api_msg = f"🌐 Sending API request for batch {batch_num}/{total_batches}: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
                     logger.info(api_msg)
-                    print(api_msg)
                     async with httpx.AsyncClient(timeout=90.0) as client:
                         response = await client.post(
                             self.base_url,
@@ -112,7 +111,6 @@ class VoyageEmbeddingClient:
 
                         success_msg = f"✅ Generated embeddings for batch {batch_num}/{total_batches}: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
                         logger.info(success_msg)
-                        print(success_msg)
 
                 except httpx.HTTPStatusError as http_err:
                     status_code = http_err.response.status_code
@@ -120,58 +118,47 @@ class VoyageEmbeddingClient:
                     
                     error_msg = f"❌ HTTP {status_code} error for batch {batch_num}/{total_batches}"
                     logger.error(error_msg)
-                    print(error_msg)
                     
                     details_msg = f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}, estimated_tokens={batch_tokens:,}"
                     logger.error(details_msg)
-                    print(details_msg)
                     
                     response_msg = f"API Response: {response_text}"
                     logger.error(response_msg)
-                    print(response_msg)
                     
                     if status_code == 429:
                         rate_limit_msg = f"😢 Rate limit hit! Batch had {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
                         logger.error(rate_limit_msg)
-                        print(rate_limit_msg)
                     elif "token" in response_text.lower() or "limit" in response_text.lower():
                         limit_msg = f"⚠️ Token limit suspected! Batch had ~{batch_tokens:,} estimated tokens (voyage-multilingual-2 limit: 120K)"
                         logger.error(limit_msg)
-                        print(limit_msg)
                     
                     raise http_err
                     
                 except httpx.TimeoutException as timeout_err:
                     timeout_msg = f"⏰ Timeout error for batch {batch_num}/{total_batches}: {timeout_err}"
                     logger.error(timeout_msg)
-                    print(timeout_msg)
                     
                     details_msg = f"Request details: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens, 90s timeout"
                     logger.error(details_msg)
-                    print(details_msg)
                     
                     raise timeout_err
                     
                 except httpx.RequestError as req_err:
                     network_msg = f"🌐 Network error for batch {batch_num}/{total_batches}: {req_err}"
                     logger.error(network_msg)
-                    print(network_msg)
                     
                     raise req_err
                     
                 except Exception as e:
                     error_msg = f"❌ Unknown error for batch {batch_num}/{total_batches}: {e}"
                     logger.error(error_msg)
-                    print(error_msg)
                     
                     # Enhanced error logging for better debugging
                     details_msg = f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}, estimated_tokens={batch_tokens:,}"
                     logger.error(details_msg)
-                    print(details_msg)
                     
                     sample_msg = f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}"
                     logger.error(sample_msg)
-                    print(sample_msg)
                     
                     raise
 
@@ -382,7 +369,6 @@ class EmbeddingStep(PipelineStep):
         except Exception as e:
             error_msg = f"Embedding step failed: {str(e)}"
             logger.error(error_msg)
-            print(f"❌ {error_msg}")
             
             # Return failed result instead of raising exception to prevent hanging
             duration = (datetime.utcnow() - start_time).total_seconds()
@@ -487,14 +473,12 @@ class EmbeddingStep(PipelineStep):
             try:
                 attempt_msg = f"🔄 Generating embeddings (attempt {attempt + 1}/{self.max_retries})"
                 logger.info(attempt_msg)
-                print(attempt_msg)
                 
                 embeddings = await self.voyage_client.get_embeddings(
                     texts, self.batch_size
                 )
                 success_msg = f"✅ Embedding generation successful on attempt {attempt + 1}"
                 logger.info(success_msg)
-                print(success_msg)
                 return embeddings
 
             except Exception as e:
@@ -503,7 +487,6 @@ class EmbeddingStep(PipelineStep):
                 if elapsed > max_total_time:
                     timeout_msg = f"⏰ Embedding generation timeout after {elapsed:.1f}s (limit: {max_total_time}s)"
                     logger.error(timeout_msg)
-                    print(timeout_msg)
                     return []  # Return empty list for graceful failure handling
                 
                 # Categorize error and calculate smart delay
@@ -512,23 +495,19 @@ class EmbeddingStep(PipelineStep):
                 
                 error_msg = f"❌ Embedding generation failed (attempt {attempt + 1}/{self.max_retries}): {error_type}"
                 logger.error(error_msg)
-                print(error_msg)
                 
                 details_msg = f"Error details: {error_details}"
                 logger.error(details_msg)
-                print(details_msg)
                 
                 if attempt < self.max_retries - 1:
                     delay_msg = f"⏱️ Waiting {delay}s before retry (error type: {error_type})"
                     logger.info(delay_msg)
-                    print(delay_msg)
                     await asyncio.sleep(delay)
                 else:
                     # CRITICAL FIX: Return empty list instead of raising exception
                     # This prevents the entire document processing from being killed
                     final_msg = f"😵 All embedding attempts failed after {self.max_retries} retries. Returning empty embeddings for graceful failure handling."
                     logger.error(final_msg)
-                    print(final_msg)
                     return []  # Return empty list for graceful failure handling
 
     async def store_embeddings(

@@ -80,7 +80,6 @@ class UnifiedElementAnalyzer:
         # Track page changes
         if page_num != self.current_page:
             logger.debug(f"Page change: {self.current_page} → {page_num}")
-            print(f"Page change: {self.current_page} → {page_num}")
             self.current_page = page_num
 
         # Create structural metadata (pure dict, no Pydantic)
@@ -117,7 +116,6 @@ class UnifiedElementAnalyzer:
         # Track page changes
         if page_num != self.current_page:
             logger.debug(f"Page change: {self.current_page} → {page_num}")
-            print(f"Page change: {self.current_page} → {page_num}")
             self.current_page = page_num
 
         # Get HTML text from metadata
@@ -648,31 +646,21 @@ class MetadataStep(PipelineStep):
 
             # Log detailed results for debugging
             logger.info("✅ Metadata analysis completed!")
-            print("✅ Metadata analysis completed!")
             logger.info(f"📊 Summary Stats: {summary_stats}")
-            print(f"📊 Summary Stats: {summary_stats}")
             text_count = len(sample_outputs.get("sample_text_elements", []))
             table_count = len(sample_outputs.get("sample_tables", []))
             logger.info(f"📋 Sample Outputs: {text_count} text, {table_count} tables")
-            print(f"📋 Sample Outputs: {text_count} text, {table_count} tables")
             logger.info(f"📄 Page Sections: {sample_outputs.get('page_sections', {})}")
-            print(f"📄 Page Sections: {sample_outputs.get('page_sections', {})}")
 
             # Show a sample enriched element
             if sample_outputs.get("sample_text_elements"):
                 sample = sample_outputs["sample_text_elements"][0]
                 logger.info("🔍 Sample Enriched Element:")
-                print("🔍 Sample Enriched Element:")
                 logger.info(f"   ID: {sample.get('id')}")
-                print(f"   ID: {sample.get('id')}")
                 logger.info(f"   Page: {sample.get('page')}")
-                print(f"   Page: {sample.get('page')}")
                 logger.info(f"   Section Inherited: {sample.get('section_inherited')}")
-                print(f"   Section Inherited: {sample.get('section_inherited')}")
                 logger.info(f"   Has Numbers: {sample.get('has_numbers')}")
-                print(f"   Has Numbers: {sample.get('has_numbers')}")
                 logger.info(f"   Complexity: {sample.get('complexity')}")
-                print(f"   Complexity: {sample.get('complexity')}")
 
             # Create enriched partition data by adding structural metadata to original elements
             enriched_partition_data = partition_data.copy()
@@ -804,7 +792,6 @@ class MetadataStep(PipelineStep):
         self.analyzer.set_document_metadata(document_metadata)
 
         logger.info(f"Document filename: {self.analyzer.document_filename}")
-        print(f"📄 Document filename: {self.analyzer.document_filename}")
 
         enriched_elements = []
         current_id = 1
@@ -812,7 +799,6 @@ class MetadataStep(PipelineStep):
         # Process text elements
         text_elements = partition_data.get("text_elements", [])
         logger.info(f"Processing {len(text_elements)} text elements...")
-        print(f"Processing {len(text_elements)} text elements...")
 
         # Show category distribution
         categories = {}
@@ -820,7 +806,6 @@ class MetadataStep(PipelineStep):
             cat = elem.get("category", "Unknown")
             categories[cat] = categories.get(cat, 0) + 1
         logger.info(f"Category distribution: {categories}")
-        print(f"Category distribution: {categories}")
 
         # Sort text elements by page number for proper inheritance
         sorted_text_elements = sorted(text_elements, key=lambda x: x["page"])
@@ -845,7 +830,6 @@ class MetadataStep(PipelineStep):
         # Process table elements
         table_elements = partition_data.get("table_elements", [])
         logger.info(f"Processing {len(table_elements)} table elements...")
-        print(f"Processing {len(table_elements)} table elements...")
 
         for table_element in table_elements:
             try:
@@ -868,7 +852,6 @@ class MetadataStep(PipelineStep):
         # Process extracted pages (full page images)
         extracted_pages = partition_data.get("extracted_pages", {})
         logger.info(f"Processing {len(extracted_pages)} extracted pages...")
-        print(f"Processing {len(extracted_pages)} extracted pages...")
 
         # Sort pages by page number for consistent numbering
         sorted_pages = sorted(extracted_pages.items(), key=lambda x: int(x[0]))
@@ -892,21 +875,17 @@ class MetadataStep(PipelineStep):
                 logger.error(f"Error processing page {page_num}: {e}")
 
         logger.info(f"Enhanced analysis complete! Total enriched elements: {len(enriched_elements)}")
-        print(f"Enhanced analysis complete! Total enriched elements: {len(enriched_elements)}")
 
         # Show page section summary
         logger.info("PAGE SECTION SUMMARY:")
-        print("PAGE SECTION SUMMARY:")
         for page_num, section in self.analyzer.page_sections.items():
             logger.info(f'Page {page_num}: "{section}"')
-            print(f'Page {page_num}: "{section}"')
 
         # Count elements with section inheritance
         elements_with_sections = sum(
             1 for elem in enriched_elements if elem.get("structural_metadata", {}).get("section_title_inherited")
         )
         logger.info(f"Elements with section inheritance: {elements_with_sections}/{len(enriched_elements)}")
-        print(f"Elements with section inheritance: {elements_with_sections}/{len(enriched_elements)}")
 
         # Show section inheritance summary (reduced verbosity)
         section_summary = {}
@@ -916,7 +895,6 @@ class MetadataStep(PipelineStep):
                 section_summary[inherited] = section_summary.get(inherited, 0) + 1
 
         logger.info(f"Section inheritance summary: {len(section_summary)} unique sections")
-        print(f"Section inheritance summary: {len(section_summary)} unique sections")
 
         return enriched_elements
 

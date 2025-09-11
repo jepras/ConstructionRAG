@@ -64,13 +64,16 @@ async def sign_up(request: SignUpRequest):
 @router.post("/signin", response_model=AuthResponse, tags=["Authentication"])
 async def sign_in(request: SignInRequest):
     """Sign in an existing user"""
+    logger.info("Sign in request received", email=request.email)
     try:
         result = await auth_service.sign_in(request.email, request.password)
+        logger.info("Sign in successful", email=request.email, user_id=result.get("user_id"))
         return AuthResponse(**result)
-    except HTTPException:
+    except HTTPException as e:
+        logger.error("Sign in HTTP exception", email=request.email, status_code=e.status_code, detail=e.detail)
         raise
     except Exception as e:
-        logger.error("Sign in error", error=str(e))
+        logger.error("Sign in unexpected error", email=request.email, error=str(e), error_type=type(e).__name__)
         raise AppError("Failed to sign in", error_code=AuthenticationError("").error_code) from e
 
 

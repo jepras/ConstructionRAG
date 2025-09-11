@@ -5,8 +5,11 @@ import time
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from uuid import UUID
-import logging
 from fastapi import BackgroundTasks
+
+# Initialize structured logger
+from src.utils.logging import get_logger
+logger = get_logger(__name__)
 
 try:
     from ..shared.base_step import PipelineStep, StepExecutor
@@ -65,7 +68,6 @@ try:
 except Exception as e:
     raise
 
-logger = logging.getLogger(__name__)
 from .models import (
     to_partition_output,
     to_metadata_output,
@@ -504,10 +506,14 @@ class IndexingOrchestrator:
             successful_embeddings = len(successful_document_ids)  # Assumes embeddings succeeded if document succeeded
             failed_embeddings = len(failed_document_ids)
             
-            print(f"📊 EMBEDDING SUMMARY:")
-            print(f"  ✅ Successful: {successful_embeddings}")
-            print(f"  ❌ Failed: {failed_embeddings}")
-            print(f"  📄 Total documents: {total_documents}")
+            logger.info("embedding_batch_summary", extra={
+                "step": "orchestrator",
+                "embedding_results": {
+                    "successful_embeddings": successful_embeddings,
+                    "failed_embeddings": failed_embeddings,
+                    "total_documents": len(document_inputs)
+                }
+            })
 
             # Update final status with more sensible logic
             total_documents = len(document_inputs)
@@ -566,21 +572,30 @@ class IndexingOrchestrator:
         max_concurrent = 5  # Process up to 5 concurrent documents
         semaphore = asyncio.Semaphore(max_concurrent)
         
-        print(f"🔄 Starting continuous processing of {len(document_inputs)} documents with max {max_concurrent} concurrent")
+        logger.info("batch_processing_started", extra={
+            "document_count": len(document_inputs),
+            "max_concurrent": max_concurrent
+        })
 
         async def process_with_semaphore(doc_input: DocumentInput) -> tuple[UUID, bool]:
             """Process a single document with semaphore control"""
             async with semaphore:
                 try:
-                    print(f"📄 Starting document {doc_input.document_id}")
                     result = await self._process_single_document_steps(
                         doc_input, indexing_run_id, progress_tracker
                     )
-                    print(f"✅ Completed document {doc_input.document_id}: {'Success' if result else 'Failed'}")
+                    logger.info("document_processed", extra={
+                        "document_id": str(doc_input.document_id),
+                        "run_id": str(indexing_run_id),
+                        "status": "success" if result else "failed"
+                    })
                     return doc_input.document_id, result
                 except Exception as e:
-                    logger.error(f"Document {doc_input.document_id} failed: {e}")
-                    print(f"❌ Failed document {doc_input.document_id}: {e}")
+                    logger.error("document_processing_failed", extra={
+                        "document_id": str(doc_input.document_id),
+                        "run_id": str(indexing_run_id),
+                        "error": str(e)
+                    }, exc_info=True)
                     return doc_input.document_id, False
 
         # Create all tasks at once (continuous queue)
@@ -595,7 +610,6 @@ class IndexingOrchestrator:
             doc_id, result = await coro
             results[doc_id] = result
             completed_count += 1
-            print(f"🏁 Progress: {completed_count}/{len(document_inputs)} documents completed")
 
         return results
 
@@ -616,9 +630,6 @@ class IndexingOrchestrator:
             for step in self.steps:  # Include ALL steps including embedding
                 step_executor = StepExecutor(step, progress_tracker)
 
-                print(
-                    f"📄 Processing {step.get_step_name()} for document {document_input.document_id}"
-                )
 
                 # Special handling for steps that need run information
                 if isinstance(step, ChunkingStep):
@@ -627,7 +638,6 @@ class IndexingOrchestrator:
                     )
                 elif isinstance(step, EmbeddingStep):
                     # Enhanced logging for embedding step
-                    print(f"🔗 Starting embedding for document {document_input.document_id}")
                     result = await step.execute(
                         current_data, 
                         indexing_run_id=indexing_run_id, 
@@ -635,9 +645,7 @@ class IndexingOrchestrator:
                     )
                     if result.status == "completed":
                         embeddings_count = result.summary_stats.get("embeddings_generated", 0)
-                        print(f"✅ Embedding completed for document {document_input.document_id}: {embeddings_count} embeddings")
                     else:
-                        print(f"❌ Embedding failed for document {document_input.document_id}: {result.error_message}")
                 else:
                     result = await step_executor.execute_with_tracking(current_data)
 
@@ -677,9 +685,6 @@ class IndexingOrchestrator:
                 else:
                     current_data = result
 
-            print(
-                f"✅ Completed individual steps for document {document_input.document_id}"
-            )
             return True
 
         except Exception as e:
