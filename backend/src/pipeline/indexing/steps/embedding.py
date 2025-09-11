@@ -92,54 +92,54 @@ class VoyageEmbeddingClient:
                     logger.info(api_msg)
                     print(api_msg)
                     async with httpx.AsyncClient(timeout=90.0) as client:
-                    response = await client.post(
-                        self.base_url,
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={"model": self.model, "input": batch_texts},
-                    )
-
-                    if response.status_code != 200:
-                        raise Exception(
-                            f"Voyage API error: {response.status_code} - {response.text}"
+                        response = await client.post(
+                            self.base_url,
+                            headers={
+                                "Authorization": f"Bearer {self.api_key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={"model": self.model, "input": batch_texts},
                         )
 
-                    result = response.json()
-                    batch_embeddings = [item["embedding"] for item in result["data"]]
-                    all_embeddings.extend(batch_embeddings)
+                        if response.status_code != 200:
+                            raise Exception(
+                                f"Voyage API error: {response.status_code} - {response.text}"
+                            )
 
-                    success_msg = f"✅ Generated embeddings for batch {batch_num}/{total_batches}: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
-                    logger.info(success_msg)
-                    print(success_msg)
+                        result = response.json()
+                        batch_embeddings = [item["embedding"] for item in result["data"]]
+                        all_embeddings.extend(batch_embeddings)
 
-            except Exception as e:
-                error_msg = f"❌ Failed to generate embeddings for batch {batch_num}/{total_batches}: {e}"
-                logger.error(error_msg)
-                print(error_msg)
-                
-                # Enhanced error logging for better debugging
-                details_msg = f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}, estimated_tokens={batch_tokens:,}"
-                logger.error(details_msg)
-                print(details_msg)
-                
-                sample_msg = f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}"
-                logger.error(sample_msg)
-                print(sample_msg)
-                
-                # Check if it's a token limit error
-                if "token" in str(e).lower() or "limit" in str(e).lower():
-                    limit_msg = f"⚠️ Suspected token limit exceeded! Batch had ~{batch_tokens:,} estimated tokens (voyage-multilingual-2 limit: 120K)"
-                    logger.error(limit_msg)
-                    print(limit_msg)
-                
-                # Log HTTP response details if available
-                if hasattr(e, 'response') and e.response:
-                    logger.error(f"HTTP response status: {e.response.status_code}")
-                    logger.error(f"HTTP response body: {e.response.text[:500]}")
-                
-                raise
+                        success_msg = f"✅ Generated embeddings for batch {batch_num}/{total_batches}: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
+                        logger.info(success_msg)
+                        print(success_msg)
+
+                except Exception as e:
+                    error_msg = f"❌ Failed to generate embeddings for batch {batch_num}/{total_batches}: {e}"
+                    logger.error(error_msg)
+                    print(error_msg)
+                    
+                    # Enhanced error logging for better debugging
+                    details_msg = f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}, estimated_tokens={batch_tokens:,}"
+                    logger.error(details_msg)
+                    print(details_msg)
+                    
+                    sample_msg = f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}"
+                    logger.error(sample_msg)
+                    print(sample_msg)
+                    
+                    # Check if it's a token limit error
+                    if "token" in str(e).lower() or "limit" in str(e).lower():
+                        limit_msg = f"⚠️ Suspected token limit exceeded! Batch had ~{batch_tokens:,} estimated tokens (voyage-multilingual-2 limit: 120K)"
+                        logger.error(limit_msg)
+                        print(limit_msg)
+                    
+                    # Log HTTP response details if available
+                    if hasattr(e, 'response') and e.response:
+                        logger.error(f"HTTP response status: {e.response.status_code}")
+                        logger.error(f"HTTP response body: {e.response.text[:500]}")
+                    
+                    raise
 
         return all_embeddings
 
