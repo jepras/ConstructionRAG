@@ -29,18 +29,69 @@ class VoyageEmbeddingClient:
         self.base_url = "https://api.voyageai.com/v1/embeddings"
         self.dimensions = 1024  # voyage-multilingual-2 dimensions
 
+    def estimate_tokens(self, text: str) -> int:
+        """Estimate token count for Danish/multilingual text"""
+        # Conservative estimate for voyage-multilingual-2:
+        # - Danish text has longer compound words and special chars
+        # - Technical construction text is token-dense
+        # - Use 1.8x multiplier for safety (Danish factor + technical content)
+        return int(len(text) * 1.8)
+
+    def split_batch_by_tokens(self, texts: List[str], max_tokens: int = 100000) -> List[List[str]]:
+        """Split texts into batches that don't exceed token limits"""
+        batches = []
+        current_batch = []
+        current_tokens = 0
+        
+        for text in texts:
+            text_tokens = self.estimate_tokens(text)
+            
+            # If adding this text would exceed limit, start new batch
+            if current_batch and (current_tokens + text_tokens) > max_tokens:
+                batches.append(current_batch)
+                current_batch = [text]
+                current_tokens = text_tokens
+            else:
+                current_batch.append(text)
+                current_tokens += text_tokens
+                
+        # Add final batch if not empty
+        if current_batch:
+            batches.append(current_batch)
+            
+        return batches
+
     async def get_embeddings(
         self, texts: List[str], batch_size: int = 100
     ) -> List[List[float]]:
-        """Generate embeddings for a list of texts using Voyage AI"""
+        """Generate embeddings for a list of texts using Voyage AI with token-aware batching"""
         all_embeddings = []
+        
+        # Split texts by token limits first (120K limit for voyage-multilingual-2)
+        token_batches = self.split_batch_by_tokens(texts, max_tokens=100000)
+        log_msg = f"📊 Split {len(texts)} texts into {len(token_batches)} token-limited batches"
+        logger.info(log_msg)
+        print(log_msg)
+        
+        # Process each token-limited batch
+        for token_batch_idx, token_batch in enumerate(token_batches):
+            estimated_tokens = sum(self.estimate_tokens(text) for text in token_batch)
+            log_msg = f"🔄 Processing token batch {token_batch_idx + 1}/{len(token_batches)}: {len(token_batch)} texts, ~{estimated_tokens:,} estimated tokens"
+            logger.info(log_msg)
+            print(log_msg)
+            
+            # Further split by batch_size within token limits
+            for i in range(0, len(token_batch), batch_size):
+                batch_texts = token_batch[i : i + batch_size]
+                batch_tokens = sum(self.estimate_tokens(text) for text in batch_texts)
+                batch_num = i // batch_size + 1
+                total_batches = (len(token_batch) + batch_size - 1) // batch_size
 
-        # Process in batches
-        for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i : i + batch_size]
-
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                try:
+                    api_msg = f"🌐 Sending API request for batch {batch_num}/{total_batches}: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
+                    logger.info(api_msg)
+                    print(api_msg)
+                    async with httpx.AsyncClient(timeout=90.0) as client:
                     response = await client.post(
                         self.base_url,
                         headers={
@@ -59,17 +110,29 @@ class VoyageEmbeddingClient:
                     batch_embeddings = [item["embedding"] for item in result["data"]]
                     all_embeddings.extend(batch_embeddings)
 
-                    logger.info(
-                        f"Generated embeddings for batch {i//batch_size + 1}: {len(batch_texts)} texts"
-                    )
+                    success_msg = f"✅ Generated embeddings for batch {batch_num}/{total_batches}: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
+                    logger.info(success_msg)
+                    print(success_msg)
 
             except Exception as e:
-                logger.error(
-                    f"Failed to generate embeddings for batch {i//batch_size + 1}: {e}"
-                )
+                error_msg = f"❌ Failed to generate embeddings for batch {batch_num}/{total_batches}: {e}"
+                logger.error(error_msg)
+                print(error_msg)
+                
                 # Enhanced error logging for better debugging
-                logger.error(f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}")
-                logger.error(f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}")
+                details_msg = f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}, estimated_tokens={batch_tokens:,}"
+                logger.error(details_msg)
+                print(details_msg)
+                
+                sample_msg = f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}"
+                logger.error(sample_msg)
+                print(sample_msg)
+                
+                # Check if it's a token limit error
+                if "token" in str(e).lower() or "limit" in str(e).lower():
+                    limit_msg = f"⚠️ Suspected token limit exceeded! Batch had ~{batch_tokens:,} estimated tokens (voyage-multilingual-2 limit: 120K)"
+                    logger.error(limit_msg)
+                    print(limit_msg)
                 
                 # Log HTTP response details if available
                 if hasattr(e, 'response') and e.response:
