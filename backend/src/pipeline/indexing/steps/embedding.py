@@ -67,6 +67,15 @@ class VoyageEmbeddingClient:
                 logger.error(
                     f"Failed to generate embeddings for batch {i//batch_size + 1}: {e}"
                 )
+                # Enhanced error logging for better debugging
+                logger.error(f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}")
+                logger.error(f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}")
+                
+                # Log HTTP response details if available
+                if hasattr(e, 'response') and e.response:
+                    logger.error(f"HTTP response status: {e.response.status_code}")
+                    logger.error(f"HTTP response body: {e.response.text[:500]}")
+                
                 raise
 
         return all_embeddings
@@ -158,11 +167,39 @@ class EmbeddingStep(PipelineStep):
 
             logger.info(f"Found {len(chunks_to_embed)} chunks that need embedding")
 
-            # Generate embeddings
+            # Generate embeddings (may return empty list on failure)
             embeddings = await self.generate_embeddings(chunks_to_embed)
 
-            # Store embeddings back to database
-            await self.store_embeddings(chunks_to_embed, embeddings, indexing_run_id)
+            # Handle embedding failure gracefully
+            if not embeddings:
+                logger.error(f"No embeddings generated for any chunks. Marking all chunks as failed.")
+                # Mark all chunks as failed in database
+                await self.store_failed_embeddings(chunks_to_embed, "All embedding attempts failed", indexing_run_id)
+                
+                # Return failed result
+                duration = (datetime.utcnow() - start_time).total_seconds()
+                return StepResult(
+                    step="embedding",
+                    status="failed",
+                    duration_seconds=duration,
+                    error_message=f"Failed to generate embeddings for all {len(chunks_to_embed)} chunks after {self.max_retries} retries",
+                    data={"chunks_processed": len(chunks_to_embed), "embeddings_generated": 0, "chunks_failed": len(chunks_to_embed)},
+                    summary_stats={"total_chunks": len(chunks_to_embed), "embeddings_generated": 0, "success_rate": 0.0},
+                    started_at=start_time,
+                    completed_at=datetime.utcnow(),
+                )
+
+            # Check for partial embedding success/failure
+            if len(embeddings) != len(chunks_to_embed):
+                logger.warning(f"Partial embedding success: {len(embeddings)}/{len(chunks_to_embed)} chunks embedded")
+
+            # Store successful embeddings back to database
+            await self.store_embeddings(chunks_to_embed[:len(embeddings)], embeddings, indexing_run_id)
+            
+            # Mark remaining chunks as failed if any
+            if len(embeddings) < len(chunks_to_embed):
+                failed_chunks = chunks_to_embed[len(embeddings):]
+                await self.store_failed_embeddings(failed_chunks, "Embedding generation partially failed", indexing_run_id)
 
             # Validate embedding quality
             quality_metrics = await self.validate_embedding_quality(
@@ -174,11 +211,28 @@ class EmbeddingStep(PipelineStep):
 
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Calculate success rate for threshold check
+            success_rate = len(embeddings) / len(chunks_to_embed) if chunks_to_embed else 0.0
+            success_threshold = 0.80  # 80% success threshold
+            
+            # Determine step status based on success rate
+            if success_rate >= success_threshold:
+                step_status = "completed"
+                status_message = f"Embedding completed with {success_rate:.1%} success rate"
+                if success_rate < 1.0:
+                    status_message += f" ({len(embeddings)}/{len(chunks_to_embed)} chunks)"
+            else:
+                step_status = "failed" 
+                status_message = f"Embedding failed - only {success_rate:.1%} success rate (below {success_threshold:.0%} threshold)"
 
             # Create summary statistics
             summary_stats = {
                 "total_chunks": len(chunks_to_embed),
                 "embeddings_generated": len(embeddings),
+                "chunks_failed": len(chunks_to_embed) - len(embeddings),
+                "success_rate": success_rate,
+                "success_threshold": success_threshold,
                 "embedding_model": self.voyage_client.model,
                 "embedding_dimensions": self.voyage_client.dimensions,
                 "batch_size_used": self.batch_size,
@@ -206,15 +260,18 @@ class EmbeddingStep(PipelineStep):
                 ]
             }
 
-            logger.info(f"Embedding completed: {len(embeddings)} embeddings generated")
+            logger.info(status_message)
 
             return StepResult(
                 step="embedding",
-                status="completed",
+                status=step_status,
                 duration_seconds=duration,
+                error_message=status_message if step_status == "failed" else None,
                 data={
                     "chunks_processed": len(chunks_to_embed),
                     "embeddings_generated": len(embeddings),
+                    "chunks_failed": len(chunks_to_embed) - len(embeddings),
+                    "success_rate": success_rate,
                     "embedding_model": self.voyage_client.model,
                     "embedding_quality": quality_metrics,
                     "index_verification": index_verification,
@@ -281,7 +338,7 @@ class EmbeddingStep(PipelineStep):
                 return embeddings
 
             except Exception as e:
-                logger.warning(
+                logger.error(
                     f"Embedding generation failed (attempt {attempt + 1}): {e}"
                 )
                 if attempt < self.max_retries - 1:
@@ -289,7 +346,10 @@ class EmbeddingStep(PipelineStep):
                         self.retry_delay * (2**attempt)
                     )  # Exponential backoff
                 else:
-                    raise
+                    # CRITICAL FIX: Return empty list instead of raising exception
+                    # This prevents the entire document processing from being killed
+                    logger.error(f"All embedding attempts failed after {self.max_retries} retries. Returning empty embeddings.")
+                    return []  # Return empty list for graceful failure handling
 
     async def store_embeddings(
         self,
@@ -309,6 +369,7 @@ class EmbeddingStep(PipelineStep):
                         "embedding_model": self.voyage_client.model,
                         "embedding_provider": "voyage",
                         "embedding_metadata": {
+                            "status": "completed",
                             "dimensions": len(embedding),
                             "model": self.voyage_client.model,
                             "generated_at": datetime.now().isoformat(),
@@ -322,6 +383,35 @@ class EmbeddingStep(PipelineStep):
         except Exception as e:
             logger.error(f"Failed to store embeddings in database: {e}")
             raise
+
+    async def store_failed_embeddings(
+        self,
+        chunks: List[Dict[str, Any]],
+        error_message: str,
+        indexing_run_id: UUID,
+    ):
+        """Mark chunks as failed in database using embedding_metadata"""
+        try:
+            logger.info(f"Marking {len(chunks)} chunks as embedding failed in database")
+
+            # Update each chunk with failure information
+            for chunk in chunks:
+                self.db.table("document_chunks").update(
+                    {
+                        "embedding_metadata": {
+                            "status": "failed",
+                            "error": error_message,
+                            "model": self.voyage_client.model,
+                            "failed_at": datetime.now().isoformat(),
+                        },
+                    }
+                ).eq("id", chunk["id"]).execute()
+
+            logger.info(f"Successfully marked {len(chunks)} chunks as embedding failed")
+
+        except Exception as e:
+            logger.error(f"Failed to mark chunks as embedding failed: {e}")
+            # Don't raise - we don't want to fail the entire step for metadata updates
 
     async def validate_embedding_quality(
         self, chunks: List[Dict[str, Any]], embeddings: List[List[float]]

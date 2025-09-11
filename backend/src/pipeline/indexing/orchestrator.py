@@ -546,40 +546,45 @@ class IndexingOrchestrator:
         progress_tracker: ProgressTracker,
     ) -> Dict[UUID, bool]:
         """
-        Process each document through individual pipeline steps (partition → metadata → enrichment → chunking).
-        Uses conservative parallel processing to avoid resource exhaustion.
+        Process each document through individual pipeline steps using continuous queue processing.
+        Uses semaphore-based concurrency control for optimal resource utilization.
         """
         results = {}
 
-        # Optimized parallel processing - increased batch size for better throughput
-        max_concurrent = min(
-            5, len(document_inputs)
-        )  # Process up to 5 concurrent documents per worker
+        # Continuous processing with semaphore (no batch boundaries)
+        max_concurrent = 5  # Process up to 5 concurrent documents
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        print(f"🔄 Starting continuous processing of {len(document_inputs)} documents with max {max_concurrent} concurrent")
 
-        for i in range(0, len(document_inputs), max_concurrent):
-            batch = document_inputs[i : i + max_concurrent]
-            print(
-                f"🔄 Processing batch {i//max_concurrent + 1}: {len(batch)} documents"
-            )
-
-            # Process batch in parallel
-            tasks = []
-            for doc_input in batch:
-                task = asyncio.create_task(
-                    self._process_single_document_steps(
+        async def process_with_semaphore(doc_input: DocumentInput) -> tuple[UUID, bool]:
+            """Process a single document with semaphore control"""
+            async with semaphore:
+                try:
+                    print(f"📄 Starting document {doc_input.document_id}")
+                    result = await self._process_single_document_steps(
                         doc_input, indexing_run_id, progress_tracker
                     )
-                )
-                tasks.append((doc_input.document_id, task))
-
-            # Wait for batch to complete
-            for doc_id, task in tasks:
-                try:
-                    result = await task
-                    results[doc_id] = result
+                    print(f"✅ Completed document {doc_input.document_id}: {'Success' if result else 'Failed'}")
+                    return doc_input.document_id, result
                 except Exception as e:
-                    logger.error(f"Document {doc_id} failed: {e}")
-                    results[doc_id] = False
+                    logger.error(f"Document {doc_input.document_id} failed: {e}")
+                    print(f"❌ Failed document {doc_input.document_id}: {e}")
+                    return doc_input.document_id, False
+
+        # Create all tasks at once (continuous queue)
+        tasks = [
+            asyncio.create_task(process_with_semaphore(doc_input))
+            for doc_input in document_inputs
+        ]
+
+        # Process results as they complete (no waiting for batches)
+        completed_count = 0
+        for coro in asyncio.as_completed(tasks):
+            doc_id, result = await coro
+            results[doc_id] = result
+            completed_count += 1
+            print(f"🏁 Progress: {completed_count}/{len(document_inputs)} documents completed")
 
         return results
 
