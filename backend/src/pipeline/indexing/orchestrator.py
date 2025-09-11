@@ -509,22 +509,33 @@ class IndexingOrchestrator:
             print(f"  ❌ Failed: {failed_embeddings}")
             print(f"  📄 Total documents: {total_documents}")
 
-            # Update final status
-            if failed_document_ids:
-                logger.warning(
-                    f"{len(failed_document_ids)} documents failed, but {len(successful_document_ids)} succeeded"
-                )
+            # Update final status with more sensible logic
+            total_documents = len(document_inputs)
+            success_rate = len(successful_document_ids) / total_documents if total_documents > 0 else 0
+            
+            if not successful_document_ids:
+                # ALL documents failed - mark as failed
+                logger.error("All documents failed processing")
                 await self.pipeline_service.update_indexing_run_status(
                     indexing_run_id=indexing_run.id,
                     status="failed",
-                    error_message=f"Completed with {len(failed_document_ids)} failed documents",
+                    error_message=f"All {total_documents} documents failed during processing",
+                )
+            elif failed_document_ids:
+                # PARTIAL success - mark as completed with warning
+                success_message = f"Completed with partial success: {len(successful_document_ids)}/{total_documents} documents succeeded ({success_rate:.1%} success rate)"
+                logger.warning(success_message)
+                await self.pipeline_service.update_indexing_run_status(
+                    indexing_run_id=indexing_run.id,
+                    status="completed",  # Changed from "failed" to "completed"
+                    error_message=f"{len(failed_document_ids)} of {total_documents} documents failed",
                 )
             else:
-                logger.info(
-                    f"Successfully completed processing all {len(document_inputs)} documents"
-                )
+                # ALL documents succeeded
+                logger.info(f"Successfully completed processing all {total_documents} documents")
                 await self.pipeline_service.update_indexing_run_status(
-                    indexing_run_id=indexing_run.id, status="completed"
+                    indexing_run_id=indexing_run.id, 
+                    status="completed"
                 )
 
             return True

@@ -232,7 +232,7 @@ class PipelineService:
             raise DatabaseError(f"Failed to update indexing run status: {str(e)}")
 
     def _serialize_step_result(self, step_result: StepResult) -> dict:
-        """Serialize step result with proper datetime handling"""
+        """Serialize step result with proper datetime handling and size optimization"""
         try:
             # Convert to dict and handle datetime serialization
             result_dict = step_result.model_dump()
@@ -243,11 +243,37 @@ class PipelineService:
             if isinstance(result_dict.get("completed_at"), datetime):
                 result_dict["completed_at"] = result_dict["completed_at"].isoformat()
 
+            # OPTIMIZATION: Limit large data fields to prevent JSON size issues
+            if "data" in result_dict and result_dict["data"]:
+                data = result_dict["data"]
+                
+                # For chunking step, don't store all chunk content - just statistics
+                if "chunks" in data and isinstance(data["chunks"], list):
+                    chunk_count = len(data["chunks"])
+                    total_size = sum(len(str(chunk.get("content", ""))) for chunk in data["chunks"])
+                    # Replace large chunks array with summary
+                    data["chunks"] = f"[{chunk_count} chunks, total size: {total_size} chars]"
+                    logger.info(f"Reduced chunking data size: {chunk_count} chunks -> summary string")
+                
+                # Limit sample_outputs to prevent large payloads
+                if "sample_outputs" in result_dict and isinstance(result_dict["sample_outputs"], dict):
+                    sample_outputs = result_dict["sample_outputs"]
+                    for key, value in sample_outputs.items():
+                        if isinstance(value, list) and len(value) > 3:
+                            # Limit arrays to first 3 items
+                            sample_outputs[key] = value[:3] + [f"... and {len(value) - 3} more items"]
+
             return result_dict
         except Exception as e:
             logger.error(f"Error serializing step result: {e}")
-            # Fallback: convert to string representation
-            return {"error": f"Serialization failed: {str(e)}"}
+            # Fallback: convert to minimal representation
+            return {
+                "step": getattr(step_result, "step", "unknown"),
+                "status": getattr(step_result, "status", "unknown"),
+                "error_message": getattr(step_result, "error_message", None),
+                "duration_seconds": getattr(step_result, "duration_seconds", 0),
+                "serialization_error": f"Full serialization failed: {str(e)}"
+            }
 
     async def store_step_result(self, indexing_run_id: UUID, step_name: str, step_result: StepResult) -> bool:
         """Store a step result in the indexing run's step_results JSONB field."""
@@ -306,57 +332,116 @@ class PipelineService:
             raise DatabaseError(f"Failed to get step result: {str(e)}")
 
     async def store_document_step_result(self, document_id: UUID, step_name: str, step_result: StepResult) -> bool:
-        """Store a step result in the document's step_results JSONB field."""
-        try:
-            # First, get the current step_results
-            result = self.supabase.table("documents").select("step_results").eq("id", str(document_id)).execute()
+        """Store a step result in the document's step_results JSONB field with retry logic."""
+        import asyncio
+        
+        max_retries = 3
+        base_delay = 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                # First, get the current step_results
+                result = self.supabase.table("documents").select("step_results").eq("id", str(document_id)).execute()
 
-            if not result.data:
-                raise DatabaseError("Document not found")
+                if not result.data:
+                    raise DatabaseError("Document not found")
 
-            current_step_results = result.data[0].get("step_results", {})
+                current_step_results = result.data[0].get("step_results", {})
 
-            # Add the new step result with custom serialization
-            current_step_results[step_name] = self._serialize_step_result(step_result)
+                # Add the new step result with custom serialization (size-optimized)
+                serialized_result = self._serialize_step_result(step_result)
+                current_step_results[step_name] = serialized_result
 
-            # Determine indexing status based on step result
-            indexing_status = "running"
-            if step_result.status == "failed":
-                indexing_status = "failed"
-            elif step_name == "ChunkingStep" and step_result.status == "completed":
-                # Document is completed after chunking (embedding happens in batch)
-                indexing_status = "completed"
-            elif step_name == "EmbeddingStep" and step_result.status == "completed":
-                # For single document processing, embedding completes the document
-                indexing_status = "completed"
+                # Determine indexing status based on step result
+                indexing_status = "running"
+                error_message = None
+                
+                if step_result.status == "failed":
+                    indexing_status = "failed"
+                    error_message = getattr(step_result, 'error_message', f"{step_name} step failed")
+                elif step_name == "ChunkingStep" and step_result.status == "completed":
+                    # Document is completed after chunking (embedding happens in batch)
+                    indexing_status = "completed"
+                elif step_name == "EmbeddingStep" and step_result.status == "completed":
+                    # For single document processing, embedding completes the document
+                    indexing_status = "completed"
 
-            # Debug logging
-            logger.info(
-                f"📊 Document {document_id} - Step: {step_name}, Status: {step_result.status}, Setting indexing_status: {indexing_status}"
-            )
-
-            # Update the step_results field and indexing_status
-            update_result = (
-                self.supabase.table("documents")
-                .update(
-                    {
-                        "step_results": current_step_results,
-                        "indexing_status": indexing_status,
-                    }
+                # Debug logging
+                logger.info(
+                    f"📊 Document {document_id} - Step: {step_name}, Status: {step_result.status}, Setting indexing_status: {indexing_status}"
                 )
-                .eq("id", str(document_id))
-                .execute()
-            )
 
-            if not update_result.data:
-                raise DatabaseError("Failed to store document step result")
+                # Prepare update data
+                update_data = {
+                    "step_results": current_step_results,
+                    "indexing_status": indexing_status,
+                }
+                
+                # Add error message if step failed
+                if error_message:
+                    update_data["error_message"] = error_message
 
-            logger.info(f"Stored step result for {step_name} in document {document_id}")
-            return True
+                # Update the step_results field and indexing_status
+                update_result = (
+                    self.supabase.table("documents")
+                    .update(update_data)
+                    .eq("id", str(document_id))
+                    .execute()
+                )
 
+                if not update_result.data:
+                    raise DatabaseError("Failed to store document step result")
+
+                logger.info(f"Stored step result for {step_name} in document {document_id}")
+                return True
+
+            except Exception as e:
+                error_str = str(e).lower()
+                
+                # Check for retryable errors (size, timeouts, temporary failures)
+                is_retryable = any(keyword in error_str for keyword in [
+                    "json could not be generated",
+                    "520", "502", "503", "504",  # HTTP errors
+                    "timeout",
+                    "connection",
+                    "temporary",
+                    "payload too large"
+                ])
+                
+                if attempt < max_retries - 1 and is_retryable:
+                    delay = base_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Retrying document step result storage (attempt {attempt + 1}/{max_retries}) after {delay}s delay. Error: {e}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    # Final attempt failed or non-retryable error
+                    detailed_error = f"Failed to store {step_name} step result for document {document_id}: {str(e)}"
+                    logger.error(detailed_error)
+                    
+                    # Try to store minimal error information if the main storage failed
+                    try:
+                        await self._store_minimal_step_error(document_id, step_name, step_result.status, str(e))
+                    except:
+                        pass  # Don't fail if even minimal storage fails
+                    
+                    raise DatabaseError(detailed_error)
+
+    async def _store_minimal_step_error(self, document_id: UUID, step_name: str, status: str, error: str) -> None:
+        """Store minimal step error information when full step result storage fails."""
+        try:
+            # Try to store just the error in the error_message field
+            minimal_update = {
+                "error_message": f"{step_name} step {status}: {error[:500]}...",  # Truncate long errors
+                "indexing_status": "failed"
+            }
+            
+            self.supabase.table("documents").update(minimal_update).eq("id", str(document_id)).execute()
+            logger.info(f"Stored minimal error info for document {document_id}")
+            
         except Exception as e:
-            logger.error(f"Error storing document step result: {e}")
-            raise DatabaseError(f"Failed to store document step result: {str(e)}")
+            logger.error(f"Failed to store even minimal error info: {e}")
 
     async def get_document_step_result(self, document_id: UUID, step_name: str) -> StepResult | None:
         """Get a specific step result from a document's step_results field."""
