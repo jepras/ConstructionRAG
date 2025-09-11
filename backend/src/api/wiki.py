@@ -127,6 +127,15 @@ async def handle_beam_error(
         error_message = request.error_message
         error_stage = request.error_stage
         
+        # Detect if this is a timeout/cancellation/expiration vs regular failure
+        error_lower = error_message.lower()
+        if "timeout" in error_lower:
+            error_stage = "beam_timeout"
+        elif "cancelled" in error_lower:
+            error_stage = "beam_cancelled"
+        elif "expired" in error_lower:
+            error_stage = "beam_expired"
+        
         logger.error(f"Beam processing failed for run {indexing_run_id}: {error_message}")
         
         # Fetch indexing run details using admin client
@@ -158,6 +167,7 @@ async def handle_beam_error(
                 "user_email": user_email,
                 "upload_type": upload_type,
                 "project_name": project_name,
+                "timeout_minutes": 30,  # Add timeout duration for timeout-related errors
                 "timestamp": "now()"
             }
         }

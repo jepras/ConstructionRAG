@@ -361,12 +361,43 @@ def process_documents(
     print("=" * 60)
 
     if env.is_remote():
-        # Run the async function in an event loop
-        return asyncio.run(
-            run_indexing_pipeline_on_beam(
-                indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
+        try:
+            # Run the async function in an event loop
+            return asyncio.run(
+                run_indexing_pipeline_on_beam(
+                    indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
+                )
             )
-        )
+        except Exception as e:
+            # Check if it's a timeout/cancellation/expiration
+            error_str = str(e).lower()
+            if "timeout" in error_str:
+                error_type = "timeout"
+            elif "cancelled" in error_str:
+                error_type = "cancelled"  
+            elif "expired" in error_str:
+                error_type = "expired"
+            else:
+                error_type = "failure"
+            
+            print(f"💥 Beam task {error_type}: {str(e)}")
+            
+            # Call error webhook for timeout/cancellation/expiration
+            if webhook_url and webhook_api_key:
+                try:
+                    asyncio.run(trigger_error_webhook(
+                        indexing_run_id, 
+                        f"Beam task {error_type}: {str(e)}",
+                        webhook_url,
+                        webhook_api_key
+                    ))
+                except Exception as webhook_error:
+                    print(f"⚠️ Failed to trigger error webhook: {webhook_error}")
+            else:
+                print("⚠️ Webhook URL or API key not provided, skipping error notification")
+            
+            # Re-raise to let Beam know it failed
+            raise
     else:
         # Local development - just return success
         print(f"Local development mode - would process {len(document_ids)} documents")
