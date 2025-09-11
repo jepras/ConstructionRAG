@@ -6,6 +6,7 @@ import os
 import tempfile
 import shutil
 import requests
+import concurrent.futures
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -155,6 +156,12 @@ class PartitionStep(PipelineStep):
     async def _process_with_unstructured(self, filepath: str, document_input: DocumentInput) -> Dict[str, Any]:
         """Process document using Unstructured hi-res strategy for scanned documents"""
         if not UNSTRUCTURED_AVAILABLE:
+            logger.error("unstructured_not_available", extra={
+                "document_id": str(document_input.document_id),
+                "run_id": str(document_input.run_id),
+                "step": "partition",
+                "error": "unstructured_library_not_imported"
+            })
             raise PipelineError("Unstructured library not available for scanned document processing")
 
         try:
@@ -168,29 +175,350 @@ class PartitionStep(PipelineStep):
                 "reason": "default_hybrid_strategy"
             })
 
-            # Run Unstructured processing in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            elements = await loop.run_in_executor(None, self._run_unstructured_sync, filepath)
+            # Run Unstructured processing with dedicated thread pool and timeout
+            loop = asyncio.get_running_loop()
+            
+            logger.info("unstructured_executor_starting", extra={
+                "document_id": str(document_input.document_id),
+                "run_id": str(document_input.run_id),
+                "step": "partition",
+                "max_workers": 2,
+                "timeout_minutes": 20
+            })
+            
+            # Create dedicated thread pool for heavy OCR operations to prevent saturation
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="unstructured-ocr") as ocr_executor:
+                # Add timeout to prevent indefinite hanging (20 minutes for image-heavy documents)
+                try:
+                    logger.info("unstructured_async_call_starting", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "filepath": filepath
+                    })
+                    
+                    elements = await asyncio.wait_for(
+                        loop.run_in_executor(ocr_executor, self._run_unstructured_sync, filepath),
+                        timeout=1200  # 20 minutes timeout
+                    )
+                    
+                    logger.info("unstructured_async_call_completed", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "elements_count": len(elements) if elements else 0
+                    })
+                    
+                except asyncio.TimeoutError:
+                    logger.error("unstructured_async_timeout", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "timeout_minutes": 20,
+                        "filepath": filepath
+                    })
+                    raise PipelineError("Unstructured processing timed out - document too complex for OCR processing")
+                except Exception as executor_error:
+                    logger.error("unstructured_executor_error", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "error_type": type(executor_error).__name__,
+                        "error_message": str(executor_error)
+                    })
+                    raise
 
             # Normalize output to current format
+            logger.info("unstructured_normalization_starting", extra={
+                "document_id": str(document_input.document_id),
+                "run_id": str(document_input.run_id),
+                "step": "partition",
+                "elements_to_normalize": len(elements) if elements else 0
+            })
+            
             normalized_result = await self._normalize_unstructured_output(elements, filepath, document_input)
+            
+            logger.info("unstructured_processing_fully_completed", extra={
+                "document_id": str(document_input.document_id),
+                "run_id": str(document_input.run_id),
+                "step": "partition",
+                "text_elements": len(normalized_result.get("text_elements", [])),
+                "table_elements": len(normalized_result.get("table_elements", [])),
+                "extracted_pages": len(normalized_result.get("extracted_pages", {}))
+            })
 
             return normalized_result
 
         except Exception as e:
-            logger.error(f"Unstructured processing failed: {e}")
+            logger.error("unstructured_processing_failed_final", extra={
+                "document_id": str(document_input.document_id),
+                "run_id": str(document_input.run_id),
+                "step": "partition",
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            })
             raise PipelineError(f"Unstructured processing failed: {str(e)}")
 
     def _run_unstructured_sync(self, filepath: str):
         """Run Unstructured processing synchronously (for thread pool execution)"""
-        return partition_pdf(
-            filename=filepath,
-            strategy="hi_res",
-            infer_table_structure=True,
-            languages=self.ocr_languages,
-            include_page_breaks=True,
-            # coordinates removed - included automatically with hi_res strategy
-        )
+        import time
+        import os
+        
+        # Add comprehensive logging to track processing stages
+        logger.info("unstructured_processing_started", extra={
+            "step": "partition",
+            "filename": os.path.basename(filepath),
+            "file_size_mb": round(os.path.getsize(filepath) / (1024 * 1024), 2),
+            "ocr_languages": self.ocr_languages,
+            "strategy": "hi_res"
+        })
+        print(f"🔄 BEAM: Starting Unstructured OCR processing for {os.path.basename(filepath)}")
+        
+        start_time = time.time()
+        
+        try:
+            # Log system information
+            import sys
+            import platform
+            logger.info("unstructured_system_info", extra={
+                "step": "partition",
+                "python_version": sys.version,
+                "platform": platform.platform(),
+                "available_memory_gb": self._get_available_memory_gb()
+            })
+            
+            # Test if unstructured is properly configured
+            logger.info("unstructured_import_test", extra={
+                "step": "partition",
+                "unstructured_available": UNSTRUCTURED_AVAILABLE
+            })
+            
+            # Check system dependencies
+            system_deps_status = self._check_system_dependencies()
+            logger.info("unstructured_system_dependencies", extra={
+                "step": "partition",
+                "dependencies": system_deps_status
+            })
+            
+            # Analyze document characteristics before Unstructured processing
+            doc_analysis = self._analyze_document_characteristics(filepath)
+            logger.info("document_analysis_before_unstructured", extra={
+                "step": "partition",
+                "filename": os.path.basename(filepath),
+                **doc_analysis
+            })
+            print(f"📊 BEAM: Document analysis: {doc_analysis['total_pages']} pages, "
+                  f"text_percentage={doc_analysis['text_percentage']}%, "
+                  f"images={doc_analysis['images_count']}, "
+                  f"text_blocks={doc_analysis['text_blocks_count']}")
+            
+            # Intelligent strategy selection based on document characteristics
+            # Per Unstructured docs: use 'ocr_only' if detectron2_onnx doesn't detect text elements
+            if doc_analysis['text_percentage'] == 0.0:
+                strategy = "ocr_only"
+                strategy_reason = "zero_text_detected_use_ocr_only"
+                print(f"🔄 BEAM: Zero text detected - switching to ocr_only strategy to prevent hanging")
+            else:
+                strategy = "hi_res" 
+                strategy_reason = "text_detected_use_hi_res"
+            
+            # Log partition_pdf call parameters
+            logger.info("unstructured_partition_call", extra={
+                "step": "partition",
+                "filename": filepath,
+                "strategy": strategy,
+                "strategy_reason": strategy_reason,
+                "infer_table_structure": True,
+                "languages": self.ocr_languages,
+                "include_page_breaks": True
+            })
+            print(f"📋 BEAM: Calling partition_pdf with {strategy} strategy for {os.path.basename(filepath)}")
+            
+            # Direct call without signal alarm (incompatible with thread pool executor)
+            result = partition_pdf(
+                filename=filepath,
+                strategy=strategy,
+                infer_table_structure=True,
+                languages=self.ocr_languages,
+                include_page_breaks=True,
+                # coordinates removed - included automatically with hi_res strategy
+            )
+            
+            elapsed_time = time.time() - start_time
+            logger.info("unstructured_processing_completed", extra={
+                "step": "partition",
+                "filename": os.path.basename(filepath),
+                "strategy_used": strategy,
+                "strategy_reason": strategy_reason,
+                "elements_extracted": len(result),
+                "processing_time_seconds": round(elapsed_time, 2),
+                "processing_speed_mb_per_sec": round(os.path.getsize(filepath) / (1024 * 1024) / elapsed_time, 2)
+            })
+            print(f"✅ BEAM: Unstructured OCR processing complete: {len(result)} elements extracted in {elapsed_time:.1f}s")
+            return result
+                
+        except Exception as e:
+            elapsed_time = time.time() - start_time
+            logger.error("unstructured_processing_failed", extra={
+                "step": "partition",
+                "filename": os.path.basename(filepath),
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "elapsed_seconds": elapsed_time
+            })
+            print(f"💥 BEAM: Unstructured OCR processing failed after {elapsed_time:.1f}s: {e}")
+            raise
+            
+    def _get_available_memory_gb(self) -> float:
+        """Get available system memory in GB"""
+        try:
+            import psutil
+            memory = psutil.virtual_memory()
+            return round(memory.available / (1024 ** 3), 2)
+        except ImportError:
+            return 0.0
+            
+    def _check_system_dependencies(self) -> dict:
+        """Check if required system dependencies for Unstructured are available"""
+        import subprocess
+        import shutil
+        
+        deps_status = {}
+        
+        # Check for key system dependencies that Unstructured hi_res strategy needs
+        dependencies = {
+            "tesseract": "tesseract --version",
+            "poppler": "pdfinfo -v",  # Part of poppler-utils
+            "libgl1": None,  # System library, can't easily check
+            "python_packages": None  # Will check Python packages separately
+        }
+        
+        for dep_name, check_cmd in dependencies.items():
+            try:
+                if check_cmd:
+                    # Try to run the command to check if dependency is available
+                    result = subprocess.run(
+                        check_cmd.split(), 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=5
+                    )
+                    deps_status[dep_name] = {
+                        "available": result.returncode == 0,
+                        "version_info": result.stdout.strip() if result.returncode == 0 else result.stderr.strip()
+                    }
+                else:
+                    # For system libraries that can't be easily checked
+                    deps_status[dep_name] = {"available": "unknown", "version_info": "system_library"}
+                    
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+                deps_status[dep_name] = {"available": False, "error": str(e)}
+        
+        # Check Python package dependencies
+        python_deps = ["unstructured", "nltk", "pdf2image"]
+        for pkg in python_deps:
+            try:
+                __import__(pkg)
+                deps_status[f"python_{pkg}"] = {"available": True, "version_info": "imported_successfully"}
+            except ImportError as e:
+                deps_status[f"python_{pkg}"] = {"available": False, "error": str(e)}
+        
+        return deps_status
+
+    def _analyze_document_characteristics(self, filepath: str) -> dict:
+        """Analyze document characteristics using PyMuPDF to identify potential hanging issues"""
+        import fitz
+        import os
+        
+        try:
+            doc = fitz.open(filepath)
+            total_pages = len(doc)
+            total_text_chars = 0
+            total_images = 0
+            total_text_blocks = 0
+            pages_with_text = 0
+            pages_with_images = 0
+            
+            for page_num in range(total_pages):
+                page = doc.load_page(page_num)
+                
+                # Extract text and count characters
+                text = page.get_text()
+                text_chars = len(text.strip())
+                if text_chars > 50:  # More than minimal text
+                    pages_with_text += 1
+                total_text_chars += text_chars
+                
+                # Count text blocks 
+                text_blocks = page.get_text("dict")["blocks"]
+                text_block_count = sum(1 for block in text_blocks if "lines" in block)
+                total_text_blocks += text_block_count
+                
+                # Count images
+                image_list = page.get_images()
+                page_images = len(image_list)
+                if page_images > 0:
+                    pages_with_images += 1
+                total_images += page_images
+            
+            doc.close()
+            
+            # Calculate metrics
+            file_size_mb = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+            text_percentage = round((pages_with_text / total_pages) * 100, 1) if total_pages > 0 else 0
+            avg_chars_per_page = round(total_text_chars / total_pages, 0) if total_pages > 0 else 0
+            
+            analysis = {
+                "total_pages": total_pages,
+                "file_size_mb": file_size_mb,
+                "text_percentage": text_percentage,
+                "pages_with_text": pages_with_text,
+                "pages_with_images": pages_with_images,
+                "images_count": total_images,
+                "text_blocks_count": total_text_blocks,
+                "total_text_chars": total_text_chars,
+                "avg_chars_per_page": int(avg_chars_per_page),
+                "text_density": "high" if avg_chars_per_page > 1000 else "medium" if avg_chars_per_page > 200 else "low",
+                "image_density": "high" if total_images > total_pages * 3 else "medium" if total_images > total_pages else "low",
+                "document_type": self._classify_document_type(text_percentage, total_images, total_pages)
+            }
+            
+            return analysis
+            
+        except Exception as e:
+            logger.warning("document_analysis_failed", extra={
+                "step": "partition", 
+                "error": str(e),
+                "filepath": os.path.basename(filepath)
+            })
+            return {
+                "total_pages": 0,
+                "file_size_mb": 0.0,
+                "text_percentage": 0.0,
+                "pages_with_text": 0,
+                "pages_with_images": 0,
+                "images_count": 0,
+                "text_blocks_count": 0,
+                "total_text_chars": 0,
+                "avg_chars_per_page": 0,
+                "text_density": "unknown",
+                "image_density": "unknown",
+                "document_type": "analysis_failed",
+                "error": str(e)
+            }
+    
+    def _classify_document_type(self, text_percentage: float, total_images: int, total_pages: int) -> str:
+        """Classify document type based on characteristics"""
+        if text_percentage < 10:
+            return "image_heavy_scan"  # Potential hanging candidate
+        elif text_percentage > 80 and total_images < total_pages:
+            return "text_heavy"
+        elif total_images > total_pages * 2:
+            return "diagram_heavy"  # Potential hanging candidate
+        elif text_percentage > 50:
+            return "mixed_content"
+        else:
+            return "low_text_content"  # Potential hanging candidate
 
     async def _normalize_unstructured_output(
         self, elements, filepath: str, document_input: DocumentInput
@@ -760,6 +1088,13 @@ class PartitionStep(PipelineStep):
                         )
 
                 elif self.ocr_strategy == "pymupdf_only":
+                    logger.info("forced_pymupdf_strategy", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "strategy": "pymupdf_only",
+                        "reason": "explicitly_configured"
+                    })
                     result = await self._partition_document_async(filepath, document_input)
                     result["metadata"]["processing_strategy"] = "pymupdf_only"
                     result["metadata"]["forced_strategy"] = True
@@ -783,22 +1118,52 @@ class PartitionStep(PipelineStep):
                     "image_method": "pymupdf",
                     "reason": "scanned_document_detection"
                 })
+                
+                # Try Unstructured with comprehensive error handling and fallback
+                unstructured_success = False
                 try:
                     result = await self._process_with_unstructured(filepath, document_input)
                     result["metadata"]["hybrid_detection"] = doc_analysis
                     result["metadata"]["processing_strategy"] = "hybrid_ocr_images"
+                    unstructured_success = True
+                    
+                    logger.info("hybrid_processing_success", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "strategy_used": "unstructured_hybrid"
+                    })
+                    
                     return result
+                    
                 except Exception as e:
-                    logger.warning(f"Hybrid processing failed: {e} - falling back to PyMuPDF only")
+                    logger.warning("hybrid_processing_failed_fallback_to_pymupdf", extra={
+                        "document_id": str(document_input.document_id),
+                        "run_id": str(document_input.run_id),
+                        "step": "partition",
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "fallback_strategy": "pymupdf_only"
+                    })
                     # Fall through to PyMuPDF processing
 
             # Step 3: Use PyMuPDF for regular documents or as fallback
             if doc_analysis["is_likely_scanned"]:
-                logger.warning("Scanned document detected but using PyMuPDF only (Unstructured unavailable or failed)")
+                logger.warning("scanned_document_pymupdf_fallback", extra={
+                    "document_id": str(document_input.document_id),
+                    "run_id": str(document_input.run_id),
+                    "step": "partition",
+                    "reason": "unstructured_unavailable_or_failed",
+                    "unstructured_available": UNSTRUCTURED_AVAILABLE
+                })
             else:
-                logger.info(
-                    f"Document detected as REGULAR (confidence: {doc_analysis['detection_confidence']:.2f}) - using PyMuPDF only"
-                )
+                logger.info("regular_document_pymupdf_processing", extra={
+                    "document_id": str(document_input.document_id),
+                    "run_id": str(document_input.run_id),
+                    "step": "partition",
+                    "detection_confidence": doc_analysis['detection_confidence'],
+                    "strategy": "pymupdf_only"
+                })
 
             result = await self._partition_document_async(filepath, document_input)
 
@@ -819,7 +1184,7 @@ class PartitionStep(PipelineStep):
         """Execute the unified partitioning pipeline asynchronously"""
 
         # Run the CPU-intensive partitioning in a thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self._partition_document_sync, filepath)
 
         # Post-process with async image uploads
@@ -1094,6 +1459,35 @@ class PartitionStep(PipelineStep):
             }
 
         return cleaned_analysis
+
+    def _count_meaningful_images(self, doc, page, images):
+        """Count images that are large enough to be meaningful (not logos/icons)"""
+        meaningful_count = 0
+        
+        # Set default values for image filtering if not already set
+        min_image_width = getattr(self, 'min_image_width', 150)
+        min_image_height = getattr(self, 'min_image_height', 100)
+        min_image_pixels = getattr(self, 'min_image_pixels', 25000)
+
+        for img in images:
+            try:
+                base_image = doc.extract_image(img[0])
+                width = base_image["width"]
+                height = base_image["height"]
+
+                # Filter out small images (logos, icons, etc.)
+                if (
+                    width >= min_image_width
+                    and height >= min_image_height
+                    and width * height >= min_image_pixels
+                ):
+                    meaningful_count += 1
+
+            except Exception as e:
+                logger.debug(f"Could not analyze image {img[0]}: {e}")
+                continue
+
+        return meaningful_count
 
     def __del__(self):
         """Cleanup temporary directories"""
