@@ -542,10 +542,6 @@ class IntelligentChunker:
             # FORCE SPLIT: Change threshold to 1000 chars instead of max_chunk_size
             split_threshold = 1000  # HARDCODED: Force split anything over 1000 chars
             if content_length <= split_threshold:
-                if content_length > 500:  # Print decision for potentially splittable chunks
-                    print(
-                        f"🔍 BEAM SKIPPING CHUNK {chunk_idx}: {content_length} <= {split_threshold} (HARDCODED threshold)"
-                    )
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
                 if content_length > splitting_stats["largest_chunk_after"]:
@@ -732,13 +728,6 @@ class IntelligentChunker:
 
             # Compose content
             content = self.compose_final_content(el, meta)
-
-            # BEAM DEBUG: Print content composition for large content
-            if len(content) > 1000:
-                content_preview = content[:200] + "..." if len(content) > 200 else content
-                print(
-                    f"🔍 BEAM COMPOSING LARGE CONTENT: {len(content)} chars, type={meta.get('element_category', 'unknown')}, preview='{content_preview}'"
-                )
 
             # Create chunk object with composed content
             chunk_bbox = meta.get("bbox")

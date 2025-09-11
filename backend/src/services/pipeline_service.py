@@ -243,25 +243,56 @@ class PipelineService:
             if isinstance(result_dict.get("completed_at"), datetime):
                 result_dict["completed_at"] = result_dict["completed_at"].isoformat()
 
-            # OPTIMIZATION: Limit large data fields to prevent JSON size issues
+            # AGGRESSIVE OPTIMIZATION: Keep only essential data, remove all bulk content
             if "data" in result_dict and result_dict["data"]:
                 data = result_dict["data"]
                 
-                # For chunking step, don't store all chunk content - just statistics
-                if "chunks" in data and isinstance(data["chunks"], list):
-                    chunk_count = len(data["chunks"])
-                    total_size = sum(len(str(chunk.get("content", ""))) for chunk in data["chunks"])
-                    # Replace large chunks array with summary
-                    data["chunks"] = f"[{chunk_count} chunks, total size: {total_size} chars]"
-                    logger.info(f"Reduced chunking data size: {chunk_count} chunks -> summary string")
+                # For ANY step with large data arrays, replace with statistics
+                for key, value in list(data.items()):
+                    if isinstance(value, list):
+                        if key == "chunks":
+                            # For chunks, store detailed statistics but no content
+                            chunk_count = len(value)
+                            total_size = sum(len(str(chunk.get("content", ""))) for chunk in value if isinstance(chunk, dict))
+                            avg_size = total_size // chunk_count if chunk_count > 0 else 0
+                            
+                            data[key] = {
+                                "count": chunk_count,
+                                "total_size_chars": total_size,
+                                "avg_size_chars": avg_size,
+                                "summary": f"{chunk_count} chunks processed, avg size: {avg_size} chars"
+                            }
+                            logger.info(f"Compressed {key}: {chunk_count} items -> statistics object")
+                            
+                        elif len(value) > 5:  # Any large array
+                            item_count = len(value)
+                            # Keep first 2 and last 1 item as examples, plus statistics
+                            data[key] = {
+                                "count": item_count,
+                                "first_items": value[:2] if item_count >= 2 else value,
+                                "last_item": value[-1] if item_count >= 1 else None,
+                                "summary": f"{item_count} items (showing 2 first + 1 last)"
+                            }
+                            logger.info(f"Compressed {key}: {item_count} items -> sample + stats")
                 
-                # Limit sample_outputs to prevent large payloads
-                if "sample_outputs" in result_dict and isinstance(result_dict["sample_outputs"], dict):
-                    sample_outputs = result_dict["sample_outputs"]
-                    for key, value in sample_outputs.items():
-                        if isinstance(value, list) and len(value) > 3:
-                            # Limit arrays to first 3 items
-                            sample_outputs[key] = value[:3] + [f"... and {len(value) - 3} more items"]
+                # Also compress any nested large objects
+                for key, value in list(data.items()):
+                    if isinstance(value, dict):
+                        # Look for large nested content
+                        for nested_key, nested_value in list(value.items()):
+                            if isinstance(nested_value, str) and len(nested_value) > 1000:
+                                value[nested_key] = nested_value[:100] + f"... [truncated {len(nested_value)} chars]"
+                
+            # Aggressively limit sample_outputs
+            if "sample_outputs" in result_dict and isinstance(result_dict["sample_outputs"], dict):
+                sample_outputs = result_dict["sample_outputs"]
+                for key, value in list(sample_outputs.items()):
+                    if isinstance(value, list) and len(value) > 2:
+                        # Keep only 2 sample items maximum
+                        sample_outputs[key] = value[:2] + [f"... and {len(value) - 2} more items"]
+                    elif isinstance(value, str) and len(value) > 500:
+                        # Truncate long strings
+                        sample_outputs[key] = value[:500] + "... [truncated]"
 
             return result_dict
         except Exception as e:
@@ -334,6 +365,15 @@ class PipelineService:
     async def store_document_step_result(self, document_id: UUID, step_name: str, step_result: StepResult) -> bool:
         """Store a step result in the document's step_results JSONB field with retry logic."""
         import asyncio
+        
+        # Skip storing detailed results for data-heavy steps that aren't needed for debugging
+        skip_detailed_storage = {
+            "ChunkingStep": step_result.status == "completed",  # Skip if successful (data in document_chunks)
+        }
+        
+        # If step should be skipped and was successful, just update status without storing full result
+        if skip_detailed_storage.get(step_name, False):
+            return await self._store_minimal_step_success(document_id, step_name, step_result)
         
         max_retries = 3
         base_delay = 1.0
@@ -427,6 +467,47 @@ class PipelineService:
                         pass  # Don't fail if even minimal storage fails
                     
                     raise DatabaseError(detailed_error)
+
+    async def _store_minimal_step_success(self, document_id: UUID, step_name: str, step_result: StepResult) -> bool:
+        """Store minimal step success info without full result data (for data-heavy steps)."""
+        try:
+            # Get current step_results
+            result = self.supabase.table("documents").select("step_results").eq("id", str(document_id)).execute()
+            if not result.data:
+                raise DatabaseError("Document not found")
+
+            current_step_results = result.data[0].get("step_results", {})
+
+            # Store only essential info
+            current_step_results[step_name] = {
+                "step": step_result.step,
+                "status": step_result.status,
+                "duration_seconds": step_result.duration_seconds,
+                "started_at": step_result.started_at.isoformat() if step_result.started_at else None,
+                "completed_at": step_result.completed_at.isoformat() if step_result.completed_at else None,
+                "summary_stats": step_result.summary_stats,
+                "note": f"Full result data skipped to reduce storage size"
+            }
+
+            # Determine status
+            indexing_status = "completed" if step_name == "ChunkingStep" else "running"
+            
+            # Update database
+            update_result = self.supabase.table("documents").update({
+                "step_results": current_step_results,
+                "indexing_status": indexing_status,
+            }).eq("id", str(document_id)).execute()
+
+            if not update_result.data:
+                raise DatabaseError("Failed to store minimal step result")
+
+            logger.info(f"Stored minimal result for {step_name} in document {document_id} (size-optimized)")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to store minimal step success: {e}")
+            # Fallback to full storage
+            return False
 
     async def _store_minimal_step_error(self, document_id: UUID, step_name: str, status: str, error: str) -> None:
         """Store minimal step error information when full step result storage fails."""

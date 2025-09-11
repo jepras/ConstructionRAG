@@ -651,8 +651,8 @@ class MetadataStep(PipelineStep):
             print("✅ Metadata analysis completed!")
             logger.info(f"📊 Summary Stats: {summary_stats}")
             print(f"📊 Summary Stats: {summary_stats}")
-            text_count = len(sample_outputs.get('sample_text_elements', []))
-            table_count = len(sample_outputs.get('sample_tables', []))
+            text_count = len(sample_outputs.get("sample_text_elements", []))
+            table_count = len(sample_outputs.get("sample_tables", []))
             logger.info(f"📋 Sample Outputs: {text_count} text, {table_count} tables")
             print(f"📋 Sample Outputs: {text_count} text, {table_count} tables")
             logger.info(f"📄 Page Sections: {sample_outputs.get('page_sections', {})}")
@@ -795,9 +795,6 @@ class MetadataStep(PipelineStep):
 
     def _analyze_metadata_sync(self, partition_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Synchronous metadata analysis with pure JSON processing"""
-
-        logger.info("Adding Enhanced Structural Awareness to Unified Data...")
-        print("Adding Enhanced Structural Awareness to Unified Data...")
 
         # Reset analyzer state for new document
         self.analyzer.reset_section_tracking()

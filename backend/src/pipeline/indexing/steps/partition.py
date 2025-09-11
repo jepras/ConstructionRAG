@@ -58,7 +58,7 @@ class PartitionStep(PipelineStep):
         self.max_image_size_mb = config.get("max_image_size_mb", 10)
         self.ocr_languages = config.get("ocr_languages", ["dan"])
         self.include_coordinates = config.get("include_coordinates", True)
-        
+
         # Table validation configuration
         self.table_validation = config.get("table_validation", {})
         self.table_validation_enabled = self.table_validation.get("enabled", True)
@@ -119,26 +119,18 @@ class PartitionStep(PipelineStep):
 
             # Calculate averages
             analysis["sample_pages_analyzed"] = sample_pages
-            analysis["avg_text_per_page"] = (
-                total_text_chars / sample_pages if sample_pages > 0 else 0
-            )
+            analysis["avg_text_per_page"] = total_text_chars / sample_pages if sample_pages > 0 else 0
 
             # Detection logic based on our testing results
             # Threshold: < 25 chars per page suggests scanned document
-            text_threshold = self.config.get("scanned_detection", {}).get(
-                "text_threshold", 25
-            )
+            text_threshold = self.config.get("scanned_detection", {}).get("text_threshold", 25)
 
             if analysis["avg_text_per_page"] < text_threshold:
                 analysis["is_likely_scanned"] = True
-                analysis["detection_confidence"] = max(
-                    0.7, 1.0 - (analysis["avg_text_per_page"] / text_threshold)
-                )
+                analysis["detection_confidence"] = max(0.7, 1.0 - (analysis["avg_text_per_page"] / text_threshold))
             else:
                 analysis["is_likely_scanned"] = False
-                analysis["detection_confidence"] = min(
-                    0.9, analysis["avg_text_per_page"] / (text_threshold * 10)
-                )
+                analysis["detection_confidence"] = min(0.9, analysis["avg_text_per_page"] / (text_threshold * 10))
 
             logger.info(
                 f"Document analysis: {analysis['avg_text_per_page']:.1f} chars/page, "
@@ -164,33 +156,21 @@ class PartitionStep(PipelineStep):
                 "error": str(e),
             }
 
-    async def _process_with_unstructured(
-        self, filepath: str, document_input: DocumentInput
-    ) -> Dict[str, Any]:
+    async def _process_with_unstructured(self, filepath: str, document_input: DocumentInput) -> Dict[str, Any]:
         """Process document using Unstructured hi-res strategy for scanned documents"""
         if not UNSTRUCTURED_AVAILABLE:
-            raise PipelineError(
-                "Unstructured library not available for scanned document processing"
-            )
+            raise PipelineError("Unstructured library not available for scanned document processing")
 
         try:
-            logger.info(
-                "Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images"
-            )
-            print(
-                "🔄 Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images"
-            )
+            logger.info("Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images")
+            print("🔄 Processing with Hybrid strategy: Unstructured OCR + PyMuPDF images")
 
             # Run Unstructured processing in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            elements = await loop.run_in_executor(
-                None, self._run_unstructured_sync, filepath
-            )
+            elements = await loop.run_in_executor(None, self._run_unstructured_sync, filepath)
 
             # Normalize output to current format
-            normalized_result = await self._normalize_unstructured_output(
-                elements, filepath, document_input
-            )
+            normalized_result = await self._normalize_unstructured_output(elements, filepath, document_input)
 
             return normalized_result
 
@@ -242,11 +222,11 @@ class PartitionStep(PipelineStep):
                     tables = list(table_finder)
                 except:
                     tables = []
-                
+
                 # Determine if page has significant visual content
                 meaningful_images = self._count_meaningful_images(doc, page, images)
                 needs_vlm_extraction = meaningful_images >= 2 or len(tables) > 0
-                page_analysis[page_index] = {'needs_extraction': needs_vlm_extraction}
+                page_analysis[page_index] = {"needs_extraction": needs_vlm_extraction}
             doc.close()
 
             # Process each element from Unstructured OCR
@@ -258,68 +238,60 @@ class PartitionStep(PipelineStep):
                     page_number = 1  # Default to page 1 if Unstructured doesn't provide page number
 
                 # CHECK: Skip text elements from pages that will be handled by VLM
-                if (element.category not in ["Table"] and 
-                    page_analysis.get(page_number, {}).get('needs_extraction', False)):
+                if element.category not in ["Table"] and page_analysis.get(page_number, {}).get(
+                    "needs_extraction", False
+                ):
                     logger.info(f"🔄 SKIPPING Unstructured text element on page {page_number} - will be handled by VLM")
                     continue
 
                 # Extract bbox if available from Unstructured
                 bbox = None
-                if hasattr(element.metadata, 'coordinates') and element.metadata.coordinates:
+                if hasattr(element.metadata, "coordinates") and element.metadata.coordinates:
                     points = element.metadata.coordinates.points
                     if points and len(points) == 4:
                         # Get raw pixel coordinates
                         pixel_bbox = [points[0][0], points[0][1], points[2][0], points[2][1]]
-                        print(f"[UNSTRUCTURED BBOX] Page {page_number}, Element {element.category}")
-                        print(f"  Original pixel coordinates: {pixel_bbox}")
-                        
+
                         # Try to get coordinate system dimensions
                         conversion_method = "unknown"
-                        if hasattr(element.metadata.coordinates, 'system'):
+                        if hasattr(element.metadata.coordinates, "system"):
                             system = element.metadata.coordinates.system
-                            if hasattr(system, 'width') and hasattr(system, 'height'):
+                            if hasattr(system, "width") and hasattr(system, "height"):
                                 image_width = system.width
                                 image_height = system.height
-                                print(f"  Image dimensions: {image_width}x{image_height} pixels")
-                                
+
                                 # Get PDF page dimensions in points
                                 doc = fitz.open(filepath)
                                 page = doc[page_number - 1] if page_number > 0 else doc[0]
                                 pdf_width = page.rect.width  # in points
                                 pdf_height = page.rect.height  # in points
                                 doc.close()
-                                print(f"  PDF dimensions: {pdf_width}x{pdf_height} points")
-                                
+
                                 # Calculate scale factors
                                 scale_x = pdf_width / image_width
                                 scale_y = pdf_height / image_height
-                                print(f"  Scale factors: x={scale_x:.4f}, y={scale_y:.4f}")
-                                
+
                                 # Convert pixels to PDF points
                                 bbox = [
                                     pixel_bbox[0] * scale_x,
                                     pixel_bbox[1] * scale_y,
                                     pixel_bbox[2] * scale_x,
-                                    pixel_bbox[3] * scale_y
+                                    pixel_bbox[3] * scale_y,
                                 ]
                                 conversion_method = "coordinate_system_scaling"
                             else:
                                 # System exists but no dimensions - use DPI fallback
-                                print(f"  Coordinate system found but no dimensions available")
+
                                 DPI_SCALE = 72.0 / 200.0  # Assume 200 DPI
                                 bbox = [coord * DPI_SCALE for coord in pixel_bbox]
                                 conversion_method = "dpi_fallback_200"
-                                print(f"  Using DPI fallback: 200 DPI (scale={DPI_SCALE:.4f})")
+
                         else:
                             # No system info at all - use DPI assumption
-                            print(f"  No coordinate system info available")
+
                             DPI_SCALE = 72.0 / 200.0  # Assume 200 DPI
                             bbox = [coord * DPI_SCALE for coord in pixel_bbox]
                             conversion_method = "dpi_fallback_200_no_system"
-                            print(f"  Using DPI fallback: 200 DPI (scale={DPI_SCALE:.4f})")
-                        
-                        print(f"  Converted PDF coordinates: {bbox}")
-                        print(f"  Conversion method: {conversion_method}")
 
                 normalized_element = {
                     "id": getattr(element, "id", None)
@@ -329,7 +301,9 @@ class PartitionStep(PipelineStep):
                     "text": str(element),
                     "metadata": {
                         "page_number": page_number,
-                        "filename": document_input.filename if document_input else getattr(element.metadata, "filename", None),
+                        "filename": document_input.filename
+                        if document_input
+                        else getattr(element.metadata, "filename", None),
                         "extraction_method": "unstructured_ocr",
                         "bbox": bbox,  # Include bounding box coordinates
                     },
@@ -344,15 +318,11 @@ class PartitionStep(PipelineStep):
                     result["text_elements"].append(normalized_element)
 
             # Step 2: Use PyMuPDF for image detection and full page extraction
-            await self._extract_full_pages_with_pymupdf(
-                filepath, result, document_input
-            )
+            await self._extract_full_pages_with_pymupdf(filepath, result, document_input)
 
             # Step 3: Process table images if Unstructured detected any tables
             if result["table_elements"]:
-                await self._process_table_images_from_unstructured(
-                    filepath, result, document_input
-                )
+                await self._process_table_images_from_unstructured(filepath, result, document_input)
 
             # Step 3: Add document metadata
             doc = fitz.open(filepath)
@@ -375,8 +345,7 @@ class PartitionStep(PipelineStep):
                         [
                             e
                             for e in result["text_elements"]
-                            if e.get("metadata", {}).get("extraction_method")
-                            == "unstructured_ocr"
+                            if e.get("metadata", {}).get("extraction_method") == "unstructured_ocr"
                         ]
                     ),
                 }
@@ -434,24 +403,20 @@ class PartitionStep(PipelineStep):
                     pixmap = page.get_pixmap(matrix=matrix)
 
                     # Save pixmap to temporary file
-                    temp_filename = (
-                        f"unstructured_page_{page_num}_{uuid4().hex[:8]}.png"
-                    )
+                    temp_filename = f"unstructured_page_{page_num}_{uuid4().hex[:8]}.png"
                     temp_image_path = self.images_dir / temp_filename
                     pixmap.save(str(temp_image_path))
 
                     # Upload to storage
-                    upload_result = (
-                        await self.storage_service.upload_extracted_page_image(
-                            image_path=str(temp_image_path),
-                            document_id=document_input.document_id,
-                            page_num=page_num,
-                            complexity="moderate",  # Default for Unstructured pages
-                            upload_type=document_input.upload_type,
-                            user_id=document_input.user_id,
-                            project_id=document_input.project_id,
-                            index_run_id=document_input.run_id,
-                        )
+                    upload_result = await self.storage_service.upload_extracted_page_image(
+                        image_path=str(temp_image_path),
+                        document_id=document_input.document_id,
+                        page_num=page_num,
+                        complexity="moderate",  # Default for Unstructured pages
+                        upload_type=document_input.upload_type,
+                        user_id=document_input.user_id,
+                        project_id=document_input.project_id,
+                        index_run_id=document_input.run_id,
                     )
 
                     result["extracted_pages"][page_num] = {
@@ -466,9 +431,7 @@ class PartitionStep(PipelineStep):
                         "image_type": "extracted_page",
                     }
 
-                    logger.info(
-                        f"Extracted full page {page_num} with {len(images)} images"
-                    )
+                    logger.info(f"Extracted full page {page_num} with {len(images)} images")
 
                 except Exception as e:
                     logger.warning(f"Failed to extract page {page_num}: {e}")
@@ -483,16 +446,14 @@ class PartitionStep(PipelineStep):
     ):
         """Process table images detected by Unstructured using PyMuPDF extraction"""
         try:
-            logger.info(
-                f"Processing {len(result['table_elements'])} table images from Unstructured"
-            )
+            logger.info(f"Processing {len(result['table_elements'])} table images from Unstructured")
 
             doc = fitz.open(filepath)
 
             for i, table_element in enumerate(result["table_elements"]):
                 try:
                     page_num = table_element.get("page", 1)
-                    table_id = table_element.get("id", f"table_{i+1}")
+                    table_id = table_element.get("id", f"table_{i + 1}")
 
                     # Get the page
                     page = doc[page_num - 1]  # Convert to 0-indexed
@@ -506,9 +467,7 @@ class PartitionStep(PipelineStep):
                     pixmap = page.get_pixmap(matrix=matrix)
 
                     # Save table image
-                    temp_filename = (
-                        f"unstructured_table_{table_id}_{uuid4().hex[:8]}.png"
-                    )
+                    temp_filename = f"unstructured_table_{table_id}_{uuid4().hex[:8]}.png"
                     temp_image_path = self.images_dir / temp_filename
                     pixmap.save(str(temp_image_path))
 
@@ -525,15 +484,13 @@ class PartitionStep(PipelineStep):
 
                     # Add image URL to table metadata
                     table_element["metadata"]["image_url"] = upload_result["url"]
-                    table_element["metadata"]["image_storage_path"] = upload_result[
-                        "storage_path"
-                    ]
+                    table_element["metadata"]["image_storage_path"] = upload_result["storage_path"]
                     table_element["metadata"]["image_path"] = str(temp_image_path)
 
                     logger.info(f"Uploaded table {table_id}: {upload_result['url']}")
 
                 except Exception as e:
-                    logger.warning(f"Failed to process table {i+1}: {e}")
+                    logger.warning(f"Failed to process table {i + 1}: {e}")
 
             doc.close()
 
@@ -576,16 +533,12 @@ class PartitionStep(PipelineStep):
             # Handle StepResult objects (from unified processing)
             if hasattr(input_data, "sample_outputs") and hasattr(input_data, "step"):
                 # This is a StepResult from a previous step - pass it through
-                logger.info(
-                    f"PartitionStep received StepResult from {input_data.step}, passing through"
-                )
+                logger.info(f"PartitionStep received StepResult from {input_data.step}, passing through")
                 return input_data
 
             # Handle DocumentInput objects (single PDF processing)
             if hasattr(input_data, "filename") and hasattr(input_data, "file_path"):
-                logger.info(
-                    f"Starting partition step for document: {input_data.filename}"
-                )
+                logger.info(f"Starting partition step for document: {input_data.filename}")
 
                 # Validate input
                 if not await self.validate_prerequisites_async(input_data):
@@ -599,57 +552,38 @@ class PartitionStep(PipelineStep):
                     downloaded_file_path = file_path
 
                 # Execute HYBRID partitioning pipeline
-                partition_result = await self._partition_document_hybrid(
-                    file_path, input_data
-                )
+                partition_result = await self._partition_document_hybrid(file_path, input_data)
             else:
-                raise PipelineError(
-                    f"Unknown input type for partition step: {type(input_data)}"
-                )
+                raise PipelineError(f"Unknown input type for partition step: {type(input_data)}")
 
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
 
             # Calculate drawing statistics from page_analysis
             page_analysis = partition_result.get("page_analysis", {})
-            total_drawing_items = sum(
-                page_data.get("drawing_items", 0) 
-                for page_data in page_analysis.values()
-            )
+            total_drawing_items = sum(page_data.get("drawing_items", 0) for page_data in page_analysis.values())
             pages_with_vector_drawings = sum(
-                1 for page_data in page_analysis.values()
-                if page_data.get("has_vector_drawings", False)
+                1 for page_data in page_analysis.values() if page_data.get("has_vector_drawings", False)
             )
             pages_with_any_drawings = sum(
-                1 for page_data in page_analysis.values()
-                if page_data.get("drawing_items", 0) > 0
+                1 for page_data in page_analysis.values() if page_data.get("drawing_items", 0) > 0
             )
-            
+
             # Create summary statistics
             summary_stats = {
                 "text_elements": len(partition_result.get("text_elements", [])),
                 "table_elements": len(partition_result.get("table_elements", [])),
                 "extracted_pages": len(partition_result.get("extracted_pages", {})),
                 "pages_analyzed": len(partition_result.get("page_analysis", {})),
-                "processing_strategy": partition_result.get("metadata", {}).get(
-                    "processing_strategy", "unknown"
-                ),
-                "original_raw_count": partition_result.get("metadata", {}).get(
-                    "original_raw_count", 0
-                ),
-                "original_image_count": partition_result.get("metadata", {}).get(
-                    "original_image_count", 0
-                ),
+                "processing_strategy": partition_result.get("metadata", {}).get("processing_strategy", "unknown"),
+                "original_raw_count": partition_result.get("metadata", {}).get("original_raw_count", 0),
+                "original_image_count": partition_result.get("metadata", {}).get("original_image_count", 0),
                 "total_drawing_items": total_drawing_items,
                 "pages_with_vector_drawings": pages_with_vector_drawings,
                 "pages_with_any_drawings": pages_with_any_drawings,
                 "document_metadata": {
-                    "total_pages": partition_result.get("document_metadata", {}).get(
-                        "total_pages", 0
-                    ),
-                    "has_title": bool(
-                        partition_result.get("document_metadata", {}).get("title", "")
-                    ),
+                    "total_pages": partition_result.get("document_metadata", {}).get("total_pages", 0),
+                    "has_title": bool(partition_result.get("document_metadata", {}).get("title", "")),
                 },
                 "tables_with_vlm_ready": len(partition_result.get("table_elements", [])),
             }
@@ -677,9 +611,7 @@ class PartitionStep(PipelineStep):
                             if len(elem.get("text", "")) > 200
                             else elem.get("text", "")
                         ),
-                        "has_image": bool(
-                            elem.get("metadata", {}).get("image_url", "")
-                        ),
+                        "has_image": bool(elem.get("metadata", {}).get("image_url", "")),
                     }
                     for elem in partition_result.get("table_elements", [])[:2]
                 ],
@@ -699,9 +631,7 @@ class PartitionStep(PipelineStep):
                     "table_elements": partition_result.get("table_elements", []),
                     "extracted_pages": partition_result.get("extracted_pages", {}),
                     "page_analysis": partition_result.get("page_analysis", {}),
-                    "document_metadata": partition_result.get(
-                        "document_metadata", {}
-                    ),  # Add document metadata
+                    "document_metadata": partition_result.get("document_metadata", {}),  # Add document metadata
                     "metadata": partition_result.get("metadata", {}),
                 },
                 started_at=start_time,
@@ -709,7 +639,7 @@ class PartitionStep(PipelineStep):
             )
 
         except Exception as e:
-            doc_id = getattr(input_data, 'document_id', 'unknown') if input_data else 'unknown'
+            doc_id = getattr(input_data, "document_id", "unknown") if input_data else "unknown"
             logger.error(f"Partition step failed for document {doc_id}: {e}")
             raise AppError(
                 f"Partition step failed for document {doc_id}",
@@ -721,9 +651,7 @@ class PartitionStep(PipelineStep):
             if downloaded_file_path and os.path.exists(downloaded_file_path):
                 try:
                     os.unlink(downloaded_file_path)
-                    logger.info(
-                        f"Cleaned up downloaded temp file: {downloaded_file_path}"
-                    )
+                    logger.info(f"Cleaned up downloaded temp file: {downloaded_file_path}")
                 except Exception as cleanup_error:
                     logger.error(f"Error cleaning up downloaded file: {cleanup_error}")
 
@@ -749,9 +677,7 @@ class PartitionStep(PipelineStep):
                     try:
                         response = requests.head(input_data.file_path, timeout=10)
                         if response.status_code != 200:
-                            logger.error(
-                                f"URL not accessible: {input_data.file_path} (status: {response.status_code})"
-                            )
+                            logger.error(f"URL not accessible: {input_data.file_path} (status: {response.status_code})")
                             return False
 
                         # Check content type
@@ -768,9 +694,7 @@ class PartitionStep(PipelineStep):
                                 logger.error(f"File too large: {file_size_mb:.2f}MB")
                                 return False
 
-                        logger.info(
-                            f"URL prerequisites validated for: {input_data.filename}"
-                        )
+                        logger.info(f"URL prerequisites validated for: {input_data.filename}")
                         return True
 
                     except Exception as e:
@@ -788,9 +712,7 @@ class PartitionStep(PipelineStep):
                         logger.error(f"File too large: {file_size_mb:.2f}MB")
                         return False
 
-                    logger.info(
-                        f"Local file prerequisites validated for: {input_data.filename}"
-                    )
+                    logger.info(f"Local file prerequisites validated for: {input_data.filename}")
                     return True
 
             # Unknown input type
@@ -810,9 +732,7 @@ class PartitionStep(PipelineStep):
         except:
             return 60  # Default 1 minute
 
-    async def _partition_document_hybrid(
-        self, filepath: str, document_input: DocumentInput
-    ) -> Dict[str, Any]:
+    async def _partition_document_hybrid(self, filepath: str, document_input: DocumentInput) -> Dict[str, Any]:
         """Execute hybrid partitioning: detect document type and choose optimal strategy"""
         try:
             # Check if we have an explicit OCR strategy configured
@@ -820,7 +740,7 @@ class PartitionStep(PipelineStep):
                 # Use the explicitly configured strategy
                 logger.info(f"Using explicitly configured OCR strategy: {self.ocr_strategy}")
                 print(f"🎯 Using explicitly configured OCR strategy: {self.ocr_strategy}")
-                
+
                 if self.ocr_strategy == "hybrid_ocr_images":
                     if UNSTRUCTURED_AVAILABLE:
                         try:
@@ -832,16 +752,18 @@ class PartitionStep(PipelineStep):
                             logger.warning(f"Hybrid processing failed: {e} - falling back to PyMuPDF only")
                             # Fall through to PyMuPDF processing
                     else:
-                        logger.warning("hybrid_ocr_images strategy requested but Unstructured not available - falling back to PyMuPDF")
-                        
+                        logger.warning(
+                            "hybrid_ocr_images strategy requested but Unstructured not available - falling back to PyMuPDF"
+                        )
+
                 elif self.ocr_strategy == "pymupdf_only":
                     result = await self._partition_document_async(filepath, document_input)
                     result["metadata"]["processing_strategy"] = "pymupdf_only"
                     result["metadata"]["forced_strategy"] = True
                     return result
-                    
+
                 # If unknown strategy or fallback needed, continue to auto-detection
-            
+
             # Step 1: Detect document type (for auto mode or fallback)
             doc_analysis = self._detect_document_type(filepath)
 
@@ -854,23 +776,17 @@ class PartitionStep(PipelineStep):
                     f"🎯 Document detected as SCANNED (confidence: {doc_analysis['detection_confidence']:.2f}) - using Hybrid: Unstructured OCR + PyMuPDF images"
                 )
                 try:
-                    result = await self._process_with_unstructured(
-                        filepath, document_input
-                    )
+                    result = await self._process_with_unstructured(filepath, document_input)
                     result["metadata"]["hybrid_detection"] = doc_analysis
                     result["metadata"]["processing_strategy"] = "hybrid_ocr_images"
                     return result
                 except Exception as e:
-                    logger.warning(
-                        f"Hybrid processing failed: {e} - falling back to PyMuPDF only"
-                    )
+                    logger.warning(f"Hybrid processing failed: {e} - falling back to PyMuPDF only")
                     # Fall through to PyMuPDF processing
 
             # Step 3: Use PyMuPDF for regular documents or as fallback
             if doc_analysis["is_likely_scanned"]:
-                logger.warning(
-                    "Scanned document detected but using PyMuPDF only (Unstructured unavailable or failed)"
-                )
+                logger.warning("Scanned document detected but using PyMuPDF only (Unstructured unavailable or failed)")
             else:
                 logger.info(
                     f"Document detected as REGULAR (confidence: {doc_analysis['detection_confidence']:.2f}) - using PyMuPDF only"
@@ -884,28 +800,22 @@ class PartitionStep(PipelineStep):
             # Add hybrid detection info to metadata
             result["metadata"]["hybrid_detection"] = doc_analysis
             result["metadata"]["processing_strategy"] = (
-                "pymupdf_only"
-                if not doc_analysis["is_likely_scanned"]
-                else "pymupdf_fallback"
+                "pymupdf_only" if not doc_analysis["is_likely_scanned"] else "pymupdf_fallback"
             )
 
             return result
 
         except Exception as e:
-            doc_id = getattr(document_input, 'document_id', 'unknown')
+            doc_id = getattr(document_input, "document_id", "unknown")
             logger.error(f"Hybrid partitioning failed for document {doc_id}: {e}")
             raise PipelineError(f"Hybrid partitioning failed for document {doc_id}: {str(e)}")
 
-    async def _partition_document_async(
-        self, filepath: str, document_input: DocumentInput
-    ) -> Dict[str, Any]:
+    async def _partition_document_async(self, filepath: str, document_input: DocumentInput) -> Dict[str, Any]:
         """Execute the unified partitioning pipeline asynchronously"""
 
         # Run the CPU-intensive partitioning in a thread pool
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None, self._partition_document_sync, filepath
-        )
+        result = await loop.run_in_executor(None, self._partition_document_sync, filepath)
 
         # Post-process with async image uploads
         cleaned_result = await self._post_process_results_async(
@@ -938,9 +848,13 @@ class PartitionStep(PipelineStep):
 
         # Add comprehensive analysis logging for Beam
         total_images = sum(analysis.get("image_count", 0) for analysis in stage1_results["page_analysis"].values())
-        meaningful_images = sum(analysis.get("meaningful_images", 0) for analysis in stage1_results["page_analysis"].values())
-        pages_needing_extraction = sum(1 for analysis in stage1_results["page_analysis"].values() if analysis.get("needs_extraction", False))
-        
+        meaningful_images = sum(
+            analysis.get("meaningful_images", 0) for analysis in stage1_results["page_analysis"].values()
+        )
+        pages_needing_extraction = sum(
+            1 for analysis in stage1_results["page_analysis"].values() if analysis.get("needs_extraction", False)
+        )
+
         print(f"📊 DOCUMENT ANALYSIS COMPLETE")
         print(f"   📄 Total pages: {stage1_results['document_metadata'].get('total_pages', 0)}")
         print(f"   🖼️  Total images detected: {total_images}")
@@ -952,9 +866,7 @@ class PartitionStep(PipelineStep):
         extracted_pages = []
         if self.extract_images:
             print(f"📄 FULL PAGE EXTRACTION")
-            extracted_pages = partitioner.stage4_full_page_extraction(
-                filepath, stage1_results["page_analysis"]
-            )
+            extracted_pages = partitioner.stage4_full_page_extraction(filepath, stage1_results["page_analysis"])
             for page_num, page_info in extracted_pages.items():
                 print(f"   ✅ Page {page_num}: {page_info['complexity']} → Full page extracted")
             print(f"📄 Full page extraction complete: {len(extracted_pages)} pages")
@@ -966,11 +878,9 @@ class PartitionStep(PipelineStep):
         if self.extract_tables:
             print(f"📋 TABLE METADATA PROCESSING (No individual images)")
             print(f"   📋 Tables to process: {len(stage1_results['table_locations'])}")
-            
-            enhanced_tables = partitioner.stage3_create_table_elements_only(
-                filepath, stage1_results["table_locations"]
-            )
-            
+
+            enhanced_tables = partitioner.stage3_create_table_elements_only(filepath, stage1_results["table_locations"])
+
             for table_info in stage1_results["table_locations"]:
                 print(f"   ✅ Table on page {table_info['page']}: Metadata only (covered by full page)")
             print(f"📋 Table metadata complete: {len(enhanced_tables)} elements")
@@ -1002,9 +912,7 @@ class PartitionStep(PipelineStep):
             filtered_text_elements = self._filter_text_elements(text_elements)
 
             # 2. Clean page analysis data
-            cleaned_page_analysis = self._clean_page_analysis(
-                stage1_results.get("page_analysis", {})
-            )
+            cleaned_page_analysis = self._clean_page_analysis(stage1_results.get("page_analysis", {}))
 
             # 3. Clean table metadata
             for table in enhanced_tables:
@@ -1014,24 +922,20 @@ class PartitionStep(PipelineStep):
             uploaded_pages = {}
 
             if extracted_pages:
-                logger.info(
-                    f"Uploading {len(extracted_pages)} extracted page images to Supabase Storage..."
-                )
+                logger.info(f"Uploading {len(extracted_pages)} extracted page images to Supabase Storage...")
 
                 for page_num, page_info in extracted_pages.items():
                     try:
                         # Upload image to Supabase Storage with new structure
-                        upload_result = (
-                            await self.storage_service.upload_extracted_page_image(
-                                image_path=page_info["filepath"],
-                                document_id=document_input.document_id,
-                                page_num=page_num,
-                                complexity=page_info["complexity"],
-                                upload_type=document_input.upload_type,
-                                user_id=document_input.user_id,
-                                project_id=document_input.project_id,
-                                index_run_id=document_input.run_id,
-                            )
+                        upload_result = await self.storage_service.upload_extracted_page_image(
+                            image_path=page_info["filepath"],
+                            document_id=document_input.document_id,
+                            page_num=page_num,
+                            complexity=page_info["complexity"],
+                            upload_type=document_input.upload_type,
+                            user_id=document_input.user_id,
+                            project_id=document_input.project_id,
+                            index_run_id=document_input.run_id,
                         )
 
                         # Update page info with Supabase URL
@@ -1058,15 +962,17 @@ class PartitionStep(PipelineStep):
             # 5. SKIP table image upload - Full-page-only approach
             if enhanced_tables:
                 print(f"📋 BEAM: Table metadata preserved for {len(enhanced_tables)} tables")
-                logger.info(f"Table metadata preserved for {len(enhanced_tables)} tables - no individual images uploaded (full-page approach)")
+                logger.info(
+                    f"Table metadata preserved for {len(enhanced_tables)} tables - no individual images uploaded (full-page approach)"
+                )
                 print(f"📋 BEAM: Table images BLOCKED - content will be captured in full-page extractions")
-                
+
                 # Clear any individual table image paths to prevent confusion
                 cleared_count = 0
                 for table_element in enhanced_tables:
                     if table_element["metadata"].pop("image_path", None):
                         cleared_count += 1
-                
+
                 print(f"📋 BEAM: Cleared individual image paths from {cleared_count}/{len(enhanced_tables)} tables")
 
             # 6. Prepare metadata
@@ -1079,9 +985,7 @@ class PartitionStep(PipelineStep):
                 "extracted_pages": len(extracted_pages),
                 "pages_analyzed": len(cleaned_page_analysis),
                 "original_raw_count": len(raw_elements),  # Keep for reference
-                "original_image_count": len(
-                    stage1_results["image_locations"]
-                ),  # Keep for reference
+                "original_image_count": len(stage1_results["image_locations"]),  # Keep for reference
             }
 
             # 7. Combine cleaned results
@@ -1090,9 +994,7 @@ class PartitionStep(PipelineStep):
                 "table_elements": enhanced_tables,
                 "extracted_pages": uploaded_pages,  # Updated: with Supabase URLs
                 "page_analysis": cleaned_page_analysis,
-                "document_metadata": stage1_results.get(
-                    "document_metadata", {}
-                ),  # Add document metadata
+                "document_metadata": stage1_results.get("document_metadata", {}),  # Add document metadata
                 "metadata": metadata,
             }
 
@@ -1116,12 +1018,7 @@ class PartitionStep(PipelineStep):
                     continue
 
             # Skip pure punctuation or whitespace
-            if (
-                text
-                and text.strip()
-                and not text.strip().isalnum()
-                and len(text.strip()) < 5
-            ):
+            if text and text.strip() and not text.strip().isalnum() and len(text.strip()) < 5:
                 continue
 
             # Clean up the element
@@ -1167,9 +1064,9 @@ class PartitionStep(PipelineStep):
 
         # Keep only essential metadata fields
         essential_fields = [
-            "page_number", 
-            "filename", 
-            "image_path", 
+            "page_number",
+            "filename",
+            "image_path",
             "bbox",
             "font_size",
             "font_name",
@@ -1177,7 +1074,7 @@ class PartitionStep(PipelineStep):
             "extraction_method",
             "processing_strategy",
             "table_id",
-            "text_as_html"
+            "text_as_html",
         ]
 
         for field in essential_fields:
@@ -1224,16 +1121,16 @@ class UnifiedPartitionerV2:
         self.images_dir = Path(images_dir)
         self.tables_dir.mkdir(exist_ok=True)
         self.images_dir.mkdir(exist_ok=True)
-        
+
         # Image filtering thresholds (configurable)
         self.min_image_width = 150  # Reduced from 200 for technical diagrams
         self.min_image_height = 100  # Reduced from 150 for technical diagrams
         self.min_image_pixels = 25000  # Reduced from 50k for technical diagrams
-        
+
         # Table validation configuration (with defaults)
         if table_validation_config is None:
             table_validation_config = {}
-        
+
         self.table_validation_enabled = table_validation_config.get("enabled", True)
         self.max_table_size = table_validation_config.get("max_table_size", 5000)
         self.max_columns = table_validation_config.get("max_columns", 20)
@@ -1245,23 +1142,25 @@ class UnifiedPartitionerV2:
     def _count_meaningful_images(self, doc, page, images):
         """Count images that are large enough to be meaningful (not logos/icons)"""
         meaningful_count = 0
-        
+
         for img in images:
             try:
                 base_image = doc.extract_image(img[0])
                 width = base_image["width"]
                 height = base_image["height"]
-                
+
                 # Filter out small images (logos, icons, etc.)
-                if (width >= self.min_image_width and 
-                    height >= self.min_image_height and 
-                    width * height >= self.min_image_pixels):
+                if (
+                    width >= self.min_image_width
+                    and height >= self.min_image_height
+                    and width * height >= self.min_image_pixels
+                ):
                     meaningful_count += 1
-                    
+
             except Exception as e:
                 logger.debug(f"Could not analyze image {img[0]}: {e}")
                 continue
-        
+
         return meaningful_count
 
     def stage1_pymupdf_analysis(self, filepath):
@@ -1297,7 +1196,7 @@ class UnifiedPartitionerV2:
 
             # Count meaningful images (filter out logos/icons)
             meaningful_images = self._count_meaningful_images(doc, page, images)
-            
+
             # Analyze page complexity with improved logic
             is_fragmented = False
             if len(images) > 10:
@@ -1312,8 +1211,8 @@ class UnifiedPartitionerV2:
                 is_fragmented = small_count >= 3
 
             # Special case: many small images might form a technical diagram
-            is_likely_diagram = (len(images) >= 15 and meaningful_images == 0 and len(tables) == 0)
-            
+            is_likely_diagram = len(images) >= 15 and meaningful_images == 0 and len(tables) == 0
+
             # Check for vector drawings (architectural plans, technical drawings)
             has_vector_drawings = False
             drawing_item_count = 0
@@ -1327,11 +1226,11 @@ class UnifiedPartitionerV2:
                 has_vector_drawings = drawing_item_count >= 4000
             except Exception as e:
                 logger.debug(f"Could not analyze drawings on page {page_index}: {e}")
-            
+
             # Determine page complexity using meaningful images and tables
             # IMPROVED: Require minimum meaningful content threshold to avoid logo-only extractions
             min_meaningful_images_for_extraction = 2  # Require at least 2 meaningful images (filters out single logos)
-            
+
             # Precedence: Images → Drawings → Tables
             if meaningful_images >= min_meaningful_images_for_extraction:
                 # Images take precedence
@@ -1370,7 +1269,7 @@ class UnifiedPartitionerV2:
                 "needs_extraction": needs_extraction,
                 "is_fragmented": is_fragmented,
             }
-            
+
             # Add detailed logging for extraction decisions (first 3 pages + any extracted)
             if page_index <= 3 or needs_extraction:
                 reason = []
@@ -1386,8 +1285,10 @@ class UnifiedPartitionerV2:
                     if drawing_item_count > 0:
                         reason.append(f"only {drawing_item_count:,} drawing items (<4000)")
                     else:
-                        reason.append(f"only {meaningful_images} meaningful images (<{min_meaningful_images_for_extraction})")
-                
+                        reason.append(
+                            f"only {meaningful_images} meaningful images (<{min_meaningful_images_for_extraction})"
+                        )
+
                 decision = "EXTRACT" if needs_extraction else "SKIP"
                 reason_str = ", ".join(reason) if reason else "no meaningful content"
                 print(f"📄 BEAM: Page {page_index}: {decision} ({reason_str})")
@@ -1404,9 +1305,9 @@ class UnifiedPartitionerV2:
                         "complexity": complexity,
                         "page_analysis": {
                             "image_count": meaningful_images,
-                            "text_blocks": len(page.get_text_blocks()) if hasattr(page, 'get_text_blocks') else 0,
-                            "complexity": complexity
-                        }
+                            "text_blocks": len(page.get_text_blocks()) if hasattr(page, "get_text_blocks") else 0,
+                            "complexity": complexity,
+                        },
                     }
                 )
 
@@ -1421,7 +1322,7 @@ class UnifiedPartitionerV2:
                         # This commonly fails with "not a textpage of this page" for drawing-heavy PDFs
                         logger.debug(f"Could not get image bbox on page {page_index}: {bbox_error}")
                         img_rect = None
-                    
+
                     # Store image info regardless of whether we got bbox or not
                     image_locations.append(
                         {
@@ -1432,7 +1333,7 @@ class UnifiedPartitionerV2:
                             "complexity": complexity,
                         }
                     )
-                    
+
                 except Exception as e:
                     # Final fallback: log the error but continue processing
                     logger.warning(f"Error processing image {i} on page {page_index}: {e}")
@@ -1449,9 +1350,7 @@ class UnifiedPartitionerV2:
 
         doc.close()
 
-        logger.info(
-            f"Stage 1 complete: {len(table_locations)} tables, {len(image_locations)} images"
-        )
+        logger.info(f"Stage 1 complete: {len(table_locations)} tables, {len(image_locations)} images")
 
         results = {
             "page_analysis": page_analysis,
@@ -1459,10 +1358,10 @@ class UnifiedPartitionerV2:
             "image_locations": image_locations,
             "document_metadata": document_metadata,
         }
-        
+
         # Store for stage2 access
         self._stage1_results = results
-        
+
         return results
 
     def _extract_document_metadata(self, doc):
@@ -1492,9 +1391,9 @@ class UnifiedPartitionerV2:
         doc = fitz.open(filepath)
         text_elements = []
         raw_elements = []
-        
+
         # Get page analysis from stage1 results (passed as instance variable)
-        page_analysis = getattr(self, '_stage1_results', {}).get('page_analysis', {})
+        page_analysis = getattr(self, "_stage1_results", {}).get("page_analysis", {})
 
         for page_num in range(len(doc)):
             page = doc[page_num]
@@ -1502,7 +1401,7 @@ class UnifiedPartitionerV2:
 
             # CHECK: Skip text extraction if page has visual content that needs VLM processing
             page_info = page_analysis.get(page_index, {})
-            if page_info.get('needs_extraction', False):
+            if page_info.get("needs_extraction", False):
                 logger.info(f"🔄 SKIPPING text extraction on page {page_index} - will be handled by VLM captions")
                 print(f"🔄 BEAM: SKIPPING text extraction on page {page_index} - has visual content")
                 continue
@@ -1569,9 +1468,7 @@ class UnifiedPartitionerV2:
             logger.info("No tables detected, skipping table processing")
             return []
 
-        logger.info(
-            f"Stage 3: PyMuPDF table processing ({len(table_locations)} tables)..."
-        )
+        logger.info(f"Stage 3: PyMuPDF table processing ({len(table_locations)} tables)...")
 
         doc = fitz.open(filepath)
         enhanced_tables = []
@@ -1583,17 +1480,13 @@ class UnifiedPartitionerV2:
                 page_num = table_info["page"]
                 table_data = table_info["table_data"]
                 page_analysis = table_info.get("page_analysis", None)
-                
+
                 # Validate table before processing
                 is_valid, validation_result = self._validate_table(table_data, page_analysis)
-                
+
                 if not is_valid:
-                    logger.warning(f"Table {i+1} on page {page_num} rejected: {validation_result['issues']}")
-                    rejected_tables.append({
-                        "page": page_num,
-                        "table_index": i,
-                        "validation": validation_result
-                    })
+                    logger.warning(f"Table {i + 1} on page {page_num} rejected: {validation_result['issues']}")
+                    rejected_tables.append({"page": page_num, "table_index": i, "validation": validation_result})
                     # Skip this table - it will be captured in full-page extraction
                     continue
 
@@ -1608,7 +1501,7 @@ class UnifiedPartitionerV2:
                 pixmap = page.get_pixmap(matrix=matrix)  # Full page for VLM context
 
                 # Save table image
-                table_id = f"table_{i+1}"
+                table_id = f"table_{i + 1}"
                 filename = f"{pdf_basename}_page{page_num:02d}_{table_id}.png"
                 save_path = self.tables_dir / filename
                 pixmap.save(str(save_path))
@@ -1638,22 +1531,20 @@ class UnifiedPartitionerV2:
                 }
 
                 enhanced_tables.append(enhanced_table)
-                logger.info(f"Processed table {i+1}: {filename}")
+                logger.info(f"Processed table {i + 1}: {filename}")
 
             except Exception as e:
-                logger.error(f"Error processing table {i+1}: {e}")
+                logger.error(f"Error processing table {i + 1}: {e}")
 
         doc.close()
-        
+
         # Log validation summary
         if rejected_tables:
             logger.warning(f"Rejected {len(rejected_tables)} tables due to quality issues")
             for rejected in rejected_tables:
                 logger.debug(f"  - Page {rejected['page']}: {rejected['validation']['issues']}")
-        
-        logger.info(
-            f"Enhanced {len(enhanced_tables)} valid tables, rejected {len(rejected_tables)} invalid tables"
-        )
+
+        logger.info(f"Enhanced {len(enhanced_tables)} valid tables, rejected {len(rejected_tables)} invalid tables")
         return enhanced_tables
 
     def stage3_create_table_elements_only(self, filepath, table_locations):
@@ -1663,39 +1554,35 @@ class UnifiedPartitionerV2:
             return []
 
         logger.info(f"Creating {len(table_locations)} table elements without individual image extraction")
-        
+
         doc = fitz.open(filepath)
         table_elements = []
         rejected_tables = []
-        
+
         for i, table_info in enumerate(table_locations):
             try:
                 page_num = table_info["page"]
                 table_data = table_info["table_data"]
                 page_analysis = table_info.get("page_analysis", None)
-                
+
                 # Validate table before processing
                 is_valid, validation_result = self._validate_table(table_data, page_analysis)
-                
+
                 if not is_valid:
-                    logger.warning(f"Table {i+1} on page {page_num} rejected: {validation_result['issues']}")
-                    rejected_tables.append({
-                        "page": page_num,
-                        "table_index": i,
-                        "validation": validation_result
-                    })
+                    logger.warning(f"Table {i + 1} on page {page_num} rejected: {validation_result['issues']}")
+                    rejected_tables.append({"page": page_num, "table_index": i, "validation": validation_result})
                     # Skip this table - it will be captured in full-page extraction
                     continue
-                
+
                 # Extract table text only (no HTML, no image)
                 try:
                     table_text = table_data.to_markdown()
                 except AttributeError:
                     # Fallback if to_markdown not available
                     table_text = str(table_data) if table_data else ""
-                
+
                 # Create table element with metadata only
-                table_id = f"table_{i+1}"
+                table_id = f"table_{i + 1}"
                 table_element = {
                     "id": table_id,
                     "category": "Table",
@@ -1708,32 +1595,30 @@ class UnifiedPartitionerV2:
                         # No image_path - covered by full-page extraction
                     },
                 }
-                
+
                 table_elements.append(table_element)
                 logger.info(f"Created table element {table_id} on page {page_num} (no individual image)")
-                
+
             except Exception as e:
-                logger.error(f"Error creating table element {i+1}: {e}")
-        
+                logger.error(f"Error creating table element {i + 1}: {e}")
+
         doc.close()
-        
+
         # Log validation summary
         if rejected_tables:
             logger.warning(f"Rejected {len(rejected_tables)} tables due to quality issues")
             for rejected in rejected_tables:
                 logger.debug(f"  - Page {rejected['page']}: {rejected['validation']['issues']}")
-        
-        logger.info(f"Created {len(table_elements)} valid table elements, rejected {len(rejected_tables)} invalid tables")
+
+        logger.info(
+            f"Created {len(table_elements)} valid table elements, rejected {len(rejected_tables)} invalid tables"
+        )
         return table_elements
 
     def stage4_full_page_extraction(self, filepath, page_analysis):
         """Stage 4: Extract full pages when images are detected (like partition_pdf.py)"""
         # Find pages that need full-page extraction
-        pages_to_extract = {
-            page_num: info
-            for page_num, info in page_analysis.items()
-            if info["needs_extraction"]
-        }
+        pages_to_extract = {page_num: info for page_num, info in page_analysis.items() if info["needs_extraction"]}
 
         if not pages_to_extract:
             logger.info("No pages need full-page extraction")
@@ -1841,120 +1726,117 @@ class UnifiedPartitionerV2:
 
     def _validate_table(self, table_data, page_analysis=None) -> Tuple[bool, Dict[str, Any]]:
         """Validate table quality and determine if it should be processed"""
-        validation_result = {
-            "is_valid": True,
-            "confidence": 1.0,
-            "issues": [],
-            "metrics": {}
-        }
-        
+        validation_result = {"is_valid": True, "confidence": 1.0, "issues": [], "metrics": {}}
+
         if not self.table_validation_enabled:
             return True, validation_result
-            
+
         try:
             # Extract table content for analysis
-            table_text = table_data.to_markdown() if hasattr(table_data, 'to_markdown') else str(table_data)
-            table_cells = table_data.extract() if hasattr(table_data, 'extract') else []
-            
+            table_text = table_data.to_markdown() if hasattr(table_data, "to_markdown") else str(table_data)
+            table_cells = table_data.extract() if hasattr(table_data, "extract") else []
+
             # Check table size
             text_length = len(table_text)
             validation_result["metrics"]["text_length"] = text_length
-            
+
             if text_length > self.max_table_size:
                 validation_result["is_valid"] = False
                 validation_result["issues"].append(f"Table too large: {text_length} chars (max: {self.max_table_size})")
                 validation_result["confidence"] *= 0.3
-            
+
             # Check number of columns
-            if hasattr(table_data, 'col_count'):
+            if hasattr(table_data, "col_count"):
                 col_count = table_data.col_count
                 validation_result["metrics"]["columns"] = col_count
-                
+
                 if col_count > self.max_columns:
                     validation_result["is_valid"] = False
                     validation_result["issues"].append(f"Too many columns: {col_count} (max: {self.max_columns})")
                     validation_result["confidence"] *= 0.4
-            
+
             # Check for repetition
             repetition_score = self._calculate_repetition_score(table_text)
             validation_result["metrics"]["repetition_score"] = repetition_score
-            
+
             if repetition_score > self.repetition_threshold:
                 validation_result["is_valid"] = False
-                validation_result["issues"].append(f"High repetition: {repetition_score:.2f} (threshold: {self.repetition_threshold})")
+                validation_result["issues"].append(
+                    f"High repetition: {repetition_score:.2f} (threshold: {self.repetition_threshold})"
+                )
                 validation_result["confidence"] *= 0.2
-            
+
             # Check if page is primarily a drawing
             if page_analysis and self.reject_on_drawing_pages:
                 if self._is_drawing_page(page_analysis):
                     validation_result["is_valid"] = False
                     validation_result["issues"].append("Page appears to be a drawing/diagram")
                     validation_result["confidence"] *= 0.3
-            
+
             # Final confidence check
             if validation_result["confidence"] < self.min_confidence:
                 validation_result["is_valid"] = False
                 validation_result["issues"].append(f"Low confidence: {validation_result['confidence']:.2f}")
-            
+
         except Exception as e:
             logger.warning(f"Table validation error: {e}")
             # On error, be conservative and reject
             validation_result["is_valid"] = False
             validation_result["issues"].append(f"Validation error: {str(e)}")
-            
+
         return validation_result["is_valid"], validation_result
-    
+
     def _calculate_repetition_score(self, text: str) -> float:
         """Calculate how repetitive the text content is"""
         if not text or len(text) < 100:
             return 0.0
-            
+
         # Split into words and count duplicates
         words = text.split()
         if len(words) == 0:
             return 0.0
-            
+
         # Count word frequencies
         word_counts = Counter(words)
-        
+
         # Calculate repetition score
         total_words = len(words)
         unique_words = len(word_counts)
-        
+
         # Also check for repeated sequences
         repeated_sequences = 0
         sequence_length = 5
         for i in range(len(words) - sequence_length):
-            sequence = ' '.join(words[i:i+sequence_length])
+            sequence = " ".join(words[i : i + sequence_length])
             if text.count(sequence) > 2:  # Sequence appears more than twice
                 repeated_sequences += 1
-        
+
         # Combine metrics
         word_repetition = 1 - (unique_words / total_words)
         sequence_repetition = min(1.0, repeated_sequences / 10)  # Normalize to 0-1
-        
+
         return (word_repetition * 0.7) + (sequence_repetition * 0.3)
-    
+
     def _is_drawing_page(self, page_analysis: Dict[str, Any]) -> bool:
         """Determine if a page is primarily a drawing/diagram"""
         if not page_analysis:
             return False
-            
+
         # Check image count vs text blocks
         image_count = page_analysis.get("image_count", 0)
         text_blocks = page_analysis.get("text_blocks", 0)
-        
+
         # If many images and few text blocks, likely a drawing
         if image_count > 3 and text_blocks < 10:
             return True
-            
+
         # Check page complexity score if available
         complexity = page_analysis.get("complexity", "")
         if complexity in ["complex", "very_complex"]:
             # Complex pages with images are often drawings
             if image_count > 0:
                 return True
-                
+
         return False
 
     # HTML conversion removed - relying on VLM captions only
@@ -1985,6 +1867,4 @@ class UnifiedPartitionerV2:
                 # Log other files but don't remove them
                 logger.debug(f"Other file found: {file_path.name}")
 
-        logger.info(
-            f"Cleanup results: {tables_kept} tables kept, {figures_removed} figures removed"
-        )
+        logger.info(f"Cleanup results: {tables_kept} tables kept, {figures_removed} figures removed")
