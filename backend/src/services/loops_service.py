@@ -7,6 +7,7 @@ import os
 import logging
 from typing import Dict, Any, Optional
 import httpx
+from src.config.database import get_supabase_admin_client
 
 logger = logging.getLogger(__name__)
 
@@ -514,26 +515,21 @@ class LoopsService:
             Extracted project name or "Unknown Project" as fallback
         """
         try:
-            from src.config.database import get_supabase_admin_client
-
             admin_db = get_supabase_admin_client()
 
             # Get documents for this indexing run
-            docs_result = admin_db.rpc("get_documents_for_indexing_run", {"run_id": indexing_run_id}).execute()
+            run_docs = (
+                admin_db.table("indexing_run_documents")
+                .select("document_id")
+                .eq("indexing_run_id", indexing_run_id)
+                .execute()
+            )
+            docs_result = None
+            if run_docs.data:
+                doc_ids = [row["document_id"] for row in run_docs.data]
+                docs_result = admin_db.table("documents").select("filename").in_("id", doc_ids).limit(5).execute()
 
-            if not docs_result.data:
-                # Fallback: get documents directly
-                run_docs = (
-                    admin_db.table("indexing_run_documents")
-                    .select("document_id")
-                    .eq("indexing_run_id", indexing_run_id)
-                    .execute()
-                )
-                if run_docs.data:
-                    doc_ids = [row["document_id"] for row in run_docs.data]
-                    docs_result = admin_db.table("documents").select("filename").in_("id", doc_ids).limit(5).execute()
-
-            if docs_result.data:
+            if docs_result and docs_result.data:
                 # Extract common project name from filenames
                 filenames = [doc.get("filename", "") for doc in docs_result.data]
                 if filenames:

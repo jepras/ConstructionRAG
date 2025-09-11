@@ -396,7 +396,6 @@ async def create_upload(
         
         # Store structured error in database if indexing_run was created
         try:
-            from src.config.database import get_supabase_admin_client
             admin_db = get_supabase_admin_client()
             
             # Get user email for context
@@ -484,8 +483,6 @@ async def list_documents(
 
         # Anonymous listing by index_run_id (email uploads only)
         if not current_user and index_run_id is not None:
-            from src.config.database import get_supabase_admin_client
-
             db = get_supabase_admin_client()
             run_res = db.table("indexing_runs").select("upload_type").eq("id", str(index_run_id)).limit(1).execute()
             if not run_res.data or run_res.data[0].get("upload_type") != "email":
@@ -571,8 +568,6 @@ async def get_document(
             document = reader.get_project_document(current_user["id"], str(project_id), str(document_id))
         elif not current_user and index_run_id is not None:
             # Anonymous email-flow: verify document belongs to the email indexing run via junction table
-            from src.config.database import get_supabase_admin_client
-
             db = get_supabase_admin_client()
             # Check that run is email type
             run_res = db.table("indexing_runs").select("upload_type").eq("id", str(index_run_id)).limit(1).execute()
@@ -663,8 +658,6 @@ async def get_document_pdf(
     Access control follows the same rules as get_document endpoint.
     """
     try:
-        from src.config.database import get_supabase_admin_client, get_supabase_client
-        
         # First, verify access to the document using same logic as get_document
         if current_user:
             # Authenticated user - check project ownership
@@ -863,7 +856,6 @@ async def process_upload_async(
                 document_ids = [doc_data["document_id"] for doc_data in document_data]
         else:
             # Fallback: get document IDs from indexing run
-            from src.config.database import get_supabase_admin_client
             db = get_supabase_admin_client()
             docs_result = (
                 db.table("indexing_run_documents")
