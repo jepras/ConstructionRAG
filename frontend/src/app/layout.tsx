@@ -13,9 +13,38 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: {
     template: "%s - specfinder.io",
-    default: "specfinder.io",
+    default: "Any project detail - instantly available | specfinder.io",
   },
-  description: "AI-powered construction document processing and Q&A system",
+  description: "Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents. AI-powered construction document processing and Q&A system.",
+  keywords: ["construction", "PDF", "documents", "AI", "Q&A", "project management", "specifications"],
+  authors: [{ name: "specfinder.io" }],
+  creator: "specfinder.io",
+  publisher: "specfinder.io",
+  metadataBase: new URL('https://specfinder.io'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://specfinder.io',
+    siteName: 'specfinder.io',
+    title: 'Any project detail - instantly available',
+    description: 'Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents.',
+    images: [
+      {
+        url: '/video-poster.jpeg',
+        width: 1200,
+        height: 630,
+        alt: 'specfinder.io - AI-powered construction document processing',
+      }
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    site: '@specfinder_io',
+    creator: '@specfinder_io',
+    title: 'Any project detail - instantly available',
+    description: 'Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents.',
+    images: ['/video-poster.jpeg'],
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
