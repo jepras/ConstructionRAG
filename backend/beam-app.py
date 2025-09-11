@@ -461,7 +461,18 @@ async def run_indexing_pipeline_on_beam(
         python_packages="beam_requirements.txt",
         # Add system dependencies for Unstructured hi_res strategy
         commands=[
-            "apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libxrender1 libgomp1 libgcc-s1 libstdc++6 fonts-liberation poppler-utils tesseract-ocr tesseract-ocr-dan"
+            # Update package lists
+            "apt-get update",
+            # Install core system dependencies
+            "apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libxrender1 libgomp1",
+            # Install additional runtime libraries 
+            "apt-get install -y libgcc-s1 libstdc++6 fonts-liberation",
+            # Install OCR and PDF processing tools
+            "apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-dan tesseract-ocr-eng",
+            # Install additional image processing dependencies
+            "apt-get install -y libjpeg-dev libpng-dev libtiff-dev libwebp-dev",
+            # Verify installations
+            "tesseract --version && pdfinfo -v || echo 'Warning: Some dependencies may not be properly installed'"
         ],
     ),
     # Remove environment variable dependency - pass URL as parameter instead

@@ -108,7 +108,7 @@ class TestQueryPipelineIntegration:
 
     async def _run_single_test(self, test_case: dict) -> dict:
         """Run a single test case"""
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
         try:
             # Create query request
@@ -120,7 +120,7 @@ class TestQueryPipelineIntegration:
             response = await self.orchestrator.process_query(request)
 
             # Calculate test duration
-            duration = (asyncio.get_event_loop().time() - start_time) * 1000
+            duration = (asyncio.get_running_loop().time() - start_time) * 1000
 
             # Analyze response quality
             quality_score = self._analyze_response_quality(response, test_case)
@@ -157,7 +157,7 @@ class TestQueryPipelineIntegration:
             }
 
         except Exception as e:
-            duration = (asyncio.get_event_loop().time() - start_time) * 1000
+            duration = (asyncio.get_running_loop().time() - start_time) * 1000
             print(f"❌ Test failed: {e}")
 
             return {

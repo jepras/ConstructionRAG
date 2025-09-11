@@ -370,7 +370,7 @@ class PDFValidationService:
         is_authenticated: bool,
     ):
         """Async wrapper for PDF content analysis - runs in thread pool."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             self.executor,
             self._analyze_pdf_content_sync,

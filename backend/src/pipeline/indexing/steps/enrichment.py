@@ -471,9 +471,9 @@ class EnrichmentStep(PipelineStep):
 
             if has_full_page:
                 if tables_skipped < 3:  # Only log first 3 skips in detail
-                logger.info(
-                    f"Skipping VLM for table {i + 1}/{len(table_elements)} on page {table_page} - full-page extraction exists"
-                )
+                    logger.info(
+                        f"Skipping VLM for table {i + 1}/{len(table_elements)} on page {table_page} - full-page extraction exists"
+                    )
                 tables_skipped += 1
                 # Still add basic metadata but skip VLM processing
                 table_element["enrichment_metadata"] = {

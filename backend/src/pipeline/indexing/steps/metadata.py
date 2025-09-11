@@ -776,7 +776,7 @@ class MetadataStep(PipelineStep):
         """Execute the metadata analysis asynchronously"""
 
         # Run the CPU-intensive analysis in a thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self._analyze_metadata_sync, partition_data)
 
         return result

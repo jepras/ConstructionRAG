@@ -646,6 +646,7 @@ class IndexingOrchestrator:
                     if result.status == "completed":
                         embeddings_count = result.summary_stats.get("embeddings_generated", 0)
                     else:
+                        embeddings_count = 0
                 else:
                     result = await step_executor.execute_with_tracking(current_data)
 
