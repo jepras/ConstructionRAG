@@ -658,6 +658,8 @@ async def get_document_pdf(
     Access control follows the same rules as get_document endpoint.
     """
     try:
+        from src.config.database import get_supabase_client
+        
         # First, verify access to the document using same logic as get_document
         if current_user:
             # Authenticated user - check project ownership
