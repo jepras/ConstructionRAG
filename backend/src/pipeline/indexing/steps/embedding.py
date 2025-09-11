@@ -114,8 +114,53 @@ class VoyageEmbeddingClient:
                         logger.info(success_msg)
                         print(success_msg)
 
+                except httpx.HTTPStatusError as http_err:
+                    status_code = http_err.response.status_code
+                    response_text = http_err.response.text[:500]
+                    
+                    error_msg = f"❌ HTTP {status_code} error for batch {batch_num}/{total_batches}"
+                    logger.error(error_msg)
+                    print(error_msg)
+                    
+                    details_msg = f"Voyage API request details: model={self.model}, batch_size={len(batch_texts)}, estimated_tokens={batch_tokens:,}"
+                    logger.error(details_msg)
+                    print(details_msg)
+                    
+                    response_msg = f"API Response: {response_text}"
+                    logger.error(response_msg)
+                    print(response_msg)
+                    
+                    if status_code == 429:
+                        rate_limit_msg = f"😢 Rate limit hit! Batch had {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens"
+                        logger.error(rate_limit_msg)
+                        print(rate_limit_msg)
+                    elif "token" in response_text.lower() or "limit" in response_text.lower():
+                        limit_msg = f"⚠️ Token limit suspected! Batch had ~{batch_tokens:,} estimated tokens (voyage-multilingual-2 limit: 120K)"
+                        logger.error(limit_msg)
+                        print(limit_msg)
+                    
+                    raise http_err
+                    
+                except httpx.TimeoutException as timeout_err:
+                    timeout_msg = f"⏰ Timeout error for batch {batch_num}/{total_batches}: {timeout_err}"
+                    logger.error(timeout_msg)
+                    print(timeout_msg)
+                    
+                    details_msg = f"Request details: {len(batch_texts)} texts, ~{batch_tokens:,} estimated tokens, 90s timeout"
+                    logger.error(details_msg)
+                    print(details_msg)
+                    
+                    raise timeout_err
+                    
+                except httpx.RequestError as req_err:
+                    network_msg = f"🌐 Network error for batch {batch_num}/{total_batches}: {req_err}"
+                    logger.error(network_msg)
+                    print(network_msg)
+                    
+                    raise req_err
+                    
                 except Exception as e:
-                    error_msg = f"❌ Failed to generate embeddings for batch {batch_num}/{total_batches}: {e}"
+                    error_msg = f"❌ Unknown error for batch {batch_num}/{total_batches}: {e}"
                     logger.error(error_msg)
                     print(error_msg)
                     
@@ -127,17 +172,6 @@ class VoyageEmbeddingClient:
                     sample_msg = f"Sample batch content: {[text[:100] + '...' if len(text) > 100 else text for text in batch_texts[:3]]}"
                     logger.error(sample_msg)
                     print(sample_msg)
-                    
-                    # Check if it's a token limit error
-                    if "token" in str(e).lower() or "limit" in str(e).lower():
-                        limit_msg = f"⚠️ Suspected token limit exceeded! Batch had ~{batch_tokens:,} estimated tokens (voyage-multilingual-2 limit: 120K)"
-                        logger.error(limit_msg)
-                        print(limit_msg)
-                    
-                    # Log HTTP response details if available
-                    if hasattr(e, 'response') and e.response:
-                        logger.error(f"HTTP response status: {e.response.status_code}")
-                        logger.error(f"HTTP response body: {e.response.text[:500]}")
                     
                     raise
 
@@ -346,12 +380,34 @@ class EmbeddingStep(PipelineStep):
             )
 
         except Exception as e:
-            logger.error(f"Embedding step failed: {str(e)}")
-            raise AppError(
-                "Embedding step failed",
-                error_code=ErrorCode.EXTERNAL_API_ERROR,
-                details={"reason": str(e)},
-            ) from e
+            error_msg = f"Embedding step failed: {str(e)}"
+            logger.error(error_msg)
+            print(f"❌ {error_msg}")
+            
+            # Return failed result instead of raising exception to prevent hanging
+            duration = (datetime.utcnow() - start_time).total_seconds()
+            return StepResult(
+                step="embedding",
+                status="failed",
+                duration_seconds=duration,
+                error_message=error_msg,
+                data={
+                    "chunks_processed": 0,
+                    "embeddings_generated": 0,
+                    "chunks_failed": 0,
+                    "success_rate": 0.0,
+                    "error_type": "critical_failure",
+                    "error_details": str(e),
+                },
+                summary_stats={
+                    "total_chunks": 0,
+                    "embeddings_generated": 0,
+                    "success_rate": 0.0,
+                    "critical_failure": True,
+                },
+                started_at=start_time,
+                completed_at=datetime.utcnow(),
+            )
 
     async def get_chunks_for_embedding(
         self, indexing_run_id: UUID, document_id: UUID = None
@@ -384,34 +440,95 @@ class EmbeddingStep(PipelineStep):
             logger.error(f"Failed to get chunks for embedding: {e}")
             raise
 
+    def categorize_error(self, error: Exception) -> tuple[str, str]:
+        """Categorize error type and extract details for smart retry strategy"""
+        error_str = str(error).lower()
+        
+        if isinstance(error, httpx.HTTPStatusError):
+            status_code = error.response.status_code
+            if status_code == 429:
+                return "rate_limit", f"HTTP 429: {error.response.text[:200]}"
+            elif 500 <= status_code < 600:
+                return "server_error", f"HTTP {status_code}: {error.response.text[:200]}"
+            else:
+                return "http_error", f"HTTP {status_code}: {error.response.text[:200]}"
+        elif isinstance(error, httpx.TimeoutException):
+            return "timeout", str(error)
+        elif isinstance(error, httpx.RequestError):
+            return "network", str(error)
+        elif "rate" in error_str or "limit" in error_str or "throttle" in error_str:
+            return "rate_limit", str(error)
+        elif "timeout" in error_str:
+            return "timeout", str(error)
+        else:
+            return "unknown", str(error)
+    
+    def calculate_retry_delay(self, error_type: str, attempt: int) -> int:
+        """Calculate smart retry delay based on error type"""
+        if error_type == "rate_limit":
+            # Rate limit errors: 30s, 60s, 120s, 240s, 300s max
+            return min(300, 30 * (2 ** attempt))
+        elif error_type in ["timeout", "network"]:
+            # Network/timeout errors: 5s, 10s, 20s, 40s, 60s max
+            return min(60, 5 * (2 ** attempt))
+        else:
+            # Other errors: Standard exponential backoff (2s, 4s, 8s, 16s, 30s max)
+            return min(30, 2 ** attempt)
+
     async def generate_embeddings(
         self, chunks: List[Dict[str, Any]]
     ) -> List[List[float]]:
-        """Generate embeddings for chunks with retry logic"""
+        """Generate embeddings for chunks with smart retry logic"""
         texts = [chunk["content"] for chunk in chunks]
+        start_time = datetime.now()
+        max_total_time = 600  # 10 minutes maximum per document
 
         for attempt in range(self.max_retries):
             try:
-                logger.info(
-                    f"Generating embeddings (attempt {attempt + 1}/{self.max_retries})"
-                )
+                attempt_msg = f"🔄 Generating embeddings (attempt {attempt + 1}/{self.max_retries})"
+                logger.info(attempt_msg)
+                print(attempt_msg)
+                
                 embeddings = await self.voyage_client.get_embeddings(
                     texts, self.batch_size
                 )
+                success_msg = f"✅ Embedding generation successful on attempt {attempt + 1}"
+                logger.info(success_msg)
+                print(success_msg)
                 return embeddings
 
             except Exception as e:
-                logger.error(
-                    f"Embedding generation failed (attempt {attempt + 1}): {e}"
-                )
+                # Check total time limit to prevent infinite hanging
+                elapsed = (datetime.now() - start_time).total_seconds()
+                if elapsed > max_total_time:
+                    timeout_msg = f"⏰ Embedding generation timeout after {elapsed:.1f}s (limit: {max_total_time}s)"
+                    logger.error(timeout_msg)
+                    print(timeout_msg)
+                    return []  # Return empty list for graceful failure handling
+                
+                # Categorize error and calculate smart delay
+                error_type, error_details = self.categorize_error(e)
+                delay = self.calculate_retry_delay(error_type, attempt) if attempt < self.max_retries - 1 else 0
+                
+                error_msg = f"❌ Embedding generation failed (attempt {attempt + 1}/{self.max_retries}): {error_type}"
+                logger.error(error_msg)
+                print(error_msg)
+                
+                details_msg = f"Error details: {error_details}"
+                logger.error(details_msg)
+                print(details_msg)
+                
                 if attempt < self.max_retries - 1:
-                    await asyncio.sleep(
-                        self.retry_delay * (2**attempt)
-                    )  # Exponential backoff
+                    delay_msg = f"⏱️ Waiting {delay}s before retry (error type: {error_type})"
+                    logger.info(delay_msg)
+                    print(delay_msg)
+                    await asyncio.sleep(delay)
                 else:
                     # CRITICAL FIX: Return empty list instead of raising exception
                     # This prevents the entire document processing from being killed
-                    logger.error(f"All embedding attempts failed after {self.max_retries} retries. Returning empty embeddings.")
+                    final_msg = f"😵 All embedding attempts failed after {self.max_retries} retries. Returning empty embeddings for graceful failure handling."
+                    logger.error(final_msg)
+                    print(final_msg)
                     return []  # Return empty list for graceful failure handling
 
     async def store_embeddings(
