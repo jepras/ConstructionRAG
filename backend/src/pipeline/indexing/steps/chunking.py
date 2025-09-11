@@ -508,35 +508,8 @@ class IntelligentChunker:
     ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Apply semantic text splitting to composed chunks that exceed max_chunk_size"""
 
-        # BEAM DEBUG: Print configuration and chunk analysis
-        print(
-            f"🔍 BEAM CHUNKING: strategy={self.strategy}, max_chunk_size={self.max_chunk_size}, chunk_size={self.chunk_size}"
-        )
-        chunk_sizes = [len(chunk["content"]) for chunk in chunks]
-        print(
-            f"🔍 BEAM CHUNKING: {len(chunks)} chunks, sizes: min={min(chunk_sizes) if chunk_sizes else 0}, max={max(chunk_sizes) if chunk_sizes else 0}, avg={sum(chunk_sizes) / len(chunk_sizes) if chunk_sizes else 0:.1f}"
-        )
-
-        # Print details about large chunks
-        large_chunks = [i for i, size in enumerate(chunk_sizes) if size > 1000]
-        if large_chunks:
-            print(f"🔍 BEAM CHUNKING: Found {len(large_chunks)} chunks > 1000 chars at indices: {large_chunks}")
-            for i in large_chunks[:3]:  # Print details for first 3 large chunks
-                chunk = chunks[i]
-                content_preview = chunk["content"][:200] + "..." if len(chunk["content"]) > 200 else chunk["content"]
-                print(
-                    f"🔍 BEAM LARGE CHUNK {i}: {len(chunk['content'])} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'"
-                )
-
         if self.strategy != "semantic" or RecursiveCharacterTextSplitter is None:
-            print(
-                f"🔍 BEAM CHUNKING: Semantic splitting disabled - strategy={self.strategy}, RecursiveCharacterTextSplitter available={RecursiveCharacterTextSplitter is not None}"
-            )
             return chunks, {"semantic_splitting_enabled": False}
-
-        print(
-            f"🔍 BEAM CHUNKING: Applying semantic text splitting to chunks larger than {self.max_chunk_size} characters..."
-        )
 
         # Initialize text splitter
         text_splitter = RecursiveCharacterTextSplitter(
@@ -546,8 +519,6 @@ class IntelligentChunker:
             length_function=len,
             is_separator_regex=False,
         )
-
-        print(f"🔍 BEAM CHUNKING: Text splitter initialized with chunk_size={self.chunk_size}, overlap={self.overlap}")
 
         split_chunks = []
         splitting_stats = {
@@ -567,13 +538,6 @@ class IntelligentChunker:
             # Track largest chunk sizes
             if content_length > splitting_stats["largest_chunk_before"]:
                 splitting_stats["largest_chunk_before"] = content_length
-
-            # BEAM DEBUG: Print processing of each chunk
-            if content_length > 500:  # Print chunks that might need splitting
-                content_preview = content[:100] + "..." if len(content) > 100 else content
-                print(
-                    f"🔍 BEAM PROCESSING CHUNK {chunk_idx}: {content_length} chars, type={chunk['metadata'].get('element_category', 'unknown')}, preview='{content_preview}'"
-                )
 
             # FORCE SPLIT: Change threshold to 1000 chars instead of max_chunk_size
             split_threshold = 1000  # HARDCODED: Force split anything over 1000 chars
