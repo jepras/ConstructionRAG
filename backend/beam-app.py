@@ -476,8 +476,8 @@ async def run_indexing_pipeline_on_beam(
         ],
     ),
     # Remove environment variable dependency - pass URL as parameter instead
-    # Timeout set to 30 minutes to match current pipeline expectations
-    timeout=1800,
+    # Timeout set to 4 hours for large PDF processing jobs
+    timeout=14400,
 )
 def process_documents(
     indexing_run_id: str,
