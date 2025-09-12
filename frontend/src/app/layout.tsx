@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://specfinder.io',
+    url: '/',
     siteName: 'specfinder.io',
     title: 'Any project detail - instantly available',
     description: 'Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents.',
@@ -34,6 +34,7 @@ export const metadata: Metadata = {
         width: 1200,
         height: 630,
         alt: 'specfinder.io - AI-powered construction document processing',
+        type: 'image/jpeg',
       }
     ],
   },
