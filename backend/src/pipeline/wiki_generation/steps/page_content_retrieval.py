@@ -54,11 +54,6 @@ class PageContentRetrievalStep(PipelineStep):
         # Initialize shared retrieval core
         self.retrieval_core = RetrievalCore(config=shared_config, db_client=self.supabase)
 
-        logger.info(
-            f"[Wiki:Retrieval] Using shared retrieval with model='{shared_config.embedding_model}', "
-            f"top_k={self.max_chunks_per_query}, threshold={self.similarity_threshold}"
-        )
-
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute page content retrieval step."""
         start_time = datetime.utcnow()

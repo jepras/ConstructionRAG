@@ -51,9 +51,7 @@ class OverviewGenerationStep(PipelineStep):
                 api_key=voyage_settings.voyage_api_key,
                 model=self.query_embedding_model,
             )
-            logger.info(
-                f"[Wiki:Overview] Using query embedding model='{self.query_embedding_model}', expected_dims={self.query_embedding_dims_expected}"
-            )
+
         except Exception as e:
             logger.warning(f"[Wiki:Overview] Failed to initialize VoyageEmbeddingClient: {e}")
             self.voyage_client = None
@@ -69,14 +67,14 @@ class OverviewGenerationStep(PipelineStep):
         self.max_chunks_in_prompt = config.get("max_chunks_in_prompt", 10)  # Reduced from 15
         self.content_preview_length = config.get("content_preview_length", 600)  # Reduced from 800
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
-        
+
         # Initialize LangChain OpenAI client with OpenRouter configuration - AFTER all attributes are set
         try:
             settings = get_settings()
             self.openrouter_api_key = settings.openrouter_api_key
             if not self.openrouter_api_key:
                 raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-            
+
             # Create LangChain ChatOpenAI client configured for OpenRouter
             self.llm_client = ChatOpenAI(
                 model=self.model,
@@ -413,7 +411,9 @@ class OverviewGenerationStep(PipelineStep):
         similar_chunks.sort(key=lambda x: x["similarity_score"], reverse=True)
         return similar_chunks[: self.max_chunks_per_query]
 
-    async def _generate_llm_overview(self, overview_data: dict[str, Any], metadata: dict[str, Any], indexing_run_id: str = None) -> str:
+    async def _generate_llm_overview(
+        self, overview_data: dict[str, Any], metadata: dict[str, Any], indexing_run_id: str = None
+    ) -> str:
         """Generate project overview using LLM."""
         if not self.openrouter_api_key:
             raise ValueError("OpenRouter API key not configured")
@@ -490,7 +490,7 @@ Generer projektoversigten på dansk:"""
         try:
             # Create message for LangChain
             message = HumanMessage(content=prompt)
-            
+
             # Get PostHog callback for automatic LLM tracking
             posthog_callback = posthog_service.get_langchain_callback(
                 pipeline_step="wiki_overview_generation",
@@ -498,39 +498,34 @@ Generer projektoversigten på dansk:"""
                 additional_properties={
                     "max_tokens": max_tokens,
                     "step_type": "overview_generation",
-                    "model": self.model
-                }
+                    "model": self.model,
+                },
             )
-            
+
             # Configure callbacks for the LangChain call
             callbacks = [posthog_callback] if posthog_callback else []
-            
+
             # Make async call to LangChain ChatOpenAI with PostHog callback
-            response = await self.llm_client.ainvoke(
-                [message],
-                config={"callbacks": callbacks} if callbacks else None
-            )
+            response = await self.llm_client.ainvoke([message], config={"callbacks": callbacks} if callbacks else None)
             content = response.content
-            
+
             # Ensure proper UTF-8 encoding for all characters (Danish æøå, quotes, symbols, etc.)
             if isinstance(content, bytes):
-                content = content.decode('utf-8')
+                content = content.decode("utf-8")
             elif isinstance(content, str):
                 # Fix any double-encoding issues by re-encoding/decoding
                 try:
-                    content = content.encode('utf-8').decode('utf-8')
+                    content = content.encode("utf-8").decode("utf-8")
                 except UnicodeError:
                     # If already properly encoded, keep as-is
                     pass
-            
+
             print(
                 f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - API call successful, content length: {len(content)}"
             )
             return content
 
         except Exception as e:
-            print(
-                f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain API error: {e}"
-            )
+            print(f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain API error: {e}")
             logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
             raise

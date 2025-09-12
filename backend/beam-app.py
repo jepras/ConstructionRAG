@@ -185,6 +185,50 @@ async def trigger_error_webhook(indexing_run_id: str, error_message: str, webhoo
         # Don't fail further if error notification fails
 
 
+async def run_indexing_pipeline_with_timeout_buffer(
+    indexing_run_id: str,
+    document_ids: list[str],
+    user_id: str = None,
+    project_id: str = None,
+    webhook_url: str = None,
+    webhook_api_key: str = None,
+) -> dict[str, Any]:
+    """
+    Wrapper for pipeline execution with internal timeout buffer.
+    
+    Uses 3.5 hour internal timeout to ensure webhook is sent before Beam's 4h hard timeout.
+    """
+    # Set internal timeout to 3.5 hours (leaving 30min buffer before Beam's 4h limit)
+    internal_timeout = 3.5 * 3600  # 3.5 hours in seconds
+    
+    try:
+        return await asyncio.wait_for(
+            run_indexing_pipeline_on_beam(
+                indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
+            ),
+            timeout=internal_timeout
+        )
+    except asyncio.TimeoutError:
+        timeout_error_message = f"Processing timeout: Task exceeded 3.5 hour limit (Beam has 4h hard timeout)"
+        
+        logger.error("internal_timeout_reached", extra={
+            "run_id": indexing_run_id,
+            "timeout_hours": 3.5,
+            "beam_timeout_hours": 4.0
+        })
+        
+        # Send error webhook before Beam kills the task
+        await trigger_error_webhook(
+            indexing_run_id, 
+            timeout_error_message,
+            webhook_url, 
+            webhook_api_key
+        )
+        
+        # Re-raise to let Beam know it failed
+        raise Exception(timeout_error_message)
+
+
 async def run_indexing_pipeline_on_beam(
     indexing_run_id: str,
     document_ids: list[str],
@@ -512,9 +556,9 @@ def process_documents(
 
     if env.is_remote():
         try:
-            # Run the async function in an event loop
+            # Run the async function with timeout buffer in an event loop
             return asyncio.run(
-                run_indexing_pipeline_on_beam(
+                run_indexing_pipeline_with_timeout_buffer(
                     indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
                 )
             )

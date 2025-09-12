@@ -450,6 +450,7 @@ class StorageService:
                     f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
                 )
 
+
             # Get file content
             admin = self._resolver.get_client(trusted=True)
             result = admin.storage.from_(self.bucket_name).download(storage_path)

@@ -764,12 +764,31 @@ async def get_wiki_initial_data(
             # Get first page content from storage using the correct method
             if first_page["storage_path"]:
                 try:
+                    # Determine the correct storage type for converted projects
+                    # If upload_type is 'email' but user_id exists, this is a converted user project
+                    # that still has files in the user project storage location
+                    storage_type = StorageUploadType(upload_type)
+                    project_id_to_use = completed_wiki_run.project_id
+                    
+                    if upload_type == "email" and completed_wiki_run.user_id is not None:
+                        # This is a converted project - use USER_PROJECT to get correct storage path
+                        storage_type = StorageUploadType.USER_PROJECT
+                        
+                        # Extract project_id from the actual storage path if it's null in the database
+                        if completed_wiki_run.project_id is None and "users/" in first_page["storage_path"]:
+                            import re
+                            # Extract project_id from path: users/{user_id}/projects/{project_id}/...
+                            match = re.search(r'users/[^/]+/projects/([^/]+)/', first_page["storage_path"])
+                            if match:
+                                project_id_to_use = match.group(1)
+                        
+                    
                     content = await storage_service.get_wiki_page_content(
                         wiki_run_id=UUID(str(completed_wiki_run.id)),
                         filename=first_page["filename"],
-                        upload_type=StorageUploadType(upload_type),
+                        upload_type=storage_type,
                         user_id=UUID(str(completed_wiki_run.user_id)) if completed_wiki_run.user_id else None,
-                        project_id=UUID(str(completed_wiki_run.project_id)) if completed_wiki_run.project_id else None,
+                        project_id=UUID(str(project_id_to_use)) if project_id_to_use else None,
                         index_run_id=UUID(str(indexing_run_id))
                     )
                     if content:
