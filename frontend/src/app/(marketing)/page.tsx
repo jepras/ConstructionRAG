@@ -306,7 +306,7 @@ export default function Home() {
 
           {/* CTA Button */}
           <div className="flex justify-center mt-12">
-            <Link href="/projects">
+            <Link href="/projects/lindevangskolen-ccs-anlgsprojekt-181d6cd9-b815-4347-bc0b-1df8dca67519/query?q=Hvad%20er%20kravene%20til%20radiatorerne%3F">
               <Button className="px-8 py-3 text-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-primary/20" style={{ animation: 'scale-pulse 2s ease-in-out infinite' }}>
                 Try search on a real project - no user needed!
               </Button>
