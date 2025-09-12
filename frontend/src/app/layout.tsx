@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     description: 'Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents.',
     images: [
       {
-        url: '/video-poster.jpeg',
+        url: '/video-poster.jpg',
         width: 1200,
         height: 630,
         alt: 'specfinder.io - AI-powered construction document processing',
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     creator: '@specfinder_io',
     title: 'Any project detail - instantly available',
     description: 'Ask questions about your construction PDFs and get instant answers, instead of digging through messy, hard-to-search documents.',
-    images: ['/video-poster.jpeg'],
+    images: ['/video-poster.jpg'],
   },
   icons: {
     icon: [
