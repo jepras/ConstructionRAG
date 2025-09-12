@@ -521,6 +521,100 @@ def _infer_current_step(step_results: dict) -> str:
     return "completed"
 
 
+@flat_router.get("/indexing-runs/{run_id}/summary", response_model=dict[str, Any])
+async def get_flat_indexing_run_summary(
+    run_id: UUID,
+    current_user: dict[str, Any] | None = Depends(get_current_user_optional),
+):
+    """Lightweight summary endpoint for indexing run statistics.
+    
+    Returns only essential data for summary bars: PDF count, names, page count,
+    image count, table count, chunk count, and last updated timestamp.
+    """
+    try:
+        reader = PipelineReadService()
+        svc = PipelineService(use_admin_client=not bool(current_user))
+        run = await svc.get_indexing_run(run_id)
+        if not run:
+            from ..shared.errors import ErrorCode
+            from ..utils.exceptions import AppError
+
+            raise AppError("Indexing run not found", error_code=ErrorCode.NOT_FOUND)
+        
+        # Access control (same logic as progress endpoint)
+        if current_user:
+            allowed = reader.get_run_for_user(str(run_id), current_user["id"])
+            if not allowed:
+                from ..shared.errors import ErrorCode
+                from ..utils.exceptions import AppError
+
+                raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
+        else:
+            if getattr(run, "upload_type", None) != "email":
+                from ..shared.errors import ErrorCode
+                from ..utils.exceptions import AppError
+
+                raise AppError("Access denied: Authentication required", error_code=ErrorCode.ACCESS_DENIED)
+
+        # Get documents linked to this indexing run
+        documents_result = (
+            svc.supabase.table("indexing_run_documents").select("document_id").eq("indexing_run_id", str(run_id)).execute()
+        )
+        document_ids = [doc["document_id"] for doc in (documents_result.data or [])]
+
+        # Initialize counters
+        pdf_names = []
+        total_pages = 0
+        total_images = 0
+        total_tables = 0
+        total_chunks = 0
+
+        if document_ids:
+            documents_result = (
+                svc.supabase.table("documents").select("id, filename, step_results").in_("id", document_ids).execute()
+            )
+            
+            for doc in documents_result.data or []:
+                pdf_names.append(doc["filename"])
+                step_results = doc.get("step_results", {})
+                
+                # Extract page count from PartitionStep
+                partition_step = step_results.get("PartitionStep", {})
+                if partition_step.get("summary_stats", {}).get("document_metadata", {}).get("total_pages"):
+                    total_pages += partition_step["summary_stats"]["document_metadata"]["total_pages"]
+                
+                # Extract image and table counts from EnrichmentStep
+                enrichment_step = step_results.get("EnrichmentStep", {})
+                if enrichment_step.get("summary_stats"):
+                    total_images += enrichment_step["summary_stats"].get("images_processed", 0)
+                    total_tables += enrichment_step["summary_stats"].get("tables_processed", 0)
+                
+                # Extract chunk count from ChunkingStep
+                chunking_step = step_results.get("ChunkingStep", {})
+                if chunking_step.get("summary_stats", {}).get("total_chunks_created"):
+                    total_chunks += chunking_step["summary_stats"]["total_chunks_created"]
+
+        return {
+            "run_id": str(run_id),
+            "pdf_count": len(pdf_names),
+            "pdf_names": pdf_names,
+            "total_pages": total_pages,
+            "total_images": total_images,
+            "total_tables": total_tables,
+            "total_chunks": total_chunks,
+            "last_updated": run.completed_at.isoformat() if run.completed_at else (run.started_at.isoformat() if run.started_at else None),
+            "status": run.status,
+        }
+    
+    except AppError:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get indexing run summary for {run_id}: {e}")
+        from ..shared.errors import ErrorCode
+        from ..utils.exceptions import AppError
+        raise AppError("Failed to get indexing run summary", error_code=ErrorCode.INTERNAL_ERROR) from e
+
+
 # Optional: Explicit creation of indexing runs (separate from uploads)
 @flat_router.post("/indexing-runs", response_model=dict[str, Any])
 async def create_indexing_run(

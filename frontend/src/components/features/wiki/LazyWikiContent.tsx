@@ -40,8 +40,10 @@ const WikiContent = dynamic(
 
 interface LazyWikiContentProps {
   content: WikiPageContent;
+  showSummaryBar?: boolean;
+  indexingRunId?: string;
 }
 
-export default function LazyWikiContent({ content }: LazyWikiContentProps) {
-  return <WikiContent content={content} />;
+export default function LazyWikiContent({ content, showSummaryBar = false, indexingRunId }: LazyWikiContentProps) {
+  return <WikiContent content={content} showSummaryBar={showSummaryBar} indexingRunId={indexingRunId} />;
 }

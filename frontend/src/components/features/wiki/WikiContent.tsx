@@ -6,9 +6,12 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { WikiPageContent } from '@/lib/api-client';
 import LazyMermaidDiagram from './LazyMermaidDiagram';
+import IndexingSummaryBar from './IndexingSummaryBar';
 
 interface WikiContentProps {
   content: WikiPageContent;
+  showSummaryBar?: boolean;
+  indexingRunId?: string;
 }
 
 // Helper function to extract text from React children
@@ -246,9 +249,14 @@ const components = {
   ),
 };
 
-export default function WikiContent({ content }: WikiContentProps) {
+export default function WikiContent({ content, showSummaryBar = false, indexingRunId }: WikiContentProps) {
   return (
     <div className="max-w-none">
+      {/* Summary Bar - only shows on main wiki page */}
+      {showSummaryBar && indexingRunId && (
+        <IndexingSummaryBar indexingRunId={indexingRunId} />
+      )}
+
       {/* Page header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">
