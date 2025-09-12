@@ -80,6 +80,7 @@ cover/
 !frontend/public/favicon*.png
 !frontend/public/favicon*.ico
 !frontend/public/apple-touch-icon.png
+!frontend/public/video-poster.jpg
 
 # Document files
 *.pdf

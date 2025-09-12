@@ -662,11 +662,11 @@ async def get_document_pdf(
         
         # First, verify access to the document using same logic as get_document
         if current_user:
-            # Authenticated user - check project ownership
+            # Authenticated user - check access level first, then project ownership
             db = get_supabase_client()
             doc_result = (
                 db.table("documents")
-                .select("file_path, filename, project_id, index_run_id")
+                .select("file_path, filename, project_id, index_run_id, access_level, upload_type")
                 .eq("id", str(document_id))
                 .limit(1)
                 .execute()
@@ -681,11 +681,15 @@ async def get_document_pdf(
             
             doc = doc_result.data[0]
             
-            # Verify project ownership if document has project_id
-            if doc.get("project_id"):
+            # Check if document is public - if so, allow access without ownership check
+            if doc.get("access_level") == "public":
+                # Public access - no ownership check needed
+                pass
+            elif doc.get("project_id"):
+                # Private project - verify ownership
                 proj = (
                     db.table("projects")
-                    .select("id")
+                    .select("id, user_id")
                     .eq("id", doc["project_id"])
                     .eq("user_id", current_user["id"])
                     .limit(1)
@@ -699,12 +703,12 @@ async def get_document_pdf(
                     )
         
         elif index_run_id:
-            # Anonymous access - verify document belongs to email indexing run
+            # Anonymous access - verify document belongs to public indexing run
             db = get_supabase_admin_client()
             
-            # Check that run is email type
-            run_res = db.table("indexing_runs").select("upload_type").eq("id", str(index_run_id)).limit(1).execute()
-            if not run_res.data or run_res.data[0].get("upload_type") != "email":
+            # Check that run is email type AND public access
+            run_res = db.table("indexing_runs").select("upload_type, access_level").eq("id", str(index_run_id)).limit(1).execute()
+            if not run_res.data or run_res.data[0].get("upload_type") != "email" or run_res.data[0].get("access_level") != "public":
                 raise AppError(
                     "Access denied: Authentication required",
                     error_code=ErrorCode.ACCESS_DENIED,
@@ -730,7 +734,7 @@ async def get_document_pdf(
             # Get document details
             doc_result = (
                 db.table("documents")
-                .select("file_path, filename, index_run_id")
+                .select("file_path, filename, index_run_id, project_id, access_level, upload_type")
                 .eq("id", str(document_id))
                 .limit(1)
                 .execute()
@@ -744,6 +748,14 @@ async def get_document_pdf(
                 )
             
             doc = doc_result.data[0]
+            
+            # Double-check document access level
+            if doc.get("access_level") != "public":
+                raise AppError(
+                    "Access denied",
+                    error_code=ErrorCode.ACCESS_DENIED,
+                    request_id=get_request_id(),
+                )
         
         else:
             raise ValidationError(
@@ -775,12 +787,31 @@ async def get_document_pdf(
                 request_id=get_request_id(),
             )
             
-        # Construct storage path based on document type
-        if current_user and doc.get("project_id"):
-            # Authenticated user project upload
+        # Construct storage path based on document type and origin
+        # Handle converted projects: upload_type='email' but files remain in users/ path
+        if doc.get("project_id") and doc.get("upload_type") == "email":
+            # Converted project - files remain in original users/ path
+            # Need to get the original user_id for the project
+            db = get_supabase_admin_client()
+            proj_result = (
+                db.table("projects")
+                .select("user_id")
+                .eq("id", doc["project_id"])
+                .limit(1)
+                .execute()
+            )
+            if proj_result.data:
+                project_owner_id = proj_result.data[0]["user_id"]
+                storage_path = f"users/{project_owner_id}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
+            else:
+                # Fallback to email-uploads path if project not found
+                run_id = index_run_id if index_run_id else doc_index_run_id
+                storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
+        elif current_user and doc.get("project_id"):
+            # Authenticated user with private project
             storage_path = f"users/{current_user['id']}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
         else:
-            # Anonymous email upload - use the index_run_id from parameter or document
+            # Original email upload - use email-uploads path
             run_id = index_run_id if index_run_id else doc_index_run_id
             storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
         
