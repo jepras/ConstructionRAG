@@ -443,15 +443,52 @@ class StorageService:
         """Get the content of a wiki page markdown file."""
         try:
             # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
-                storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+            # Handle converted projects: upload_type='email' but files remain in users/ path
+            if upload_type == UploadType.EMAIL and user_id is not None:
+                # Potential converted project - check if it has pages metadata with storage paths
+                from ..config.database import get_supabase_admin_client
+                admin_db = get_supabase_admin_client()
+                
+                # Get wiki run with pages metadata to extract actual storage path
+                wiki_result = (
+                    admin_db.table("wiki_generation_runs")
+                    .select("pages_metadata")
+                    .eq("id", str(wiki_run_id))
+                    .limit(1)
+                    .execute()
+                )
+                
+                if wiki_result.data and wiki_result.data[0].get("pages_metadata"):
+                    # Extract path information from first page's storage_path
+                    pages_metadata = wiki_result.data[0]["pages_metadata"]
+                    if pages_metadata and len(pages_metadata) > 0:
+                        first_page_path = pages_metadata[0].get("storage_path")
+                        if first_page_path and "users/" in first_page_path:
+                            # Parse path like: users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/page-1.md
+                            # Extract the base path and replace the filename
+                            import os
+                            base_path = os.path.dirname(first_page_path)
+                            storage_path = f"{base_path}/{filename}"
+                        else:
+                            # Fallback to email-uploads path
+                            storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+                    else:
+                        storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+                else:
+                    # No pages metadata or not converted - use email-uploads path  
+                    storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+            elif upload_type == UploadType.EMAIL:
+                # Original email upload - use email-uploads path
+                storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
             else:  # USER_PROJECT
+                # Regular user project - use users/ path
                 storage_path = (
-                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
+                    f"users/{str(user_id)}/projects/{str(project_id)}/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
                 )
 
 
             # Get file content
+            logger.info(f"Attempting to download wiki page from storage path: {storage_path}")
             admin = self._resolver.get_client(trusted=True)
             result = admin.storage.from_(self.bucket_name).download(storage_path)
 

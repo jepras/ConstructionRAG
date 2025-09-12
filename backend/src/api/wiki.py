@@ -473,10 +473,14 @@ async def get_wiki_page_content(
             page_name += ".md"
 
         # Get page content from storage
+        # Convert string upload_type to enum
+        from ..services.storage_service import UploadType as StorageUploadType
+        storage_upload_type = StorageUploadType.EMAIL if wiki_run.upload_type == "email" else StorageUploadType.USER_PROJECT
+        
         content = await storage_service.get_wiki_page_content(
             wiki_run_id=str(wiki_run_id),
             filename=page_name,
-            upload_type=wiki_run.upload_type,
+            upload_type=storage_upload_type,
             user_id=wiki_run.user_id,
             project_id=wiki_run.project_id,
             index_run_id=wiki_run.indexing_run_id,
@@ -490,9 +494,6 @@ async def get_wiki_page_content(
         }
 
     except HTTPException as exc:
-        from ..shared.errors import ErrorCode
-        from ..utils.exceptions import AppError
-        
         status = getattr(exc, "status_code", 500)
         code = (
             ErrorCode.NOT_FOUND
