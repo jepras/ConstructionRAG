@@ -21,7 +21,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [email, setEmail] = useState("")
   const [isPublic] = useState(true) // Always true for public upload form
   const [shareWithAI] = useState(true) // Always true for public upload form
-  const [language, setLanguage] = useState("Danish")
+  const [language, setLanguage] = useState("English")
   const [validationComplete, setValidationComplete] = useState(false)
   const [filesAreValid, setFilesAreValid] = useState(false)
   const [estimatedTime, setEstimatedTime] = useState(0)
@@ -81,6 +81,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
     formData.append("email", email)
     formData.append("upload_type", "email")
     formData.append("email_notifications_enabled", emailNotificationsEnabled.toString())
+    formData.append("language", language.toLowerCase())
 
     uploadMutation.mutate(formData, {
       onSuccess: (response) => {
@@ -236,6 +237,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
               disabled={uploadMutation.isPending}
               className="w-full mt-1 px-3 py-2 bg-input border border-border rounded-lg text-foreground"
             >
+              <option value="English">English</option>
               <option value="Danish">Danish</option>
             </select>
           </div>

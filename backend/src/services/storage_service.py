@@ -42,7 +42,7 @@ class StorageService:
         # Return cached result if already checked
         if self._bucket_exists is not None:
             return self._bucket_exists
-        
+
         try:
             # Use admin for bucket management
             admin = self._resolver.get_client(trusted=True, operation="ensure_bucket")
@@ -98,7 +98,7 @@ class StorageService:
                 # Determine content type if not provided
                 if not content_type:
                     content_type = self._get_content_type(file_path)
-                
+
                 # Read file content with proper encoding for text files
                 if content_type and (content_type.startswith("text/") or "text/markdown" in content_type):
                     # Read text files with UTF-8 encoding to preserve characters
@@ -136,7 +136,6 @@ class StorageService:
             else:
                 url = str(signed_url_response)
 
-            logger.info(f"Uploaded file to storage: {storage_path} -> {url}")
             return url
 
         except Exception as e:
@@ -233,12 +232,14 @@ class StorageService:
         try:
             # Sanitize filename for storage compatibility
             sanitized_filename = sanitize_filename(filename)
-            
+
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/generated/{sanitized_filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{sanitized_filename}"
+                storage_path = (
+                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{sanitized_filename}"
+                )
 
             # Upload file
             url = await self.upload_file(file_path, storage_path, content_type)
@@ -268,12 +269,14 @@ class StorageService:
         try:
             # Sanitize filename for storage compatibility
             sanitized_filename = sanitize_filename(filename)
-            
+
             # Create storage path based on upload type
             if upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
             else:  # USER_PROJECT
-                storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
+                storage_path = (
+                    f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
+                )
 
             # Upload file
             url = await self.upload_file(file_path, storage_path, "application/pdf")
@@ -447,8 +450,9 @@ class StorageService:
             if upload_type == UploadType.EMAIL and user_id is not None:
                 # Potential converted project - check if it has pages metadata with storage paths
                 from ..config.database import get_supabase_admin_client
+
                 admin_db = get_supabase_admin_client()
-                
+
                 # Get wiki run with pages metadata to extract actual storage path
                 wiki_result = (
                     admin_db.table("wiki_generation_runs")
@@ -457,7 +461,7 @@ class StorageService:
                     .limit(1)
                     .execute()
                 )
-                
+
                 if wiki_result.data and wiki_result.data[0].get("pages_metadata"):
                     # Extract path information from first page's storage_path
                     pages_metadata = wiki_result.data[0]["pages_metadata"]
@@ -467,25 +471,27 @@ class StorageService:
                             # Parse path like: users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/page-1.md
                             # Extract the base path and replace the filename
                             import os
+
                             base_path = os.path.dirname(first_page_path)
                             storage_path = f"{base_path}/{filename}"
                         else:
                             # Fallback to email-uploads path
-                            storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+                            storage_path = (
+                                f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+                            )
                     else:
-                        storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+                        storage_path = (
+                            f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
+                        )
                 else:
-                    # No pages metadata or not converted - use email-uploads path  
+                    # No pages metadata or not converted - use email-uploads path
                     storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
             elif upload_type == UploadType.EMAIL:
                 # Original email upload - use email-uploads path
                 storage_path = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
             else:  # USER_PROJECT
                 # Regular user project - use users/ path
-                storage_path = (
-                    f"users/{str(user_id)}/projects/{str(project_id)}/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
-                )
-
+                storage_path = f"users/{str(user_id)}/projects/{str(project_id)}/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/{filename}"
 
             # Get file content
             logger.info(f"Attempting to download wiki page from storage path: {storage_path}")

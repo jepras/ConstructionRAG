@@ -1,5 +1,6 @@
 {
   "defaults": {
+    "language": "english",
     "chunking": {
       "chunk_size": 1000,
       "overlap": 200
@@ -37,9 +38,6 @@
       "extract_tables": true,
       "extract_images": true,
       "max_image_size_mb": 10,
-      "ocr_languages": [
-        "dan"
-      ],
       "table_validation": {
         "enabled": true,
         "max_table_size": 5000,
@@ -142,8 +140,7 @@
       "temperature": 0.1,
       "response_format": {
         "include_citations": true,
-        "include_confidence": true,
-        "language": "danish"
+        "include_confidence": true
       }
     },
     "quality_analysis": {

@@ -33,9 +33,8 @@ class PageContentRetrievalStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        # Load wiki retrieval config from SoT
-        wiki_cfg = ConfigService().get_effective_config("wiki")
-        retrieval_cfg = wiki_cfg.get("retrieval", {})
+        # Use wiki retrieval config from passed config (no fresh ConfigService calls)
+        retrieval_cfg = config.get("retrieval", {})
 
         # Configure retrieval settings
         self.max_chunks_per_query = retrieval_cfg.get("top_k", 10)

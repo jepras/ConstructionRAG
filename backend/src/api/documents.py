@@ -55,7 +55,7 @@ class UploadCreateResponse(BaseModel):
 
 class FileValidationResult(BaseModel):
     """Result for a single file validation."""
-    
+
     filename: str
     is_valid: bool
     errors: list[str]
@@ -68,7 +68,7 @@ class FileValidationResult(BaseModel):
 
 class ValidationResponse(BaseModel):
     """Response for batch file validation."""
-    
+
     files: list[FileValidationResult]
     is_valid: bool
     total_pages: int
@@ -94,11 +94,11 @@ async def validate_uploads(
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
 ):
     """Validate PDF files before upload.
-    
+
     This endpoint performs security, integrity, and processing time estimation
     without storing the files. It helps prevent malicious content and provides
     upfront feedback about processing requirements.
-    
+
     Rate limits:
     - Anonymous: 50 PDFs per hour
     - Authenticated: Unlimited
@@ -107,7 +107,7 @@ async def validate_uploads(
     from src.services.pdf_validation_service import PDFValidationService
     from fastapi import Request
     from starlette.datastructures import State
-    
+
     # Create a mock request for rate limiting
     # In production, this would be handled by middleware
     request = Request(
@@ -120,7 +120,7 @@ async def validate_uploads(
         }
     )
     request._state = State()
-    
+
     # Apply rate limiting
     is_authenticated = current_user is not None
     await rate_limit_middleware(
@@ -128,10 +128,10 @@ async def validate_uploads(
         file_count=len(files),
         is_authenticated=is_authenticated,
     )
-    
+
     # Initialize validation service
     validator = PDFValidationService()
-    
+
     # Prepare files for validation
     files_to_validate = []
     for file in files:
@@ -141,21 +141,21 @@ async def validate_uploads(
                 details={"field_errors": [{"field": "files", "message": "Filename required"}]},
                 request_id=get_request_id(),
             )
-        
+
         # Read file content
         content = await file.read()
         files_to_validate.append((file.filename, content))
-        
+
         # Reset file position for potential future reads
         await file.seek(0)
-    
+
     # Validate all files
     try:
         validation_result = await validator.validate_batch(
             files=files_to_validate,
             is_authenticated=is_authenticated,
         )
-        
+
         # Convert to response model
         return ValidationResponse(
             files=[
@@ -178,7 +178,7 @@ async def validate_uploads(
             errors=validation_result.get("errors", []),
             warnings=validation_result.get("warnings", []),
         )
-        
+
     except Exception as e:  # noqa: BLE001
         logger.error(f"Validation error: {e}")
         raise AppError(
@@ -199,6 +199,7 @@ async def create_upload(
     email: str | None = Form(None),  # noqa: B008
     project_id: UUID | None = Form(None),  # noqa: B008
     email_notifications_enabled: bool = Form(True),  # noqa: B008
+    language: str = Form("english"),  # noqa: B008
     current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
 ):
@@ -220,7 +221,11 @@ async def create_upload(
         upload_type = "anonymous" if project_id is None else "authenticated"
         raise ValidationError(
             f"Maximum {max_files_limit} PDF files allowed per {upload_type} upload",
-            details={"field_errors": [{"field": "files", "message": f"At most {max_files_limit} files per {upload_type} upload"}]},
+            details={
+                "field_errors": [
+                    {"field": "files", "message": f"At most {max_files_limit} files per {upload_type} upload"}
+                ]
+            },
             request_id=get_request_id(),
         )
 
@@ -242,6 +247,25 @@ async def create_upload(
 
     try:
         from src.services.document_service import DocumentService
+        from src.services.config_service import ConfigService
+
+        # Load base config and override language
+        config_service = ConfigService()
+        base_config = config_service._load_config()  # Load raw config
+        logger.info(f"🔧 Loaded base config structure: {list(base_config.keys()) if base_config else 'None'}")
+
+        if not base_config:
+            logger.error("❌ Failed to load base config, using default structure")
+            base_config = {"defaults": {"language": language}}
+        else:
+            # Ensure defaults section exists
+            if "defaults" not in base_config:
+                base_config["defaults"] = {}
+            base_config["defaults"]["language"] = language  # Override language
+
+        logger.info(
+            f"🌐 Final config will be stored with language: {base_config.get('defaults', {}).get('language', 'unknown')}"
+        )
 
         # Anonymous email upload (no project_id)
         if project_id is None:
@@ -260,31 +284,41 @@ async def create_upload(
                 index_run_id=UUID(index_run_id),
             )
 
-            db.table("indexing_runs").insert(
-                {
-                    "id": index_run_id,
-                    "upload_type": "email",
-                    "status": "pending",
-                    "created_at": "now()",
-                    "access_level": "public",
-                    "email": email,
-                    "email_notifications_enabled": email_notifications_enabled,
-                }
-            ).execute()
+            result = (
+                db.table("indexing_runs")
+                .insert(
+                    {
+                        "id": index_run_id,
+                        "upload_type": "email",
+                        "status": "pending",
+                        "created_at": "now()",
+                        "access_level": "public",
+                        "email": email,
+                        "email_notifications_enabled": email_notifications_enabled,
+                        "pipeline_config": base_config,  # Store complete config with language
+                    }
+                )
+                .execute()
+            )
+
+            # Verify the config was stored
+            logger.info(
+                f"📋 Stored pipeline_config for run {index_run_id} with language: {base_config.get('defaults', {}).get('language', 'unknown')}"
+            )
 
             # Read all files first (this is fast)
             file_data = []
             for file in files:
                 content = await file.read()
                 file_data.append((content, file.filename))
-            
+
             # Create all documents in parallel
             created_docs = await doc_service.create_email_documents_batch(
                 file_data=file_data,
                 index_run_id=index_run_id,
                 email=email,
             )
-            
+
             # Process results
             document_ids: list[str] = []
             document_data: list[dict[str, Any]] = []
@@ -346,12 +380,13 @@ async def create_upload(
         db.table("indexing_runs").insert(
             {
                 "id": index_run_id,
-                "upload_type": "user_project", 
+                "upload_type": "user_project",
                 "status": "pending",
                 "user_id": current_user["id"],
                 "project_id": str(project_id),
                 "access_level": "private",
                 "email_notifications_enabled": email_notifications_enabled,
+                "pipeline_config": base_config,  # Store complete config with language
             }
         ).execute()
 
@@ -393,15 +428,15 @@ async def create_upload(
         # Enhanced error handling with notification
         error_message = f"Upload failed: {str(e)}"
         logger.error(f"Upload processing error for run {index_run_id}: {error_message}")
-        
+
         # Store structured error in database if indexing_run was created
         try:
             admin_db = get_supabase_admin_client()
-            
+
             # Get user email for context
-            user_email = email if project_id is None else (current_user.get('email') if current_user else None)
+            user_email = email if project_id is None else (current_user.get("email") if current_user else None)
             project_name = LoopsService.extract_project_name_from_documents(index_run_id)
-            
+
             # Store error in indexing_runs table
             error_context = {
                 "stage": "upload",
@@ -413,16 +448,20 @@ async def create_upload(
                     "document_count": len(files),
                     "project_name": project_name,
                     "timestamp": "now()",
-                    "upload_type": "email" if project_id is None else "user_project"
-                }
+                    "upload_type": "email" if project_id is None else "user_project",
+                },
             }
-            
-            admin_db.table("indexing_runs").update({
-                "status": "failed",
-                "error_message": LoopsService.format_error_context("upload", "document_storage", str(e), error_context["context"]),
-                "completed_at": "now()"
-            }).eq("id", index_run_id).execute()
-            
+
+            admin_db.table("indexing_runs").update(
+                {
+                    "status": "failed",
+                    "error_message": LoopsService.format_error_context(
+                        "upload", "document_storage", str(e), error_context["context"]
+                    ),
+                    "completed_at": "now()",
+                }
+            ).eq("id", index_run_id).execute()
+
             # Send error notification
             try:
                 loops_service = LoopsService()
@@ -432,19 +471,19 @@ async def create_upload(
                     indexing_run_id=index_run_id,
                     user_email=user_email,
                     project_name=project_name,
-                    debug_info=f"Railway logs: https://railway.app/logs?filter={index_run_id}"
+                    debug_info=f"Railway logs: https://railway.app/logs?filter={index_run_id}",
                 )
-                
+
                 # Also send user error notification if we have their email
                 if user_email:
                     await loops_service.send_user_error_notification(user_email)
-                    
+
             except Exception as notification_error:
                 logger.error(f"Failed to send error notification: {notification_error}")
-                
+
         except Exception as db_error:
             logger.error(f"Failed to update database with error: {db_error}")
-        
+
         raise AppError(
             "Failed to create upload",
             error_code=ErrorCode.INTERNAL_ERROR,
@@ -653,13 +692,13 @@ async def get_document_pdf(
     db_client=DB_CLIENT_DEP,
 ):
     """Get signed URL for document PDF.
-    
+
     Returns a signed URL to access the PDF file directly from Supabase storage.
     Access control follows the same rules as get_document endpoint.
     """
     try:
         from src.config.database import get_supabase_client
-        
+
         # First, verify access to the document using same logic as get_document
         if current_user:
             # Authenticated user - check access level first, then project ownership
@@ -671,16 +710,16 @@ async def get_document_pdf(
                 .limit(1)
                 .execute()
             )
-            
+
             if not doc_result.data:
                 raise AppError(
                     "Document not found",
                     error_code=ErrorCode.NOT_FOUND,
                     request_id=get_request_id(),
                 )
-            
+
             doc = doc_result.data[0]
-            
+
             # Check if document is public - if so, allow access without ownership check
             if doc.get("access_level") == "public":
                 # Public access - no ownership check needed
@@ -701,20 +740,30 @@ async def get_document_pdf(
                         error_code=ErrorCode.ACCESS_DENIED,
                         request_id=get_request_id(),
                     )
-        
+
         elif index_run_id:
             # Anonymous access - verify document belongs to public indexing run
             db = get_supabase_admin_client()
-            
+
             # Check that run is email type AND public access
-            run_res = db.table("indexing_runs").select("upload_type, access_level").eq("id", str(index_run_id)).limit(1).execute()
-            if not run_res.data or run_res.data[0].get("upload_type") != "email" or run_res.data[0].get("access_level") != "public":
+            run_res = (
+                db.table("indexing_runs")
+                .select("upload_type, access_level")
+                .eq("id", str(index_run_id))
+                .limit(1)
+                .execute()
+            )
+            if (
+                not run_res.data
+                or run_res.data[0].get("upload_type") != "email"
+                or run_res.data[0].get("access_level") != "public"
+            ):
                 raise AppError(
                     "Access denied: Authentication required",
                     error_code=ErrorCode.ACCESS_DENIED,
                     request_id=get_request_id(),
                 )
-            
+
             # Verify document is linked to the run
             j = (
                 db.table("indexing_run_documents")
@@ -730,7 +779,7 @@ async def get_document_pdf(
                     error_code=ErrorCode.NOT_FOUND,
                     request_id=get_request_id(),
                 )
-            
+
             # Get document details
             doc_result = (
                 db.table("documents")
@@ -739,16 +788,16 @@ async def get_document_pdf(
                 .limit(1)
                 .execute()
             )
-            
+
             if not doc_result.data:
                 raise AppError(
                     "Document not found",
                     error_code=ErrorCode.NOT_FOUND,
                     request_id=get_request_id(),
                 )
-            
+
             doc = doc_result.data[0]
-            
+
             # Double-check document access level
             if doc.get("access_level") != "public":
                 raise AppError(
@@ -756,7 +805,7 @@ async def get_document_pdf(
                     error_code=ErrorCode.ACCESS_DENIED,
                     request_id=get_request_id(),
                 )
-        
+
         else:
             raise ValidationError(
                 "Invalid parameters",
@@ -770,14 +819,14 @@ async def get_document_pdf(
                 },
                 request_id=get_request_id(),
             )
-        
+
         # Generate storage path based on document type and location
         # For email uploads: email-uploads/index-runs/{index_run_id}/pdfs/{filename}
         # For project uploads: users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}
-        
+
         filename = doc.get("filename")
         doc_index_run_id = doc.get("index_run_id")
-        
+
         if not filename:
             logger.error(f"No filename found for document {document_id}")
             raise AppError(
@@ -786,20 +835,14 @@ async def get_document_pdf(
                 details={"reason": "No filename for document", "document_id": str(document_id)},
                 request_id=get_request_id(),
             )
-            
+
         # Construct storage path based on document type and origin
         # Handle converted projects: upload_type='email' but files remain in users/ path
         if doc.get("project_id") and doc.get("upload_type") == "email":
             # Converted project - files remain in original users/ path
             # Need to get the original user_id for the project
             db = get_supabase_admin_client()
-            proj_result = (
-                db.table("projects")
-                .select("user_id")
-                .eq("id", doc["project_id"])
-                .limit(1)
-                .execute()
-            )
+            proj_result = db.table("projects").select("user_id").eq("id", doc["project_id"]).limit(1).execute()
             if proj_result.data:
                 project_owner_id = proj_result.data[0]["user_id"]
                 storage_path = f"users/{project_owner_id}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
@@ -809,26 +852,28 @@ async def get_document_pdf(
                 storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
         elif current_user and doc.get("project_id"):
             # Authenticated user with private project
-            storage_path = f"users/{current_user['id']}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
+            storage_path = (
+                f"users/{current_user['id']}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
+            )
         else:
             # Original email upload - use email-uploads path
             run_id = index_run_id if index_run_id else doc_index_run_id
             storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
-        
+
         logger.info(f"Generating signed URL for document {document_id} with path: {storage_path}")
-        
+
         # Use admin client to create signed URL
         admin_db = get_supabase_admin_client()
-        
+
         # Generate a signed URL valid for 1 hour
         try:
             response = admin_db.storage.from_("pipeline-assets").create_signed_url(
                 path=storage_path,
-                expires_in=3600  # 1 hour
+                expires_in=3600,  # 1 hour
             )
-            
+
             logger.info(f"Supabase storage response: {response}")
-            
+
             if not response or "signedURL" not in response:
                 logger.error(f"Invalid response from Supabase storage: {response}")
                 raise AppError(
@@ -837,12 +882,8 @@ async def get_document_pdf(
                     details={"reason": "Could not create signed URL", "storage_path": storage_path},
                     request_id=get_request_id(),
                 )
-            
-            return {
-                "url": response["signedURL"],
-                "filename": doc.get("filename", "document.pdf"),
-                "expires_in": 3600
-            }
+
+            return {"url": response["signedURL"], "filename": doc.get("filename", "document.pdf"), "expires_in": 3600}
         except Exception as storage_error:
             logger.error(f"Storage error for document {document_id}: {storage_error}")
             raise AppError(
@@ -851,7 +892,7 @@ async def get_document_pdf(
                 details={"reason": str(storage_error), "storage_path": storage_path},
                 request_id=get_request_id(),
             ) from storage_error
-        
+
     except (AppError, ValidationError):
         raise
     except Exception as e:  # noqa: BLE001
@@ -891,10 +932,7 @@ async def process_upload_async(
             # Fallback: get document IDs from indexing run
             db = get_supabase_admin_client()
             docs_result = (
-                db.table("indexing_run_documents")
-                .select("document_id")
-                .eq("indexing_run_id", index_run_id)
-                .execute()
+                db.table("indexing_run_documents").select("document_id").eq("indexing_run_id", index_run_id).execute()
             )
             document_ids = [doc["document_id"] for doc in (docs_result.data or [])]
 
@@ -911,7 +949,7 @@ async def process_upload_async(
             )
 
             if beam_result["status"] == "triggered":
-                logger.info(f"Beam task triggered successfully: {beam_result['task_id']}")
+                logger.info(f"(documents.py) - Beam task triggered successfully: {beam_result['task_id']}")
             else:
                 logger.error(f"Failed to trigger Beam task: {beam_result}")
 

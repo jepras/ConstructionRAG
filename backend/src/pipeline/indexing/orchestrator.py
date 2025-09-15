@@ -127,17 +127,93 @@ class IndexingOrchestrator:
 
         self.steps = []
 
-    async def initialize_steps(self, user_id: Optional[UUID] = None):
+    async def initialize_steps(self, user_id: Optional[UUID] = None, indexing_run_id: Optional[UUID] = None):
         """Initialize pipeline steps with configuration"""
         try:
-            # Load configuration (SoT overrides enforced in ConfigManager)
+            # CRITICAL: If we have an indexing run ID, use the stored config instead of ConfigManager
+            if indexing_run_id and self.db:
+                logger.info(f"🔄 Attempting to load stored config for run {indexing_run_id}")
+                run_result = self.db.table("indexing_runs").select("pipeline_config").eq("id", str(indexing_run_id)).execute()
+                logger.info(f"🔍 Config query result: {run_result}")
+                
+                if run_result.data and run_result.data[0].get("pipeline_config"):
+                    stored_config = run_result.data[0]["pipeline_config"]
+                    language = stored_config.get("defaults", {}).get("language", "english")
+                    logger.info(f"✅ Using stored config with language: {language}")
+                    
+                    # Use stored config directly instead of ConfigManager
+                    indexing_config = stored_config.get("indexing", {})
+                    
+                    # Initialize steps with stored config
+                    partition_config = indexing_config.get("partition", {})
+                    partition_config["language"] = language
+                    
+                    self.partition_step = PartitionStep(
+                        config=partition_config,
+                        storage_client=self.storage,
+                        progress_tracker=self.progress_tracker,
+                        storage_service=self.storage_service,
+                    )
+                    
+                    # Initialize other steps with stored config
+                    metadata_config = indexing_config.get("metadata", {})
+                    self.metadata_step = MetadataStep(
+                        config=metadata_config,
+                        storage_client=self.storage,
+                        progress_tracker=self.progress_tracker,
+                        storage_service=self.storage_service,
+                    )
+                    
+                    enrichment_config = indexing_config.get("enrichment", {})
+                    self.enrichment_step = EnrichmentStep(
+                        config=enrichment_config,
+                        storage_client=self.storage,
+                        progress_tracker=self.progress_tracker,
+                        storage_service=self.storage_service,
+                    )
+                    
+                    chunking_config = indexing_config.get("chunking", {})
+                    self.chunking_step = ChunkingStep(
+                        config=chunking_config,
+                        storage_client=self.storage,
+                        progress_tracker=self.progress_tracker,
+                        db=self.db,
+                        pipeline_service=self.pipeline_service,
+                        storage_service=self.storage_service,
+                    )
+                    
+                    embedding_config = indexing_config.get("embedding", {})
+                    self.embedding_step = EmbeddingStep(
+                        config=embedding_config,
+                        progress_tracker=self.progress_tracker,
+                        db=self.db,
+                        pipeline_service=self.pipeline_service,
+                        storage_service=self.storage_service,
+                    )
+                    
+                    self.steps = [
+                        self.partition_step,
+                        self.metadata_step,
+                        self.enrichment_step,
+                        self.chunking_step,
+                        self.embedding_step,
+                    ]
+                    
+                    logger.info(f"✅ Initialized steps with stored config (language: {language})")
+                    return
+                else:
+                    logger.warning(f"❌ No stored config found, falling back to ConfigManager")
+            
+            # Fallback to ConfigManager (original logic)
             if not self.config_manager:
                 raise ValueError("Config manager is None - cannot initialize steps")
 
             config = await self.config_manager.get_indexing_config(user_id)
+            language = "english"  # default fallback
 
-            # Initialize real partition step
+            # Initialize real partition step with language
             partition_config = config.steps.get("partition", {})
+            partition_config["language"] = language  # Inject language into step config
             self.partition_step = PartitionStep(
                 config=partition_config,
                 storage_client=self.storage,
@@ -247,10 +323,6 @@ class IndexingOrchestrator:
         """Process a single document through all indexing steps sequentially"""
         indexing_run = None
         try:
-            # Initialize steps if not already done
-            if not self.steps:
-                await self.initialize_steps(document_input.user_id)
-
             # Create or get indexing run in database
             if existing_indexing_run_id:
                 indexing_run = await self.pipeline_service.get_indexing_run(
@@ -267,6 +339,10 @@ class IndexingOrchestrator:
                     user_id=document_input.user_id,
                     project_id=document_input.project_id,
                 )
+
+            # Initialize steps if not already done (after we have indexing_run)
+            if not self.steps:
+                await self.initialize_steps(document_input.user_id, indexing_run.id)
 
             # Link document to indexing run
             if document_input.document_id:
@@ -286,9 +362,19 @@ class IndexingOrchestrator:
                 index_run_id=indexing_run.id,
             )
 
-            # Store the configuration used for this run (effective indexing config)
-            effective = ConfigService().get_effective_config("indexing")
-            await self.config_manager.store_run_config(indexing_run.id, effective)
+            # Fetch the stored pipeline_config from the indexing run (already stored by upload API)
+            run_result = self.db.table("indexing_runs").select("pipeline_config").eq("id", str(indexing_run.id)).execute()
+            logger.info(f"🔍 Database query result for run {indexing_run.id}: {run_result}")
+            
+            if run_result.data and run_result.data[0].get("pipeline_config"):
+                stored_config = run_result.data[0]["pipeline_config"]
+                language = stored_config.get("defaults", {}).get("language", "unknown")
+                logger.info(f"🌐 Found stored config with language: {language}")
+                logger.info(f"🔧 Stored config structure: {list(stored_config.keys()) if stored_config else 'None'}")
+                # Config already stored by upload API - no need to store again
+            else:
+                logger.warning(f"❌ No stored config found for run {indexing_run.id}. Query returned: {run_result.data}")
+                logger.warning(f"This should not happen for new uploads")
 
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(
@@ -422,10 +508,6 @@ class IndexingOrchestrator:
 
         indexing_run = None
         try:
-            # Initialize steps if not already done
-            if not self.steps:
-                await self.initialize_steps(document_inputs[0].user_id)
-
             # Create or get indexing run in database
             if existing_indexing_run_id:
                 indexing_run = await self.pipeline_service.get_indexing_run(
@@ -442,6 +524,10 @@ class IndexingOrchestrator:
                     user_id=document_inputs[0].user_id,
                     project_id=document_inputs[0].project_id,
                 )
+
+            # Initialize steps if not already done (after we have indexing_run)
+            if not self.steps:
+                await self.initialize_steps(document_inputs[0].user_id, indexing_run.id)
 
             # Link all documents to indexing run
             for doc_input in document_inputs:
@@ -461,9 +547,15 @@ class IndexingOrchestrator:
                 index_run_id=indexing_run.id,
             )
 
-            # Store the configuration used for this run (effective indexing config)
-            effective = ConfigService().get_effective_config("indexing")
-            await self.config_manager.store_run_config(indexing_run.id, effective)
+            # Fetch the stored pipeline_config from the indexing run (already stored by upload API)
+            run_result = self.db.table("indexing_runs").select("pipeline_config").eq("id", str(indexing_run.id)).execute()
+            if run_result.data and run_result.data[0].get("pipeline_config"):
+                stored_config = run_result.data[0]["pipeline_config"]
+                language = stored_config.get("defaults", {}).get("language", "unknown")
+                logger.info(f"🌐 Using stored config with language: {language}")
+                # Config already stored by upload API - no need to store again
+            else:
+                logger.warning(f"No stored config found for run {indexing_run.id}, this should not happen for new uploads")
 
             # Update status to running
             await self.pipeline_service.update_indexing_run_status(

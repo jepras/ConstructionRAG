@@ -52,11 +52,11 @@ class BeamService:
                 payload["user_id"] = user_id
             if project_id:
                 payload["project_id"] = project_id
-            
+
             # Add webhook URL and API key for wiki generation
             backend_url = os.getenv("BACKEND_API_URL")
             webhook_api_key = os.getenv("BEAM_WEBHOOK_API_KEY")
-            
+
             if backend_url and webhook_api_key:
                 payload["webhook_url"] = f"{backend_url}/api/wiki/internal/webhook"
                 payload["webhook_api_key"] = webhook_api_key
@@ -83,16 +83,14 @@ class BeamService:
                 if response.status_code == 200:
                     result = response.json()
                     task_id = result.get("task_id")
-                    logger.info(f"Beam task triggered successfully: {task_id}")
+                    logger.info(f"(beam service) - Beam task triggered successfully: {task_id}")
                     return {
                         "status": "triggered",
                         "task_id": task_id,
                         "beam_url": self.beam_url,
                     }
                 else:
-                    logger.error(
-                        f"Beam API error: {response.status_code} - {response.text}"
-                    )
+                    logger.error(f"Beam API error: {response.status_code} - {response.text}")
                     return {
                         "status": "error",
                         "error": f"Beam API error: {response.status_code}",

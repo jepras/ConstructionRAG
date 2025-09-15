@@ -122,7 +122,9 @@ class ConfigService:
                 with self.config_path.open("r", encoding="utf-8") as f:
                     self._raw_config = json.load(f)
                 self._mtime = stat.st_mtime
-                logger.info("config_loaded_successfully", extra={"config_path": str(self.config_path)})
+                # Only log config loading in non-development to reduce startup noise
+                if os.environ.get("ENVIRONMENT") != "development":
+                    logger.info("config_loaded_successfully", extra={"config_path": str(self.config_path)})
             except json.JSONDecodeError as e:
                 logger.error("config_invalid_json", extra={"config_path": str(self.config_path), "error": str(e)})
                 raise ConfigServiceError(

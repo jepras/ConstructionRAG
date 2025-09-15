@@ -55,4 +55,9 @@ notebooks/
 # Data
 data/
 chroma_db/
-documents/ 
+documents/
+
+# Logs and temporary files that cause unnecessary rebuilds
+*.log
+*.tmp
+.tmp/ 

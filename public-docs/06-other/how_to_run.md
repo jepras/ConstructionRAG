@@ -107,3 +107,12 @@ curl -X POST "http://localhost:8000/api/wiki/runs?index_run_id=b1aa2098-d307-4cb
       dGEiOnsiZW1haWwiOiJqZXByYXNoZXJAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiYTRiZTkzNWQtZGQxNy00ZGIyLWFhNGUtYjQ5O
       DkyNzdiYjFhIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3NTY5OTUxOTJ9XSwic2Vzc2lvbl9pZCI6Im
       VlYzAxYzIwLTJlNWEtNDBiOC04NzkzLTQzN2I5MzlmYTM3YiIsImlzX2Fub255bW91cyI6ZmFsc2V9.j0G_La0MTX2uz0PcaS7dA-tPAUHPoezMjYMVLZiFUsY")
+
+
+curl -X POST "https://localhost:8000/api/uploads" \
+    -H "Content-Type: multipart/form-data" \
+    -F "files=@/Users/jepperasmussen/workspace/github.com/jepras/ConstructionRAG/data/external/construction_pdfs/smallest-doc.pdf" \
+    -F "email=test-config-flow@example.com"
+
+    
+curl -X POST "http://localhost:8000/api/wiki/runs?index_run_id=33ad4089-99cc-43de-a646-7c6d7ddd99c7"

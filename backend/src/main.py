@@ -59,6 +59,16 @@ app.add_exception_handler(Exception, general_exception_handler)
 @app.on_event("startup")
 async def validate_startup_config() -> None:
     """Fail-fast validation for config and critical environment."""
+    # Skip expensive validation in development for faster reloads
+    if settings.environment == "development":
+        import logging
+        logger = logging.getLogger("uvicorn.error")
+        logger.info("🚀 ConstructionRAG API is ready!")
+        logger.info("📍 API available at: http://localhost:8000")
+        logger.info("📚 Docs available at: http://localhost:8000/docs") 
+        logger.info("✅ Health check: http://localhost:8000/health")
+        return
+        
     from src.services.config_service import ConfigService
 
     cfg = ConfigService()

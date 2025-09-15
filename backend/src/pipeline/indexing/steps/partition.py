@@ -58,7 +58,10 @@ class PartitionStep(PipelineStep):
         self.extract_tables = config.get("extract_tables", True)
         self.extract_images = config.get("extract_images", True)
         self.max_image_size_mb = config.get("max_image_size_mb", 10)
-        self.ocr_languages = config.get("ocr_languages", ["dan"])
+        
+        # Get language from config and map to OCR languages
+        language = config.get("language", "english")  # From defaults.language
+        self.ocr_languages = self._get_ocr_languages(language)
         self.include_coordinates = config.get("include_coordinates", True)
 
         # Table validation configuration
@@ -81,6 +84,17 @@ class PartitionStep(PipelineStep):
         self.images_dir.mkdir(exist_ok=True)
 
         logger.info(f"PartitionStep initialized with temp dir: {self.temp_dir}")
+
+    def _get_ocr_languages(self, language: str) -> list[str]:
+        """Map language setting to OCR language codes."""
+        ocr_mapping = {
+            "english": ["eng"],
+            "danish": ["dan"],
+            "multilingual": ["eng", "dan"]  # Support both if needed
+        }
+        mapped_languages = ocr_mapping.get(language, ["eng"])
+        logger.info(f"🌐 Mapped language '{language}' to OCR languages: {mapped_languages}")
+        return mapped_languages
 
     def _detect_document_type(self, filepath: str) -> Dict[str, Any]:
         """Detect if document is scanned using fast PyMuPDF analysis"""
