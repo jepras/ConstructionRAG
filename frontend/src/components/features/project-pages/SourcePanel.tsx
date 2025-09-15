@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FileText, Maximize2, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FileText, Maximize2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchResult } from '@/lib/api-client';
 import { PDFPageViewer, PDFFullViewer } from './PDFViewerWrapper';
 import { deduplicateBboxHighlights } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
 interface SourcePanelProps {
   selectedSource?: SearchResult;
@@ -24,18 +25,35 @@ export default function SourcePanel({
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [showFullViewer, setShowFullViewer] = useState(false);
+  const [pdfViewerKey, setPdfViewerKey] = useState(0);
   
   // Cache PDF URLs to avoid refetching
   const [pdfUrlCache, setPdfUrlCache] = useState<Map<string, string>>(new Map());
+  
+  // Debounce timer ref
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingAbortControllerRef = useRef<AbortController | null>(null);
 
-  // Load PDF URL when source changes
+  // Load PDF URL when source changes with debouncing
   useEffect(() => {
+    // Clear any existing debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Abort any in-flight PDF loading
+    if (loadingAbortControllerRef.current) {
+      loadingAbortControllerRef.current.abort();
+    }
+
     const currentDocId = selectedSource?.metadata?.document_id || selectedSource?.document_id;
     const previousDocId = pdfUrl ? 'has-url' : 'no-url';
     
 
     if (selectedSource?.metadata?.document_id || selectedSource?.document_id) {
-      const loadPdfUrl = async () => {
+      // Debounce the PDF loading by 300ms
+      debounceTimerRef.current = setTimeout(() => {
+        const loadPdfUrl = async () => {
         const documentId = selectedSource.metadata?.document_id || selectedSource.document_id;
         if (!documentId) {
           setPdfError('No document ID found');
@@ -49,8 +67,14 @@ export default function SourcePanel({
         if (pdfUrlCache.has(cacheKey)) {
           const cachedUrl = pdfUrlCache.get(cacheKey)!;
           setPdfUrl(cachedUrl);
+          // Force re-render of PDF viewer with new key
+          setPdfViewerKey(prev => prev + 1);
           return;
         }
+
+        // Create new abort controller for this request
+        const abortController = new AbortController();
+        loadingAbortControllerRef.current = abortController;
 
         const apiStartTime = performance.now();
         setLoadingPdf(true);
@@ -72,6 +96,7 @@ export default function SourcePanel({
               'Content-Type': 'application/json',
             },
             credentials: 'include',
+            signal: abortController.signal,
           });
 
 
@@ -90,19 +115,39 @@ export default function SourcePanel({
           // Cache the URL
           setPdfUrlCache(prev => new Map(prev.set(cacheKey, data.url)));
           setPdfUrl(data.url);
-        } catch (error) {
+          // Force re-render of PDF viewer with new key
+          setPdfViewerKey(prev => prev + 1);
+        } catch (error: any) {
+          // Ignore abort errors
+          if (error?.name === 'AbortError') {
+            console.log('SourcePanel: PDF loading was aborted');
+            return;
+          }
           console.error('SourcePanel: Error loading PDF:', error);
           setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
         } finally {
           setLoadingPdf(false);
+          loadingAbortControllerRef.current = null;
         }
       };
 
       loadPdfUrl();
+      }, 300); // 300ms debounce delay
     } else {
       console.log('SourcePanel: No source selected or no document ID');
       setPdfUrl(null);
+      setPdfViewerKey(prev => prev + 1);
     }
+    
+    // Cleanup function
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      if (loadingAbortControllerRef.current) {
+        loadingAbortControllerRef.current.abort();
+      }
+    };
   }, [selectedSource, indexingRunId]);
 
   // Prepare highlights for all sources on the same page and document as the selected source
@@ -120,9 +165,9 @@ export default function SourcePanel({
             bbox: source?.bbox || source?.metadata?.bbox,
             chunk_id: source?.chunk_id,
           }))
-          .filter((h): h is { bbox: number[]; chunk_id?: string } => {
+          .filter((h) => {
             return h?.bbox !== undefined && Array.isArray(h.bbox) && h.bbox.length === 4;
-          });
+          }) as Array<{ bbox: number[]; chunk_id?: string }>;
         
         // Apply deduplication to remove overlapping/identical bboxes
         return deduplicateBboxHighlights(rawHighlights, 0.8, 1);
@@ -256,16 +301,45 @@ export default function SourcePanel({
                     </div>
                   </div>
                 ) : pdfUrl ? (
-                  <PDFPageViewer
-                    key={`${selectedSource.metadata?.document_id || selectedSource.document_id}-${selectedSource.page_number || selectedSource.metadata?.page_number || 1}`}
-                    pdfUrl={pdfUrl}
-                    pageNumber={selectedSource.page_number || selectedSource.metadata?.page_number || 1}
-                    highlights={currentHighlights}
-                    selectedChunkId={selectedSource.chunk_id}
-                    scale={1.2}
-                    onPageClick={() => setShowFullViewer(true)}
-                    className="h-full"
-                  />
+                  <ErrorBoundary
+                    fallback={({ error, retry }) => (
+                      <div className="h-full flex items-center justify-center p-6">
+                        <div className="text-center">
+                          <div className="mb-4">
+                            <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
+                          </div>
+                          <p className="text-sm text-destructive mb-2">PDF viewer error</p>
+                          <p className="text-xs text-muted-foreground mb-4">
+                            {error?.message || 'The PDF viewer encountered an error'}
+                          </p>
+                          <Button 
+                            onClick={() => {
+                              setPdfViewerKey(prev => prev + 1);
+                              retry?.();
+                            }}
+                            size="sm"
+                            variant="outline"
+                            className="gap-2"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Retry
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    key={pdfViewerKey}
+                  >
+                    <PDFPageViewer
+                      key={`${pdfUrl}-${pdfViewerKey}`}
+                      pdfUrl={pdfUrl}
+                      pageNumber={selectedSource.page_number || selectedSource.metadata?.page_number || 1}
+                      highlights={currentHighlights}
+                      selectedChunkId={selectedSource.chunk_id}
+                      scale={1.2}
+                      onPageClick={() => setShowFullViewer(true)}
+                      className="h-full"
+                    />
+                  </ErrorBoundary>
                 ) : (
                   <div className="h-full flex items-center justify-center p-6">
                     <div className="text-center">

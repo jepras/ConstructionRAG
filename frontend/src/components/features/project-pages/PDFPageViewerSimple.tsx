@@ -1,14 +1,19 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Set up the worker for react-pdf
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Set up the worker for react-pdf with error handling
+try {
+  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+} catch (error) {
+  console.error('Failed to set PDF.js worker:', error);
+}
 
 interface PDFPageViewerProps {
   pdfUrl: string;
@@ -35,15 +40,41 @@ export default function PDFPageViewerSimple({
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageLoadError, setPageLoadError] = useState<string | null>(null);
   const [documentLoadError, setDocumentLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [documentLoaded, setDocumentLoaded] = useState(false);
+  
+  // Reset errors and loading state when URL changes
+  useEffect(() => {
+    setDocumentLoadError(null);
+    setPageLoadError(null);
+    setRetryCount(0);
+    setDocumentLoaded(false);
+    setNumPages(null);
+  }, [pdfUrl]);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
     setDocumentLoadError(null);
+    setDocumentLoaded(true);
   }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('PDFPageViewerSimple: Failed to load document:', error);
-    setDocumentLoadError(error.message || 'Failed to load PDF');
+    
+    // Check for specific worker-related errors
+    const errorMessage = error.message || 'Failed to load PDF';
+    const isWorkerError = errorMessage.includes('messageHandler') || 
+                         errorMessage.includes('sendWithPromise') ||
+                         errorMessage.includes('Worker') ||
+                         errorMessage.includes('worker');
+    
+    if (isWorkerError) {
+      setDocumentLoadError('PDF viewer initialization error. Please retry.');
+      console.warn('Worker-related error detected, may need retry');
+    } else {
+      setDocumentLoadError(errorMessage);
+    }
   }, []);
 
   const onPageLoadSuccess = useCallback((page: any) => {
@@ -52,8 +83,36 @@ export default function PDFPageViewerSimple({
 
   const onPageLoadError = useCallback((error: Error) => {
     console.error('PDFPageViewerSimple: Failed to load page:', error);
-    setPageLoadError(error.message || 'Failed to load page');
+    
+    // Check for worker errors at page level too
+    const errorMessage = error.message || 'Failed to load page';
+    const isWorkerError = errorMessage.includes('messageHandler') || 
+                         errorMessage.includes('sendWithPromise');
+                         
+    if (isWorkerError) {
+      setPageLoadError('Page rendering error. Please retry.');
+    } else {
+      setPageLoadError(errorMessage);
+    }
   }, []);
+  
+  // Retry handler with exponential backoff
+  const handleRetry = useCallback(() => {
+    setIsRetrying(true);
+    setDocumentLoadError(null);
+    setPageLoadError(null);
+    setDocumentLoaded(false);
+    
+    // Use exponential backoff: 100ms, 200ms, 400ms, etc.
+    const delay = Math.min(100 * Math.pow(2, retryCount), 2000);
+    
+    setTimeout(() => {
+      setRetryCount(prev => prev + 1);
+      setIsRetrying(false);
+      // Force re-render by updating a key (handled by parent component)
+      window.location.reload(); // Last resort if component doesn't remount
+    }, delay);
+  }, [retryCount]);
 
   // Custom text renderer to add highlights
   const textRenderer = useCallback(
@@ -86,6 +145,7 @@ export default function PDFPageViewerSimple({
   return (
     <div className={cn('relative overflow-auto bg-gray-50', className)}>
       <Document
+        key={`${pdfUrl}-${retryCount}`}
         file={pdfUrl}
         onLoadSuccess={onDocumentLoadSuccess}
         onLoadError={onDocumentLoadError}
@@ -103,7 +163,27 @@ export default function PDFPageViewerSimple({
         error={
           <div className="flex flex-col items-center justify-center p-8">
             <AlertCircle className="h-8 w-8 text-destructive mb-2" />
-            <p className="text-sm text-destructive">{documentLoadError || 'Failed to load PDF'}</p>
+            <p className="text-sm text-destructive mb-2">{documentLoadError || 'Failed to load PDF'}</p>
+            {retryCount < 3 && (
+              <Button 
+                onClick={handleRetry}
+                disabled={isRetrying}
+                size="sm"
+                variant="outline"
+                className="gap-2"
+              >
+                {isRetrying ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Retrying...</>
+                ) : (
+                  <><RefreshCw className="h-3 w-3" /> Retry</>
+                )}
+              </Button>
+            )}
+            {retryCount >= 3 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Please refresh the page if the problem persists
+              </p>
+            )}
           </div>
         }
         options={documentOptions}
@@ -113,29 +193,47 @@ export default function PDFPageViewerSimple({
           onClick={onPageClick}
           style={{ cursor: onPageClick ? 'pointer' : 'default' }}
         >
-          <Page
-            pageNumber={pageNumber}
-            scale={scale}
-            onLoadSuccess={onPageLoadSuccess}
-            onLoadError={onPageLoadError}
-            onRenderSuccess={() => {
-              // Track when page rendering starts
-              (window as any).pageRenderStartTime = performance.now();
-            }}
-            renderTextLayer={true}
-            renderAnnotationLayer={false}
-            customTextRenderer={textRenderer}
-            className="shadow-lg"
-            error={
-              <div className="flex flex-col items-center justify-center p-8 bg-white rounded shadow">
-                <AlertCircle className="h-8 w-8 text-destructive mb-2" />
-                <p className="text-sm text-destructive">{pageLoadError || 'Failed to load page'}</p>
-              </div>
-            }
-          />
+          {/* Only render Page component when document is loaded and page number is valid */}
+          {documentLoaded && numPages && pageNumber >= 1 && pageNumber <= numPages ? (
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              onLoadSuccess={onPageLoadSuccess}
+              onLoadError={onPageLoadError}
+              onRenderSuccess={() => {
+                // Track when page rendering starts
+                (window as any).pageRenderStartTime = performance.now();
+              }}
+              renderTextLayer={true}
+              renderAnnotationLayer={false}
+              customTextRenderer={textRenderer}
+              className="shadow-lg"
+              error={
+                <div className="flex flex-col items-center justify-center p-8 bg-white rounded shadow">
+                  <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+                  <p className="text-sm text-destructive">{pageLoadError || 'Failed to load page'}</p>
+                </div>
+              }
+            />
+          ) : documentLoaded && numPages && (pageNumber < 1 || pageNumber > numPages) ? (
+            // Show error if page number is out of range
+            <div className="flex flex-col items-center justify-center p-8 bg-white rounded shadow">
+              <AlertCircle className="h-8 w-8 text-warning mb-2" />
+              <p className="text-sm text-foreground">Page {pageNumber} not found</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                This document has {numPages} page{numPages > 1 ? 's' : ''}
+              </p>
+            </div>
+          ) : (
+            // Show loading while document is loading
+            <div className="flex items-center justify-center p-8 bg-white rounded shadow">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading page...</span>
+            </div>
+          )}
           
-          {/* Overlay for highlights */}
-          {highlights && highlights.length > 0 && (
+          {/* Overlay for highlights - only show when document and page are loaded */}
+          {documentLoaded && numPages && pageNumber >= 1 && pageNumber <= numPages && highlights && highlights.length > 0 && (
             <svg
               className="absolute inset-0 pointer-events-none"
               style={{
