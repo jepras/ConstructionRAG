@@ -100,6 +100,17 @@ class WikiGenerationOrchestrator:
             logger.info(f"🔄 Wiki: Fetching stored config for indexing run {index_run_id}")
             run_result = self.supabase.table("indexing_runs").select("pipeline_config").eq("id", str(index_run_id)).execute()
             
+            # 🆕 ENHANCED DEBUGGING
+            logger.info(f"📊 Wiki: Database query result - data count: {len(run_result.data) if run_result.data else 0}")
+            if run_result.data:
+                first_row = run_result.data[0]
+                has_pipeline_config = first_row.get("pipeline_config") is not None
+                pipeline_config_type = type(first_row.get("pipeline_config", None)).__name__
+                logger.info(f"📊 Wiki: First row has pipeline_config: {has_pipeline_config}, type: {pipeline_config_type}")
+                if has_pipeline_config:
+                    stored_config = first_row["pipeline_config"]
+                    logger.info(f"📊 Wiki: Stored config keys: {list(stored_config.keys()) if isinstance(stored_config, dict) else 'Not a dict'}")
+            
             if run_result.data and run_result.data[0].get("pipeline_config"):
                 stored_config = run_result.data[0]["pipeline_config"]
                 logger.info(f"✅ Wiki: Retrieved stored config with {len(stored_config)} sections")
@@ -113,7 +124,14 @@ class WikiGenerationOrchestrator:
                 language = stored_config.get("defaults", {}).get("language", "unknown")
                 logger.info(f"🌐 Wiki generation using language: {language}")
             else:
-                logger.warning(f"No stored config found for indexing run {index_run_id}, using default config")
+                logger.warning(f"❌ Wiki: No stored config found for indexing run {index_run_id}, using default config")
+                logger.warning(f"❌ Wiki: This means language will default to 'english' instead of user's choice")
+                # 🆕 Force language to english as fallback since we can't get stored config
+                if hasattr(self, 'config') and isinstance(self.config, dict):
+                    if "defaults" not in self.config:
+                        self.config["defaults"] = {}
+                    self.config["defaults"]["language"] = "english"
+                    logger.info(f"⚠️ Wiki: Forced language to 'english' due to missing stored config")
 
             # Convert string to enum if needed
             if isinstance(upload_type, str):
