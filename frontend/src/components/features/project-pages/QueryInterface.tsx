@@ -245,14 +245,7 @@ export default function QueryInterface({
         )}
         <div ref={messagesEndRef} />
         
-        {/* Language disclaimer - only show on start page */}
-        {messages.length === 0 && (
-          <div className="text-center px-6 pb-4">
-            <div className="inline-block px-4 py-2 bg-primary/5 border border-primary/20 rounded-lg text-muted-foreground text-sm">
-              kun dansk virker pt.
-            </div>
-          </div>
-        )}
+        
       </div>
 
       {/* Input Area */}

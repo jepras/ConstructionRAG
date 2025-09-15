@@ -14,6 +14,7 @@ Usage:
     python operations/admin_cleanup_v2.py --dry-run  # Preview what would be deleted
     python operations/admin_cleanup_v2.py --confirm   # Execute actual deletions
     python operations/admin_cleanup_v2.py --oldest 4 --confirm  # Delete oldest x runs
+    python operations/admin_cleanup_v2.py --newest 3 --confirm  # Delete newest x runs
 """
 
 import asyncio
@@ -132,6 +133,22 @@ class AdminCleanup:
             return result.data
         except Exception as e:
             logger.error(f"Failed to get oldest indexing runs: {e}")
+            return []
+
+    async def get_newest_indexing_runs(self, limit: int) -> list[dict[str, Any]]:
+        """Get the newest indexing runs."""
+        try:
+            result = (
+                self.supabase.table("indexing_runs")
+                .select("id, upload_type, user_id, project_id, started_at")
+                .order("started_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+
+            return result.data
+        except Exception as e:
+            logger.error(f"Failed to get newest indexing runs: {e}")
             return []
 
     async def get_indexing_run_details(self, run_id: UUID) -> dict[str, Any] | None:
@@ -642,7 +659,7 @@ class AdminCleanup:
         logger.info(f"Found {len(oldest_runs)} runs to process")
 
         # Show preview
-        logger.info("Runs to be deleted:")
+        logger.info("Oldest runs to be deleted:")
         for i, run in enumerate(oldest_runs):
             logger.info(f"  {i + 1}. {run['id']} (started: {run['started_at']}, type: {run['upload_type']})")
 
@@ -659,6 +676,36 @@ class AdminCleanup:
 
         logger.info(f"Processed {success_count}/{len(oldest_runs)} runs successfully")
         return success_count == len(oldest_runs)
+
+    async def cleanup_newest_runs(self, count: int) -> bool:
+        """Clean up the newest N indexing runs."""
+        logger.info(f"Getting newest {count} indexing runs")
+
+        newest_runs = await self.get_newest_indexing_runs(count)
+        if not newest_runs:
+            logger.info("No indexing runs found")
+            return True
+
+        logger.info(f"Found {len(newest_runs)} runs to process")
+
+        # Show preview
+        logger.info("Newest runs to be deleted:")
+        for i, run in enumerate(newest_runs):
+            logger.info(f"  {i + 1}. {run['id']} (started: {run['started_at']}, type: {run['upload_type']})")
+
+        success_count = 0
+        for run in newest_runs:
+            try:
+                run_id = UUID(run["id"])
+                success = await self.delete_indexing_run(run_id)
+                if success:
+                    success_count += 1
+            except Exception as e:
+                logger.error(f"Failed to process run {run['id']}: {e}")
+                self.stats.add_failure(f"Processing run {run['id']}", str(e))
+
+        logger.info(f"Processed {success_count}/{len(newest_runs)} runs successfully")
+        return success_count == len(newest_runs)
 
 
 def confirm_operation(operation_desc: str) -> bool:
@@ -680,8 +727,15 @@ async def main():
     )
     parser.add_argument("--confirm", action="store_true", help="Actually execute deletions (overrides --dry-run)")
     parser.add_argument("--oldest", type=int, help="Delete the oldest N indexing runs")
+    parser.add_argument("--newest", type=int, help="Delete the newest N indexing runs")
 
     args = parser.parse_args()
+
+    # Check for mutual exclusion
+    if args.oldest and args.newest:
+        print("Error: Cannot specify both --oldest and --newest at the same time.")
+        print("Choose either --oldest N or --newest N, not both.")
+        sys.exit(1)
 
     # Determine if this is a dry run
     dry_run = not args.confirm
@@ -703,6 +757,17 @@ async def main():
             return
 
         success = await cleanup.cleanup_oldest_runs(args.oldest)
+    elif args.newest:
+        operation_desc = f"delete the newest {args.newest} indexing runs and all associated data"
+        # Add extra warning for newest runs
+        if not dry_run:
+            print("\n⚠️  EXTRA WARNING: You are about to delete the NEWEST (most recent) indexing runs!")
+            print("This is potentially more disruptive than deleting old runs.")
+            if not confirm_operation(operation_desc):
+                print("Operation cancelled.")
+                return
+
+        success = await cleanup.cleanup_newest_runs(args.newest)
     else:
         operation_desc = f"delete {len(INDEXING_RUNS_TO_DELETE)} manually specified indexing runs"
         if not dry_run and INDEXING_RUNS_TO_DELETE and not confirm_operation(operation_desc):
