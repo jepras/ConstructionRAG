@@ -182,7 +182,7 @@ class QueryPipelineOrchestrator:
             },
         }
 
-    async def process_query(self, request: QueryRequest) -> QueryResponse:
+    async def process_query(self, request: QueryRequest, language: str = "english") -> QueryResponse:
         """Process a complete query through the entire pipeline"""
 
         start_time = datetime.utcnow()
@@ -199,6 +199,7 @@ class QueryPipelineOrchestrator:
         run_logger.info(f"🔍 Request user_id: {request.user_id}")
         run_logger.info(f"🔍 Request indexing_run_id: {request.indexing_run_id}")
         run_logger.info(f"🔍 Request type: {type(request)}")
+        run_logger.info(f"🌐 Query pipeline using language: {language}")
 
         try:
             # Step 1: Query Processing
@@ -239,10 +240,15 @@ class QueryPipelineOrchestrator:
             search_results = to_search_results(retrieval_result.sample_outputs)
 
             # Step 3: Response Generation
-            run_logger.info("Step 3: Generating response...")
+            run_logger.info(f"Step 3: Generating response in {language}...")
             step3_start = datetime.utcnow()
 
-            generation_result = await self.generator.execute((request.query, search_results))
+            # Create language-aware generation config
+            generation_config = GenerationConfig(**self.config["generation"])
+            generation_config.response_format["language"] = language
+            language_aware_generator = ResponseGenerator(generation_config)
+            
+            generation_result = await language_aware_generator.execute((request.query, search_results))
             if generation_result.status != "completed":
                 raise Exception(f"Generation failed: {generation_result.error_message}")
 

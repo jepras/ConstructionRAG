@@ -35,7 +35,7 @@ class GenerationConfig(BaseModel):
     response_format: Dict[str, Any] = {
         "include_citations": True,
         "include_confidence": True,
-        "language": "danish",
+        "language": "english",  # Updated default from danish to english
     }
 
 
@@ -201,34 +201,39 @@ class ResponseGenerator(PipelineStep):
         )
 
     def _create_prompt(self, query: str, context: str) -> str:
-        """Create the prompt for the LLM"""
+        """Create language-aware prompt following plan guidelines"""
+        
+        # Map language codes to full names for clearer instruction
+        language_names = {
+            "english": "English",
+            "danish": "Danish",
+        }
+        language = self.config.response_format.get("language", "english")
+        output_language = language_names.get(language, "English")
 
-        prompt = f"""Du er en ekspert på dansk byggeri og konstruktion. Du skal besvare følgende spørgsmål baseret på den kontekst du får leveret:
+        prompt = f"""You are an expert in construction and building engineering. Answer the following question based on the provided context:
 
-SPØRGSMÅL:
+QUESTION:
 {query}
 
-KONTEKST:
+CONTEXT:
 {context}
 
-Vurder baseret på spørgsmålet om du skal give et længere detaljeret svar eller et kort svar på få sætninger. 
+Assess whether to provide a detailed comprehensive answer or a brief response.
 
-VIGTIGT!
-- Hvis du ikke har fået nok kontekst til at svare på spørgsmål, så gør brugere opmærksom på dette og forsøg ikke at svar på spørgsmålet! I stedet skriv KUN: "Jeg har ikke nok informationer til at svare på dit spørgsmål"
-- Hvis du vurderer at du har et godt kort svar, så skriv kun det korte svar. 
+IMPORTANT:
+- If insufficient context, respond ONLY: "I don't have enough information to answer your question"
+- Use precise and factual information
+- Cite relevant sources using numbered references [1], [2], etc.
+- Include a "References:" section with format:
+  [1] document-name.pdf, page X
+  [2] other-document.pdf, page Y
+- Keep response under 500 words
+- Format in plain text, no markdown
 
-INSTRUKTIONER:
-- Svar på dansk
-- Vær præcis og faktuel
-- Citer relevante dele af kilderne når det er relevant - brug nummererede referencer som [1], [2] osv.
-- Tilføj en "Referencer:" sektion til sidst i dit svar med nummererede kilder i formatet:
-  [1] dokumentnavn.pdf, side X
-  [2] andet-dokument.pdf, side Y
-- Hold svaret under 500 ord
-- Lav gerne mange korte afsnit for at gøre det nemt at læse.
-- Formater dit svar i normal tekst format - ikke noget markdown.
+Output your response in {output_language}.
 
-SVAR:"""
+ANSWER:"""
 
         # Log the prompt components to see what's being sent
         logger.info(f"💬 Created prompt with {len(prompt)} characters")

@@ -128,6 +128,22 @@ class QueryService:
 
         allowed_ids = self._resolve_accessible_document_ids(user=user, indexing_run_id=indexing_run_id)
 
+        # 🆕 CRITICAL: Fetch language from stored config when indexing_run_id is provided
+        language = "english"  # default fallback
+        if indexing_run_id:
+            try:
+                self.logger.info(f"🔄 Query: Fetching stored config for indexing run {indexing_run_id}")
+                result = self.db.table("indexing_runs").select("pipeline_config").eq("id", indexing_run_id).execute()
+                
+                if result.data and result.data[0].get("pipeline_config"):
+                    pipeline_config = result.data[0]["pipeline_config"]
+                    language = pipeline_config.get("defaults", {}).get("language", "english")
+                    self.logger.info(f"✅ Query: Using language from stored config: {language}")
+                else:
+                    self.logger.warning(f"⚠️ Query: No stored config found for run {indexing_run_id}, using default: {language}")
+            except Exception as e:
+                self.logger.error(f"❌ Query: Failed to fetch stored config: {e}, using default: {language}")
+
         req = QueryRequest(
             query=query_text.strip(),
             user_id=(user["id"] if user else None),
@@ -136,7 +152,7 @@ class QueryService:
         )
 
         orch = orchestrator or QueryPipelineOrchestrator()
-        resp = await orch.process_query(req)
+        resp = await orch.process_query(req, language=language)  # 🆕 Pass language
 
         # Wrap response with minimal envelope. The orchestrator stores the run and sets access_level.
         return {
