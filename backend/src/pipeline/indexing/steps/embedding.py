@@ -202,16 +202,32 @@ class EmbeddingStep(PipelineStep):
             if not api_key:
                 raise ValueError("Voyage API key not provided in config or environment")
 
-        # Model from SoT: orchestrator provided config already includes embedding settings
-        model_name = config.get("model") or "voyage-multilingual-2"
+        # Model from config - use safe fallbacks with warnings if missing
+        model_name = config.get("model", "voyage-multilingual-2")  # Safe fallback
+        if "model" not in config:
+            logger.warning("embedding_config_missing_model", extra={"using_default": model_name})
         self.voyage_client = VoyageEmbeddingClient(api_key=api_key, model=model_name)
 
-        # Configuration
+        # Configuration - use config values with safe fallbacks
         self.batch_size = config.get("batch_size", 100)
         self.max_retries = config.get("max_retries", 3)
         self.retry_delay = config.get("retry_delay", 1.0)
         self.timeout_seconds = config.get("timeout_seconds", 30)
         self.resume_capability = config.get("resume_capability", True)
+        
+        # Warn about missing config values
+        missing_fields = [field for field in ["batch_size", "max_retries", "timeout_seconds"] if field not in config]
+        if missing_fields:
+            logger.warning("embedding_config_missing_fields", extra={"missing_fields": missing_fields})
+        
+        # Log the loaded configuration
+        logger.info("embedding_config_loaded", extra={
+            "step": "embedding",
+            "model": model_name,
+            "batch_size": self.batch_size,
+            "max_retries": self.max_retries,
+            "timeout_seconds": self.timeout_seconds
+        })
 
     async def execute(
         self, input_data: Any, indexing_run_id: UUID = None, document_id: UUID = None
