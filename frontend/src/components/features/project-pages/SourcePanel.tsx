@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FileText, Maximize2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { FileText, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchResult } from '@/lib/api-client';
 import { PDFPageViewer, PDFFullViewer } from './PDFViewerWrapper';
@@ -252,17 +252,6 @@ export default function SourcePanel({
                   <h3 className="text-sm font-semibold text-foreground truncate">
                     {selectedSource.source_filename}
                   </h3>
-                  {pdfUrl && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="p-1 ml-2"
-                      onClick={() => setShowFullViewer(true)}
-                      title="View full document"
-                    >
-                      <Maximize2 className="w-4 h-4" />
-                    </Button>
-                  )}
                 </div>
                 <div className="flex items-center gap-3 mt-1">
                   {(selectedSource.page_number || selectedSource.metadata?.page_number) && (
@@ -336,7 +325,6 @@ export default function SourcePanel({
                       highlights={currentHighlights}
                       selectedChunkId={selectedSource.chunk_id}
                       scale={1.2}
-                      onPageClick={() => setShowFullViewer(true)}
                       className="h-full"
                     />
                   </ErrorBoundary>
