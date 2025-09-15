@@ -21,7 +21,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   const [initialVersion, setInitialVersion] = useState("Initial Version")
   const [isPublic, setIsPublic] = useState(true) // Default to public for now
   const [shareWithAI, setShareWithAI] = useState(true)
-  const [language, setLanguage] = useState("Danish")
+  const [language, setLanguage] = useState("English")
   const [selectedExperts, setSelectedExperts] = useState<string[]>([])
   const [validationComplete, setValidationComplete] = useState(false)
   const [filesAreValid, setFilesAreValid] = useState(false)
@@ -101,7 +101,7 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
       initial_version_name: initialVersion,
       visibility: isPublic ? 'public' as const : 'private' as const,
       share_with_ai: shareWithAI,
-      language,
+      language: language.toLowerCase(),
       expert_modules: selectedExperts,
       files
     }
@@ -261,16 +261,21 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
           </div>
         </div>
 
-        <div className="mt-6 opacity-60 pointer-events-none">
-          <Label htmlFor="language" className="text-muted-foreground">Project Language</Label>
+        <div className="mt-6">
+          <Label htmlFor="language" className="text-foreground">Project Language</Label>
           <select
             id="language"
             value={language}
-            disabled={true}
-            className="w-full mt-1 px-3 py-2 bg-muted border border-muted rounded-lg text-muted-foreground"
+            onChange={(e) => setLanguage(e.target.value)}
+            disabled={createProjectMutation.isPending}
+            className="w-full mt-1 px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:border-primary focus:ring-1 focus:ring-primary"
           >
+            <option value="English">English</option>
             <option value="Danish">Danish</option>
           </select>
+          <p className="text-xs text-muted-foreground mt-2">
+            Choose the primary language for document processing and AI responses.
+          </p>
         </div>
       </div>
 
