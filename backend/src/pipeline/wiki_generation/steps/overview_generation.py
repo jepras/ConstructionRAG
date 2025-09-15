@@ -41,11 +41,11 @@ class OverviewGenerationStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        # Configure embedding client for queries via SoT (align with retrieval)
+        # Configure embedding client for queries from passed config (no fresh ConfigService calls)
         voyage_settings = get_settings()
-        sot_query = ConfigService().get_effective_config("query")
-        self.query_embedding_model = sot_query.get("embedding", {}).get("model", "voyage-multilingual-2")
-        self.query_embedding_dims_expected = sot_query.get("embedding", {}).get("dimensions", 1024)
+        query_config = config.get("query", config)  # Fallback to root config if no query section
+        self.query_embedding_model = query_config.get("embedding", {}).get("model", "voyage-multilingual-2")
+        self.query_embedding_dims_expected = query_config.get("embedding", {}).get("dimensions", 1024)
         try:
             self.voyage_client = VoyageEmbeddingClient(
                 api_key=voyage_settings.voyage_api_key,
@@ -56,11 +56,9 @@ class OverviewGenerationStep(PipelineStep):
             logger.warning(f"[Wiki:Overview] Failed to initialize VoyageEmbeddingClient: {e}")
             self.voyage_client = None
 
-        # Generation model from SoT wiki generation section, fallback to global default
-        wiki_cfg = ConfigService().get_effective_config("wiki")
-        defaults_cfg = ConfigService().get_effective_config("defaults")
-        global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
-        self.model = wiki_cfg.get("generation", {}).get("model", global_default_model)
+        # Use generation model from passed config (no fresh ConfigService calls)
+        generation_config = config.get("generation", {})
+        self.model = generation_config.get("model", "google/gemini-2.5-flash-lite")
         self.similarity_threshold = config.get("similarity_threshold", 0.15)
         self.max_chunks_per_query = config.get("max_chunks_per_query", 10)
         self.overview_query_count = config.get("overview_query_count", 12)
@@ -164,7 +162,7 @@ class OverviewGenerationStep(PipelineStep):
 
     def _generate_overview_queries(self, metadata: dict[str, Any]) -> list[str]:
         """Generate overview queries based on metadata - exactly matching original."""
-        language = self.config.get("language", "danish")
+        language = self.config.get("language", "english")
 
         if language == "danish":
             # Standard overview queries in Danish - exactly matching original
@@ -462,19 +460,26 @@ Indhold: {content[:800]}..."""
 
         excerpts_text = "\n".join(document_excerpts)
 
-        # Create prompt in Danish - exactly matching original
-        prompt = f"""Baseret på byggeprojektets dokumentudtog nedenfor, generer en kort 2-3 afsnit projektoversigt der dækker:
+        # Create language-aware prompt following plan guidelines
+        language = self.config.get("language", "english")
+        language_names = {
+            "english": "English",
+            "danish": "Danish",
+        }
+        output_language = language_names.get(language, "English")
+        
+        prompt = f"""Based on the construction project's document excerpts below, generate a brief 2-3 paragraph project overview that covers:
 
-1. Projektnavn, type, placering og hovedformål
-2. Projektomfang, hvad der skal bygges, installeres og leveres i projektet. Nævn hvad der er mest fokus på og hvad der er sekundære opgaver. 
-3. Hvilke faggrupper og fagområder der er mest nævnt i dokumenteret i prioriteret rækkefølge. 
+1. Project name, type, location and main purpose
+2. Project scope, what will be built, installed and delivered in the project. Mention what the main focus is and what are secondary tasks.
+3. Which trade groups and disciplines are most mentioned in the documents in prioritized order.
 
-Brug KUN information der eksplicit findes i dokumentudtragene. 
+Use ONLY information that is explicitly found in the document excerpts.
 
-Dokumentudtrag:
+Document excerpts:
 {excerpts_text}
 
-Generer projektoversigten på dansk:"""
+Output your response in {output_language}:"""
 
         return prompt
 

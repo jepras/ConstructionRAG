@@ -37,12 +37,10 @@ class MarkdownGenerationStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        wiki_cfg = ConfigService().get_effective_config("wiki")
-        gen_cfg = wiki_cfg.get("generation", {})
-        defaults_cfg = ConfigService().get_effective_config("defaults")
-        global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
-        self.model = gen_cfg.get("model", global_default_model)
-        self.language = config.get("language", "danish")
+        # Use config passed from orchestrator (no fresh ConfigService calls)
+        gen_cfg = config.get("generation", {})
+        self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
+        self.language = config.get("language", "english")  # Updated default
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
@@ -64,6 +62,14 @@ class MarkdownGenerationStep(PipelineStep):
         except Exception as e:
             logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
             raise
+
+    def _get_output_language(self) -> str:
+        """Get the output language name for prompts."""
+        language_names = {
+            "english": "English",
+            "danish": "Danish",
+        }
+        return language_names.get(self.language, "English")
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute markdown generation step."""
@@ -375,7 +381,7 @@ Based ONLY on the content of the [RELEVANT_PAGE_RETRIEVED_CHUNKS]:
 | `112727-01_K07_H1_E0_61.102` | Ground floor | Routing paths in common areas, café and multi-room. |
 
 IMPORTANT: 
-- Generate the content in Danish language.
+- Generate the content in {self._get_output_language()} language.
 - Avoid filler text. Get straight to the point. Output in a concise and accurate format. 
 - Avoid lengthy text. Prioritise bullets when possible for easy readability. 
 

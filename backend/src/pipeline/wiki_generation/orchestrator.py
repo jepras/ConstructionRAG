@@ -96,6 +96,25 @@ class WikiGenerationOrchestrator:
         try:
             logger.info(f"Starting wiki generation pipeline for index run: {index_run_id}")
 
+            # 🆕 CRITICAL: Fetch the indexing run's stored config with language
+            logger.info(f"🔄 Wiki: Fetching stored config for indexing run {index_run_id}")
+            run_result = self.supabase.table("indexing_runs").select("pipeline_config").eq("id", str(index_run_id)).execute()
+            
+            if run_result.data and run_result.data[0].get("pipeline_config"):
+                stored_config = run_result.data[0]["pipeline_config"]
+                logger.info(f"✅ Wiki: Retrieved stored config with {len(stored_config)} sections")
+                
+                # Override the fresh config with stored config (includes user's language choice)
+                self.config = stored_config
+                
+                # Re-initialize steps with the correct language config
+                self.steps = self._initialize_steps(db_client=self.supabase)
+                
+                language = stored_config.get("defaults", {}).get("language", "unknown")
+                logger.info(f"🌐 Wiki generation using language: {language}")
+            else:
+                logger.warning(f"No stored config found for indexing run {index_run_id}, using default config")
+
             # Convert string to enum if needed
             if isinstance(upload_type, str):
                 upload_type_enum = UploadType.EMAIL if upload_type == "email" else UploadType.USER_PROJECT

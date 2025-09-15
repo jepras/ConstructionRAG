@@ -198,17 +198,21 @@ class EnrichmentStep(PipelineStep):
         self.storage_client = storage_client
         self.storage_service = storage_service or StorageService()
 
-        # Extract configuration from SoT defaults if not provided
-        try:
-            from src.services.config_service import ConfigService
-
-            defaults_cfg = ConfigService().get_effective_config("defaults")
-            default_generation_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
-        except Exception:
-            default_generation_model = "google/gemini-2.5-flash-lite"
-
+        # Use config passed from orchestrator (no fresh ConfigService calls)
+        # Get generation model from config, with fallback
+        generation_config = config.get("generation", {})
+        default_generation_model = generation_config.get("model", "google/gemini-2.5-flash-lite")
+        
         self.vlm_model = config.get("vlm_model", default_generation_model)
-        self.caption_language = config.get("caption_language", "Danish")
+        
+        # Get language from config with fallback to English
+        language = config.get("language", "english")
+        # Map language to caption language
+        language_mapping = {
+            "english": "English", 
+            "danish": "Danish"
+        }
+        self.caption_language = language_mapping.get(language, "English")
         self.max_text_context_length = config.get("max_text_context_length", 1500)
         self.max_page_text_elements = config.get("max_page_text_elements", 5)
 

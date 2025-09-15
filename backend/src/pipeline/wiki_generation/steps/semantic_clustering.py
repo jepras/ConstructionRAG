@@ -56,12 +56,10 @@ class SemanticClusteringStep(PipelineStep):
             logger.error(f"Failed to load OpenRouter API key: {e}")
             raise
 
-        wiki_cfg = ConfigService().get_effective_config("wiki")
-        gen_cfg = wiki_cfg.get("generation", {})
-        defaults_cfg = ConfigService().get_effective_config("defaults")
-        global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
-        self.model = gen_cfg.get("model", global_default_model)
-        self.language = config.get("language", "danish")
+        # Use config passed from orchestrator (no fresh ConfigService calls)
+        gen_cfg = config.get("generation", {})
+        self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
+        self.language = config.get("language", "english")  # Updated default
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
 
         # Semantic clustering configuration matching original
@@ -277,27 +275,32 @@ class SemanticClusteringStep(PipelineStep):
                 }
             )
 
-        # Create prompt for LLM to generate names - exactly matching original
-        samples_text = "\n".join([f"Klynge {item['cluster_id']}: {item['sample_text']}" for item in cluster_samples])
+        # Create language-aware prompt following plan guidelines
+        samples_text = "\n".join([f"Cluster {item['cluster_id']}: {item['sample_text']}" for item in cluster_samples])
+        
+        language_names = {
+            "english": "English",
+            "danish": "Danish",
+        }
+        output_language = language_names.get(self.language, "English")
 
-        prompt = f"""Baseret på følgende dokumentindhold fra en byggeprojekt-database, generer korte, beskrivende navne for hver klynge.
+        prompt = f"""Based on the following document content from a construction project database, generate short, descriptive names for each cluster.
 
-Navnene skal være:
-- Korte og præcise (2-4 ord)
-- Beskrivende for klyngens indhold
-- Professionelle og faglige
-- På dansk
-- Unikke (ingen gentagelser)
+Names should be:
+- Short and precise (2-4 words)
+- Descriptive of cluster content
+- Professional and technical
+- Unique (no repetitions)
 
-Dokumentklynger:
+Document clusters:
 {samples_text}
 
-Generer navne i følgende format:
-Klynge 0: [Navn]
-Klynge 1: [Navn]
+Generate names in the following format:
+Cluster 0: [Name]
+Cluster 1: [Name]
 ...
 
-Svar kun med navnene i det specificerede format."""
+Output your response in {output_language}. Only respond with the names in the specified format."""
 
         try:
             start_time = datetime.utcnow()
@@ -340,25 +343,42 @@ Svar kun med navnene i det specificerede format."""
             print(f"⚠️  LLM klyngenavn generering fejlede: {str(e)}")
             print("⚠️  Falder tilbage til generiske navne...")
 
-            # Fallback to generic names - exactly matching original
-            generic_names = [
-                "Tekniske Specifikationer",
-                "Projektdokumentation",
-                "Bygningskomponenter",
-                "Systeminstallationer",
-                "Udførselsdetaljer",
-                "Drifts- og Vedligehold",
-                "Kvalitetssikring",
-                "Sikkerhedsforhold",
-            ]
+            # Fallback to generic names - language-aware as per plan
+            generic_names = {
+                "danish": [
+                    "Tekniske Specifikationer",
+                    "Projektdokumentation", 
+                    "Bygningskomponenter",
+                    "Systeminstallationer",
+                    "Udførselsdetaljer",
+                    "Drifts- og Vedligehold",
+                    "Kvalitetssikring",
+                    "Sikkerhedsforhold",
+                ],
+                "english": [
+                    "Technical Specifications",
+                    "Project Documentation",
+                    "Building Components", 
+                    "System Installations",
+                    "Implementation Details",
+                    "Operations & Maintenance",
+                    "Quality Assurance",
+                    "Safety Requirements",
+                ]
+            }
+            fallback_names = generic_names.get(self.language, generic_names["english"])
 
             cluster_names = {}
             for i, summary in enumerate(cluster_summaries):
                 cluster_id = summary["cluster_id"]
-                if i < len(generic_names):
-                    cluster_names[cluster_id] = generic_names[i]
+                if i < len(fallback_names):
+                    cluster_names[cluster_id] = fallback_names[i]
                 else:
-                    cluster_names[cluster_id] = f"Temaområde {cluster_id}"
+                    # Language-aware overflow naming
+                    if self.language == "danish":
+                        cluster_names[cluster_id] = f"Temaområde {cluster_id}"
+                    else:
+                        cluster_names[cluster_id] = f"Topic Area {cluster_id}"
 
             return cluster_names
 

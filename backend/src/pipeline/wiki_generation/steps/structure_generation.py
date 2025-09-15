@@ -37,12 +37,9 @@ class StructureGenerationStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        # Read generation settings from SoT (wiki.generation) with config fallback
-        wiki_cfg = ConfigService().get_effective_config("wiki")
-        gen_cfg = wiki_cfg.get("generation", {})
-        defaults_cfg = ConfigService().get_effective_config("defaults")
-        global_default_model = defaults_cfg.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
-        self.model = gen_cfg.get("model", global_default_model)
+        # Use config passed from orchestrator (no fresh ConfigService calls)
+        gen_cfg = config.get("generation", {})
+        self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
 
         # Initialize LangChain OpenAI client with OpenRouter configuration
         try:
@@ -69,6 +66,15 @@ class StructureGenerationStep(PipelineStep):
         # Add new config for testing limits
         self.max_pages = gen_cfg.get("max_pages", 10)  # Default to 10 if not specified
         self.queries_per_page = gen_cfg.get("queries_per_page", 8)  # Default to 8 if not specified
+
+    def _get_output_language(self) -> str:
+        """Get the output language name for prompts."""
+        language = self.config.get("language", "english")
+        language_names = {
+            "english": "English",
+            "danish": "Danish",
+        }
+        return language_names.get(language, "English")
 
     async def execute(self, input_data: dict[str, Any]) -> StepResult:
         """Execute structure generation step."""
@@ -197,12 +203,12 @@ class StructureGenerationStep(PipelineStep):
 ## Section breakdown information
 I want to create a wiki for this construction project. Determine the most logical structure for a wiki based on the project's documentation and content.
 
-IMPORTANT: The wiki content will be generated in Danish language.
+IMPORTANT: The wiki content will be generated in {self._get_output_language()} language.
 
 # Return output 
 ## Return output rules
 - Create a maximum of {self.max_pages} wiki pages in total (including the overview page). Only create as many pages as you need to cover the project. 
-- Make sure each output has EXACTLY 1 overview page titled "Projektoversigt" or "Project Overview" (depending on language), with the below queries (in Danish if the language specified is Danish and English if otherwise). Do NOT create multiple overview pages with similar names. 
+- Make sure each output has EXACTLY 1 overview page titled "Project Overview" (or "Projektoversigt" if Danish), with the below queries. Do NOT create multiple overview pages with similar names. 
 
 project_overview_queries = [
     # Core project identity
