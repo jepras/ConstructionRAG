@@ -196,7 +196,7 @@ function WikiPageContent({
       currentPage={pageName}
       isAuthenticated={true}
     >
-      <LazyWikiContent content={pageContent!} />
+      <LazyWikiContent content={pageContent!} showSummaryBar={false} />
     </WikiLayout>
   );
 }

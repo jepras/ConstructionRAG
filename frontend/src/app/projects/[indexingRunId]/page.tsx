@@ -108,7 +108,11 @@ async function PublicProjectWikiContent({ indexingRunId }: { indexingRunId: stri
           content={contentToDisplay.content}
           currentPage={firstPage.name}
         >
-          <LazyWikiContent content={contentToDisplay} />
+          <LazyWikiContent 
+            content={contentToDisplay} 
+            showSummaryBar={true}
+            indexingRunId={actualRunId}
+          />
         </WikiLayout>
       </>
     );

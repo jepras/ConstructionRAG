@@ -107,7 +107,7 @@ async function PublicWikiPageContent({
         content={pageContent.content}
         currentPage={pageName}
       >
-        <LazyWikiContent content={pageContent} />
+        <LazyWikiContent content={pageContent} showSummaryBar={false} />
       </WikiLayout>
     );
   } catch (error) {

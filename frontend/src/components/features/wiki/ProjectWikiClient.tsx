@@ -219,7 +219,11 @@ export default function ProjectWikiClient({ slug, optimisticData }: ProjectWikiC
       currentPage={firstPage?.name || ''}
       isAuthenticated={true}
     >
-      <LazyWikiContent content={firstPageContent!} />
+      <LazyWikiContent 
+        content={firstPageContent!} 
+        showSummaryBar={true}
+        indexingRunId={runId || ''}
+      />
     </WikiLayout>
   );
 }
