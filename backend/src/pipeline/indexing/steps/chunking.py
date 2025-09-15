@@ -44,41 +44,31 @@ class IntelligentChunker:
         self.prioritize_vlm_captions = config.get("prioritize_vlm_captions", True)
         self.fallback_to_original_text = config.get("fallback_to_original_text", True)
 
-        # Semantic chunking parameters
-        self.strategy = config.get("strategy", "semantic")  # HARDCODED: Force semantic strategy
-        self.chunk_size = config.get("chunk_size", 1000)
-        self.overlap = config.get("overlap", 200)
-        self.separators = config.get("separators", ["\n\n", "\n", " ", ""])
-        self.min_chunk_size = config.get("min_chunk_size", 100)
-        self.max_chunk_size = config.get("max_chunk_size", 1200)  # HARDCODED: Force aggressive splitting
+        # Semantic chunking parameters - use config values (with fallbacks for safety)
+        self.strategy = config.get("strategy", "semantic")  # Use config or safe default
+        self.chunk_size = config.get("chunk_size", 1000)  # Use config or safe default  
+        self.overlap = config.get("overlap", 200)  # Use config or safe default
+        self.separators = config.get("separators", ["\n\n", "\n", " ", ""])  # Optional with reasonable default
+        self.min_chunk_size = config.get("min_chunk_size", 100)  # Optional with reasonable default
+        self.max_chunk_size = config.get("max_chunk_size", 1500)  # Use config or safe default
+        
+        # Warn if using fallback values (config should provide these)
+        if "strategy" not in config:
+            logger.warning("chunking_config_missing_strategy", extra={"using_default": self.strategy})
+        if "chunk_size" not in config:
+            logger.warning("chunking_config_missing_chunk_size", extra={"using_default": self.chunk_size})
+        if "max_chunk_size" not in config:
+            logger.warning("chunking_config_missing_max_chunk_size", extra={"using_default": self.max_chunk_size})
 
-        # Log configuration as received
-        logger.info("chunking_config_received", extra={
-            "step": "chunking",
-            "config_received": {
-                "strategy": config.get('strategy', 'NOT_SET'),
-                "max_chunk_size": config.get('max_chunk_size', 'NOT_SET'),
-                "chunk_size": self.chunk_size,
-                "overlap": self.overlap
-            }
-        })
 
-        # FORCE HARDCODED VALUES FOR BEAM TESTING
-        self.strategy = "semantic"
-        self.max_chunk_size = 1000  # Force split anything over 1000 chars
-        self.chunk_size = 800  # Force smaller target chunk size
-        self.overlap = 200  # Ensure good overlap
-
-        logger.info("chunking_config_forced", extra={
-            "step": "chunking",
-            "forced_values": {
-                "strategy": self.strategy,
-                "max_chunk_size": self.max_chunk_size,
-                "chunk_size": self.chunk_size,
-                "overlap": self.overlap
-            },
-            "reason": "beam_testing_hardcoded_values"
-        })
+        # Validate config consistency with warnings instead of failures
+        if self.chunk_size >= self.max_chunk_size:
+            logger.warning(f"chunking_config_inconsistent: chunk_size ({self.chunk_size}) >= max_chunk_size ({self.max_chunk_size}), will cap chunks")
+            self.max_chunk_size = self.chunk_size + 100  # Ensure max > chunk
+        
+        if self.overlap >= self.chunk_size:
+            logger.warning(f"chunking_config_inconsistent: overlap ({self.overlap}) >= chunk_size ({self.chunk_size}), reducing overlap")
+            self.overlap = max(50, self.chunk_size // 4)  # Ensure reasonable overlap
 
     def extract_structural_metadata(self, el: dict) -> dict:
         """Extract structural metadata from element, handling various formats"""
@@ -550,8 +540,8 @@ class IntelligentChunker:
             if content_length > splitting_stats["largest_chunk_before"]:
                 splitting_stats["largest_chunk_before"] = content_length
 
-            # FORCE SPLIT: Change threshold to 1000 chars instead of max_chunk_size
-            split_threshold = 1000  # HARDCODED: Force split anything over 1000 chars
+            # Use configured max_chunk_size as split threshold
+            split_threshold = self.max_chunk_size
             if content_length <= split_threshold:
                 split_chunks.append(chunk)
                 splitting_stats["chunks_unchanged"] += 1
@@ -931,8 +921,8 @@ class ChunkingStep(PipelineStep):
             self.db = get_supabase_admin_client()
 
         # Initialize chunking engine
-        chunking_config = config.get("chunking", {})
-        self.chunker = IntelligentChunker(chunking_config)
+        # Initialize chunking engine with config
+        self.chunker = IntelligentChunker(config)
 
     async def execute(self, input_data: Any, indexing_run_id: UUID = None, document_id: UUID = None) -> StepResult:
         """Execute the chunking step with enriched data from previous step"""

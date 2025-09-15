@@ -8,6 +8,9 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel, ValidationError
 
 from src.config.settings import get_settings
+from src.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConfigServiceError(Exception):
@@ -108,6 +111,7 @@ class ConfigService:
     # ---------- Internals ----------
     def _load_config(self) -> Dict[str, Any]:
         if not self.config_path.exists():
+            logger.error("config_file_not_found", extra={"config_path": str(self.config_path)})
             raise ConfigServiceError(
                 f"Configuration file not found: {self.config_path}"
             )
@@ -118,7 +122,9 @@ class ConfigService:
                 with self.config_path.open("r", encoding="utf-8") as f:
                     self._raw_config = json.load(f)
                 self._mtime = stat.st_mtime
+                logger.info("config_loaded_successfully", extra={"config_path": str(self.config_path)})
             except json.JSONDecodeError as e:
+                logger.error("config_invalid_json", extra={"config_path": str(self.config_path), "error": str(e)})
                 raise ConfigServiceError(
                     f"Invalid JSON in {self.config_path}: {e}"
                 ) from e

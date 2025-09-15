@@ -75,6 +75,7 @@ class ConfigManager:
             from src.services.config_service import ConfigService
 
             effective = ConfigService().get_effective_config("indexing")
+            
             # Map to legacy IndexingConfig shape expected by orchestrator
             steps = {
                 "partition": effective.get("partition", {}),
@@ -85,6 +86,7 @@ class ConfigManager:
                 "storage": effective.get("storage", {}),
             }
             orchestration = effective.get("orchestration", {})
+            
             return IndexingConfig(steps=steps, orchestration=orchestration)
         except Exception as e:
             logger.error(f"Failed to get indexing config from SoT: {e}")

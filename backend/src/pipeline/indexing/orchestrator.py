@@ -165,6 +165,7 @@ class IndexingOrchestrator:
 
             # Initialize real chunking step
             chunking_config = config.steps.get("chunking", {})
+            
             self.chunking_step = ChunkingStep(
                 config=chunking_config,
                 storage_client=self.storage,
