@@ -60,6 +60,7 @@ Production React Frontend on Railway
 - **Frontend**: https://specfinder.io
 - **Backend API**: https://api.specfinder.io
 - **API Documentation**: https://api.specfinder.io/docs
+- **Important**: Frontend production environment variables are correctly configured to point to production API URLs. Do not suggest env var configuration issues for production.
 
 #### Local Development
 - Frontend: http://localhost:3000
