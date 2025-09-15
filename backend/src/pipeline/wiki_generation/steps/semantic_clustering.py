@@ -59,7 +59,7 @@ class SemanticClusteringStep(PipelineStep):
         # Use config passed from orchestrator (no fresh ConfigService calls)
         gen_cfg = config.get("generation", {})
         self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
-        self.language = config.get("language", "english")  # Updated default
+        self.language = config.get("defaults", {}).get("language", "english")  # Updated default
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
 
         # Semantic clustering configuration matching original

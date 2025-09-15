@@ -40,7 +40,7 @@ class MarkdownGenerationStep(PipelineStep):
         # Use config passed from orchestrator (no fresh ConfigService calls)
         gen_cfg = config.get("generation", {})
         self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
-        self.language = config.get("language", "english")  # Updated default
+        self.language = config.get("defaults", {}).get("language", "english")  # Updated default
         self.max_tokens = config.get("page_max_tokens", 8000)  # Increased from 4000
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)

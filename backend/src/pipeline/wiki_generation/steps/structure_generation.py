@@ -58,7 +58,7 @@ class StructureGenerationStep(PipelineStep):
         except Exception as e:
             logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
             raise
-        self.language = config.get("language", "danish")
+        self.language = config.get("defaults", {}).get("language", "english")
         self.max_tokens = config.get("structure_max_tokens", 6000)
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
@@ -69,7 +69,7 @@ class StructureGenerationStep(PipelineStep):
 
     def _get_output_language(self) -> str:
         """Get the output language name for prompts."""
-        language = self.config.get("language", "english")
+        language = self.config.get("defaults", {}).get("language", "english")
         language_names = {
             "english": "English",
             "danish": "Danish",
@@ -439,23 +439,23 @@ IMPORTANT FORMATTING INSTRUCTIONS:
                 {
                     "id": "page_overview",
                     "title": (
-                        "Projektoversigt" if self.config.get("language", "danish") == "danish" else "Project Overview"
+                        "Projektoversigt" if self.config.get("defaults", {}).get("language", "english") == "danish" else "Project Overview"
                     ),
                     "description": (
                         "Omfattende oversigt over projektet"
-                        if self.config.get("language", "danish") == "danish"
+                        if self.config.get("defaults", {}).get("language", "english") == "danish"
                         else "Comprehensive project overview"
                     ),
                     "relevance_score": 10,
                     "queries": [
                         (
                             "projekt navn titel beskrivelse oversigt"
-                            if self.config.get("language", "danish") == "danish"
+                            if self.config.get("defaults", {}).get("language", "english") == "danish"
                             else "project name title description overview"
                         ),
                         (
                             "byggeprojekt omfang målsætninger"
-                            if self.config.get("language", "danish") == "danish"
+                            if self.config.get("defaults", {}).get("language", "english") == "danish"
                             else "construction project scope objectives goals"
                         ),
                     ],

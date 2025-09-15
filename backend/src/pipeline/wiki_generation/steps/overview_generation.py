@@ -162,7 +162,7 @@ class OverviewGenerationStep(PipelineStep):
 
     def _generate_overview_queries(self, metadata: dict[str, Any]) -> list[str]:
         """Generate overview queries based on metadata - exactly matching original."""
-        language = self.config.get("language", "english")
+        language = self.config.get("defaults", {}).get("language", "english")
 
         if language == "danish":
             # Standard overview queries in Danish - exactly matching original
@@ -461,7 +461,7 @@ Indhold: {content[:800]}..."""
         excerpts_text = "\n".join(document_excerpts)
 
         # Create language-aware prompt following plan guidelines
-        language = self.config.get("language", "english")
+        language = self.config.get("defaults", {}).get("language", "english")
         language_names = {
             "english": "English",
             "danish": "Danish",
