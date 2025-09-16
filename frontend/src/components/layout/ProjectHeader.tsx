@@ -141,7 +141,7 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
               
               // Special logic for Wiki tab - it should be active for wiki pages only
               const isActive = tab.name === 'Wiki' 
-                ? (pathname === href || (pathname.startsWith(`${href}/`) && !pathname.includes('/query') && !pathname.includes('/indexing') && !pathname.includes('/settings')))
+                ? (pathname === href || (pathname.startsWith(`${href}/`) && !pathname.includes('/query') && !pathname.includes('/indexing') && !pathname.includes('/settings') && !pathname.includes('/checklist')))
                 : pathname === href;
                 
               const Icon = tab.icon;
