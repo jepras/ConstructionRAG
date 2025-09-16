@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpen, MessageSquare, Settings, Database, Share2, ChevronDown } from 'lucide-react';
+import { BookOpen, MessageSquare, Settings, Database, Share2, ChevronDown, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,6 +39,12 @@ const navigationTabs = [
     href: '/query',
     icon: MessageSquare,
     description: 'Ask questions about the project'
+  },
+  {
+    name: 'Checklist',
+    href: '/checklist',
+    icon: CheckSquare,
+    description: 'Create and analyze project checklists'
   },
   {
     name: 'Index',
