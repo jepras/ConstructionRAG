@@ -345,6 +345,7 @@ async def list_wiki_runs(
                 "created_at": (wiki_run.created_at.isoformat() if wiki_run.created_at else None),
                 "completed_at": (wiki_run.completed_at.isoformat() if wiki_run.completed_at else None),
                 "error_message": wiki_run.error_message,
+                "language": wiki_run.language if hasattr(wiki_run, 'language') else "danish",
             }
             for wiki_run in wiki_runs
         ]

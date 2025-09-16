@@ -421,7 +421,7 @@ class WikiGenerationRunCreate(BaseModel):
     user_id: UUID | None = None
     project_id: UUID | None = None
     upload_id: str | None = None
-    language: str = "danish"
+    language: str = "danish"  # Default, but should be overridden from indexing run config
     model: str = "google/gemini-2.5-flash-lite"
     status: WikiGenerationStatus = WikiGenerationStatus.PENDING
 

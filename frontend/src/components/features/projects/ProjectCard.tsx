@@ -53,11 +53,17 @@ export default function ProjectCard({ project }: ProjectCardProps) {
       
       <div className="flex items-center justify-between pt-4 border-t border-border/50">
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          {/* Danish flag for Danish projects */}
+          {/* Language flags */}
           {(project.language === 'da' || project.language === 'danish') && (
             <div className="flex items-center gap-1">
               <span className="text-sm">🇩🇰</span>
               <span>Danish</span>
+            </div>
+          )}
+          {(project.language === 'en' || project.language === 'english') && (
+            <div className="flex items-center gap-1">
+              <span className="text-sm">🇬🇧</span>
+              <span>English</span>
             </div>
           )}
           

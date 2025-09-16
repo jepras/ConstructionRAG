@@ -36,7 +36,7 @@ export default function ProjectGrid() {
   const currentPage = Math.max(parseInt(currentPageParam || '1', 10) || 1, 1);
 
   // Fetch a generous amount and paginate client-side
-  const { data: wikiRuns, isLoading, error } = usePublicProjectsWithWikis(200);
+  const { data: wikiRuns, isLoading, error } = usePublicProjectsWithWikis(50);
 
   // Transform wiki runs to project format
   const projects: Project[] = wikiRuns && wikiRuns.length > 0

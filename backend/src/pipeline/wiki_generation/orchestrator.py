@@ -357,10 +357,10 @@ class WikiGenerationOrchestrator:
     ) -> WikiGenerationRun:
         """Create a new wiki generation run record."""
         
-        # Get the access_level from the parent indexing run
+        # Get the access_level and pipeline_config from the parent indexing run
         indexing_run_response = (
             self.supabase.table("indexing_runs")
-            .select("access_level")
+            .select("access_level, pipeline_config")
             .eq("id", index_run_id)
             .limit(1)
             .execute()
@@ -368,10 +368,19 @@ class WikiGenerationOrchestrator:
         
         # Default to 'private' if we can't find the indexing run
         access_level = "private"
+        language = "danish"  # Default language
+        
         if indexing_run_response.data:
             access_level = indexing_run_response.data[0].get("access_level", "private")
+            
+            # Extract language from pipeline_config
+            pipeline_config = indexing_run_response.data[0].get("pipeline_config", {})
+            if isinstance(pipeline_config, dict):
+                # Try to get language from defaults section
+                language = pipeline_config.get("defaults", {}).get("language", "danish")
+                logger.info(f"Extracted language '{language}' from indexing run pipeline config")
         
-        logger.info(f"Creating wiki run for indexing run {index_run_id} with access_level: {access_level}")
+        logger.info(f"Creating wiki run for indexing run {index_run_id} with access_level: {access_level} and language: {language}")
         
         wiki_run_data = WikiGenerationRunCreate(
             indexing_run_id=index_run_id,
@@ -379,6 +388,7 @@ class WikiGenerationOrchestrator:
             user_id=user_id,
             project_id=project_id,
             status=WikiGenerationStatus.PENDING,
+            language=language,
         )
 
         # Convert UUIDs to strings for JSON serialization

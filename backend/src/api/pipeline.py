@@ -128,6 +128,7 @@ async def list_indexing_runs_with_wikis(
                     flattened_row = {**row}
                     flattened_row["wiki_structure"] = wiki_data.get("wiki_structure", {})
                     flattened_row["pages_metadata"] = wiki_data.get("pages_metadata", [])
+                    flattened_row["language"] = wiki_data.get("language")
                     # Remove the nested object
                     flattened_row.pop("wiki_generation_runs", None)
                     result_data.append(flattened_row)
@@ -135,6 +136,7 @@ async def list_indexing_runs_with_wikis(
                     # Fallback if no wiki data found
                     row["wiki_structure"] = {}
                     row["pages_metadata"] = []
+                    row["language"] = None
                     result_data.append(row)
             
             return result_data
@@ -201,20 +203,12 @@ async def list_user_projects_with_wikis(
                     wiki_structure,
                     pages_metadata,
                     language
-                ),
-                projects!inner(
-                    name,
-                    description,
-                    created_at,
-                    updated_at,
-                    deleted_at
                 )
             """)
             .eq("user_id", current_user["id"])
             .eq("upload_type", "user_project")
             .eq("wiki_status", "completed")
             .gt("pages_count", 0)
-            .is_("projects.deleted_at", "null")  # Filter out soft-deleted projects
             .order("project_id, created_at", desc=True)
         )
         
@@ -226,45 +220,66 @@ async def list_user_projects_with_wikis(
         
         # Group by project_id and take the latest wiki for each project
         projects_dict = {}
+        project_ids = set()
+        
+        # First pass: collect data and project IDs
         for row in res.data or []:
             project_id = row.get("project_id")
             if not project_id:
                 logger.warning(f"⚠️ Row missing project_id: {row}")
                 continue
                 
+            project_ids.add(project_id)
+            
             # Skip if we already have this project (since we ordered by created_at desc, first is latest)
             if project_id in projects_dict:
                 continue
                 
             wiki_data = row.get("wiki_generation_runs")
-            project_data = row.get("projects")
             
-            if wiki_data and project_data:
-                # Create flattened response similar to public projects
-                flattened_row = {
-                    "id": project_id,  # Use project_id for consistency
-                    "indexing_run_id": row.get("indexing_run_id"),
-                    "wiki_run_id": row.get("wiki_run_id"),
-                    "project_name": project_data.get("name") or row.get("project_name"),
-                    "project_description": project_data.get("description"),
-                    "upload_type": row.get("upload_type"),
-                    "access_level": row.get("access_level"),
-                    "user_id": row.get("user_id"),
-                    "pages_count": row.get("pages_count", 0),
-                    "total_word_count": row.get("total_word_count", 0),
-                    "wiki_status": row.get("wiki_status"),
-                    "created_at": project_data.get("created_at"),
-                    "updated_at": max(project_data.get("updated_at", ""), row.get("updated_at", "")),
-                    "wiki_structure": wiki_data.get("wiki_structure", {}),
-                    "pages_metadata": wiki_data.get("pages_metadata", [])
-                }
-                projects_dict[project_id] = flattened_row
+            # Store project_wikis data with wiki info
+            projects_dict[project_id] = {
+                "project_id": project_id,
+                "indexing_run_id": row.get("indexing_run_id"),
+                "wiki_run_id": row.get("wiki_run_id"),
+                "project_name": row.get("project_name"),  # From project_wikis table
+                "upload_type": row.get("upload_type"),
+                "access_level": row.get("access_level"),
+                "user_id": row.get("user_id"),
+                "pages_count": row.get("pages_count", 0),
+                "total_word_count": row.get("total_word_count", 0),
+                "wiki_status": row.get("wiki_status"),
+                "created_at": row.get("created_at"),
+                "updated_at": row.get("updated_at"),
+                "wiki_structure": wiki_data.get("wiki_structure", {}) if wiki_data else {},
+                "pages_metadata": wiki_data.get("pages_metadata", []) if wiki_data else [],
+                "language": wiki_data.get("language", "danish") if wiki_data else "danish",
+            }
+        
+        # Second pass: enrich with project data from projects table
+        if project_ids:
+            projects_query = (
+                db.table("projects")
+                .select("id, name, description, created_at, updated_at")
+                .in_("id", list(project_ids))
+                .is_("deleted_at", "null")
+            )
+            projects_res = projects_query.execute()
+            
+            # Update project names and descriptions
+            for project_row in projects_res.data or []:
+                project_id = project_row.get("id")
+                if project_id in projects_dict:
+                    projects_dict[project_id]["project_name"] = project_row.get("name") or projects_dict[project_id]["project_name"]
+                    projects_dict[project_id]["project_description"] = project_row.get("description")
+                    projects_dict[project_id]["project_created_at"] = project_row.get("created_at")
+                    projects_dict[project_id]["project_updated_at"] = project_row.get("updated_at")
         
         # Convert to list and apply pagination
         result_data = list(projects_dict.values())
         
         # Sort by updated_at desc (most recently updated first)
-        result_data.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        result_data.sort(key=lambda x: x.get("project_updated_at") or x.get("updated_at", ""), reverse=True)
         
         # Apply pagination
         start_idx = offset
