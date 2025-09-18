@@ -310,7 +310,7 @@ export default function ProjectChecklistContent({
       });
       
       setCurrentAnalysisRunId(response.analysis_run_id);
-      toast.success("Analysis started! Polling for progress...");
+      toast.success("Analysis started!");
       
       // Start polling for progress
       startPolling(response.analysis_run_id);

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { apiClient } from '@/lib/api-client';
 
 interface IndexingSummaryBarProps {
   indexingRunId: string;
@@ -70,12 +71,7 @@ export default function IndexingSummaryBar({ indexingRunId }: IndexingSummaryBar
     // Fetch progress data after mount to not block initial render
     const fetchData = async () => {
       try {
-        const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${baseURL}/api/indexing-runs/${indexingRunId}/summary`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch progress data');
-        }
-        const summaryData = await response.json();
+        const summaryData = await apiClient.getIndexingRunSummary(indexingRunId);
 
         setData({
           pdfCount: summaryData.pdf_count,

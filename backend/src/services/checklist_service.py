@@ -373,7 +373,7 @@ class ChecklistService:
                 return True
             elif access_level == "auth" and user:
                 return True
-            elif access_level == "private" and user and indexing_run["user_id"] == str(user.id):
+            elif access_level == "private" and user and indexing_run["user_id"] == str(user["id"]):
                 return True
             else:
                 raise AppError(
@@ -467,40 +467,39 @@ class ChecklistService:
     ) -> list[ChecklistTemplateResponse]:
         """List templates available to a user.
         
-        Returns all public templates plus user's own private templates.
+        For authenticated users: Returns only templates they created (both public and private).
+        For anonymous users: Returns only public templates.
         """
         try:
-            # Start with public templates
-            query = (
-                self.supabase.table("checklist_templates")
-                .select("*")
-                .eq("is_public", True)
-            )
-            public_result = query.execute()
-            
             templates = []
             
-            # Add public templates
-            for template in public_result.data:
-                templates.append(ChecklistTemplateResponse(
-                    **template,
-                    is_owner=user_id is not None and template.get("user_id") == user_id
-                ))
-            
-            # Add user's private templates if authenticated
             if user_id:
-                private_query = (
+                # For authenticated users: show only their own templates (both public and private)
+                user_query = (
                     self.supabase.table("checklist_templates")
                     .select("*")
                     .eq("user_id", user_id)
-                    .eq("is_public", False)
                 )
-                private_result = private_query.execute()
+                user_result = user_query.execute()
                 
-                for template in private_result.data:
+                for template in user_result.data:
                     templates.append(ChecklistTemplateResponse(
                         **template,
                         is_owner=True
+                    ))
+            else:
+                # For anonymous users: show only public templates
+                public_query = (
+                    self.supabase.table("checklist_templates")
+                    .select("*")
+                    .eq("is_public", True)
+                )
+                public_result = public_query.execute()
+                
+                for template in public_result.data:
+                    templates.append(ChecklistTemplateResponse(
+                        **template,
+                        is_owner=False
                     ))
             
             # Sort by created_at descending
@@ -509,6 +508,11 @@ class ChecklistService:
 
         except Exception as e:
             logger.error(f"Error listing templates: {e}")
+            # For table not found or similar database issues, return empty list
+            # This handles fresh systems without the checklist_templates table
+            if "relation" in str(e).lower() and "does not exist" in str(e).lower():
+                logger.warning("Checklist templates table does not exist, returning empty list")
+                return []
             raise
 
     async def get_template_by_id(

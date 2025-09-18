@@ -109,6 +109,7 @@ export default function ProjectWikiClient({ slug, optimisticData }: ProjectWikiC
   // Parse nested slug format: projectSlug/runId
   const [projectSlug, runId] = slug.includes('/') ? slug.split('/') : [slug, null];
   const projectId = extractProjectIdFromSlug(projectSlug);
+  
 
   // Progressive data loading
   const {
@@ -222,7 +223,7 @@ export default function ProjectWikiClient({ slug, optimisticData }: ProjectWikiC
       <LazyWikiContent 
         content={firstPageContent!} 
         showSummaryBar={true}
-        indexingRunId={runId || ''}
+        indexingRunId={runId}
       />
     </WikiLayout>
   );

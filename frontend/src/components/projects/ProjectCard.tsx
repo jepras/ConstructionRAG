@@ -39,18 +39,18 @@ export function ProjectCard({ project, className, onDelete }: ProjectCardProps) 
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const getStatusIcon = () => {
+  const getStatusIcon = (key?: string) => {
     switch (project.status) {
       case 'wiki_generated':
-        return <CheckCircle className="h-4 w-4 text-primary" />
+        return <CheckCircle key={key} className="h-4 w-4 text-primary" />
       case 'processing':
-        return <Clock className="h-4 w-4 text-muted-foreground" />
+        return <Clock key={key} className="h-4 w-4 text-muted-foreground" />
       case 'failed':
-        return <AlertCircle className="h-4 w-4 text-destructive" />
+        return <AlertCircle key={key} className="h-4 w-4 text-destructive" />
       case 'no_documents':
-        return <AlertCircle className="h-4 w-4 text-muted-foreground" />
+        return <AlertCircle key={key} className="h-4 w-4 text-muted-foreground" />
       default:
-        return <Clock className="h-4 w-4 text-muted-foreground" />
+        return <Clock key={key} className="h-4 w-4 text-muted-foreground" />
     }
   }
 
@@ -160,7 +160,7 @@ export function ProjectCard({ project, className, onDelete }: ProjectCardProps) 
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-              {getStatusIcon()}
+              {getStatusIcon('header')}
             </div>
           </div>
         </CardHeader>
@@ -182,7 +182,7 @@ export function ProjectCard({ project, className, onDelete }: ProjectCardProps) 
                 variant={getStatusBadgeVariant()}
                 className="flex items-center gap-1"
               >
-                {getStatusIcon()}
+                {getStatusIcon('badge')}
                 {getStatusText()}
               </Badge>
             </div>

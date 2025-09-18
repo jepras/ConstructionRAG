@@ -125,7 +125,13 @@ export default function ChecklistEditor({ checklist, onChecklistChange }: Checkl
       setTemplates(templatesData);
     } catch (error) {
       console.error('Error loading templates:', error);
-      toast.error('Failed to load templates');
+      // Gracefully handle no templates - this is normal for fresh systems
+      setTemplates([]);
+      // Only show error toast if it's a real API error, not just empty/missing templates
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('not found') && !errorMessage.includes('404')) {
+        toast.error('Failed to load templates');
+      }
     } finally {
       setLoadingTemplates(false);
     }

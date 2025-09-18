@@ -849,6 +849,24 @@ export class ApiClient {
     })
   }
 
+  async getIndexingRunSummary(indexingRunId: string): Promise<any> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+    
+    return this.request<any>(`/api/indexing-runs/${indexingRunId}/summary`, {
+      headers,
+      next: {
+        revalidate: 300, // 5 minute cache for summary data
+        tags: [`indexing-run-${indexingRunId}`, 'indexing-runs']
+      }
+    })
+  }
+
   // Checklist Analysis methods
   async createChecklistAnalysis(request: ChecklistAnalysisRequest): Promise<ChecklistAnalysisResponse> {
     // Try to get auth headers, but don't fail if not authenticated (public projects)

@@ -48,7 +48,7 @@ async def analyze_checklist(
             checklist_content=request.checklist_content,
             checklist_name=request.checklist_name,
             model_name=request.model_name,
-            user_id=str(user.id) if user else None,
+            user_id=str(user["id"]) if user else None,
         )
         
         # Start background processing
@@ -108,7 +108,7 @@ async def list_analysis_runs(
     try:
         checklist_service = ChecklistService()
         runs = await checklist_service.list_analysis_runs_for_user(
-            user_id=str(user.id) if user else None,
+            user_id=str(user["id"]) if user else None,
             indexing_run_id=indexing_run_id,
         )
         return {"runs": runs}
@@ -131,7 +131,7 @@ async def delete_analysis_run(
     
     try:
         checklist_service = ChecklistService()
-        await checklist_service.delete_analysis_run_by_id(run_id, str(user.id))
+        await checklist_service.delete_analysis_run_by_id(run_id, str(user["id"]))
         return {"message": "Analysis run deleted successfully"}
         
     except AppError as e:
@@ -157,7 +157,7 @@ async def create_template(
         checklist_service = ChecklistService()
         template = await checklist_service.create_template(
             request=request,
-            user_id=str(user.id) if user else None,
+            user_id=str(user["id"]) if user else None,
         )
         return template
         
@@ -179,7 +179,7 @@ async def list_templates(
     try:
         checklist_service = ChecklistService()
         templates = await checklist_service.list_templates_for_user(
-            user_id=str(user.id) if user else None
+            user_id=str(user["id"]) if user else None
         )
         return templates
         
@@ -200,7 +200,7 @@ async def get_template(
         checklist_service = ChecklistService()
         template = await checklist_service.get_template_by_id(
             template_id=template_id,
-            user_id=str(user.id) if user else None,
+            user_id=str(user["id"]) if user else None,
         )
         
         if not template:
@@ -232,7 +232,7 @@ async def update_template(
         template = await checklist_service.update_template(
             template_id=template_id,
             request=request,
-            user_id=str(user.id) if user else None,
+            user_id=str(user["id"]) if user else None,
         )
         return template
         
@@ -256,7 +256,7 @@ async def delete_template(
         checklist_service = ChecklistService()
         await checklist_service.delete_template(
             template_id=template_id,
-            user_id=str(user.id) if user else None,
+            user_id=str(user["id"]) if user else None,
         )
         return {"message": "Template deleted successfully"}
         
