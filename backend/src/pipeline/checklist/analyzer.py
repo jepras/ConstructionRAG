@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def create_llm_client(model_name: str) -> ChatOpenAI:
     """Create LangChain ChatOpenAI client configured for OpenRouter."""
     settings = get_settings()
-    
+
     return ChatOpenAI(
         model=model_name,
         openai_api_key=settings.openrouter_api_key,
@@ -34,10 +34,7 @@ async def call_llm(llm_client: ChatOpenAI, prompt: str) -> str:
 
 
 async def analyze_checklist_with_chunks(
-    parsed_items: List[Dict[str, Any]],
-    chunks: List[Dict[str, Any]],
-    language: str,
-    model_name: str
+    parsed_items: List[Dict[str, Any]], chunks: List[Dict[str, Any]], language: str, model_name: str
 ) -> str:
     """
     LLM2: Analyze retrieved chunks against original checklist.
@@ -45,40 +42,38 @@ async def analyze_checklist_with_chunks(
     """
     try:
         llm_client = create_llm_client(model_name)
-        
+
         # Format chunks for LLM with proper document citations (no excerpt numbers)
         formatted_chunks = []
         for i, chunk in enumerate(chunks[:50]):  # Limit to avoid token limits
             content = chunk.get("content", "")
             document_id = chunk.get("document_id", "unknown")
-            
+
             # Extract page number from metadata
             metadata_chunk = chunk.get("metadata", {})
             page_number = metadata_chunk.get("page_number", "N/A") if metadata_chunk else "N/A"
-            
+
             # Extract document name from metadata if available
-            doc_name = metadata_chunk.get("document_name", f"document_{document_id[:8]}") if metadata_chunk else f"document_{document_id[:8]}"
-            
+            doc_name = (
+                metadata_chunk.get("document_name", f"document_{document_id[:8]}")
+                if metadata_chunk
+                else f"document_{document_id[:8]}"
+            )
+
             # Format with actual document reference instead of excerpt numbers
             formatted_chunk = f"""
 From {doc_name}, Page {page_number}:
 {content[:800]}..."""
             formatted_chunks.append(formatted_chunk)
-        
+
         chunks_text = "\n".join(formatted_chunks)
-        
-        language_names = {
-            "english": "English",
-            "danish": "Danish"
-        }
+
+        language_names = {"english": "English", "danish": "Danish"}
         output_language = language_names.get(language, "English")
-        
+
         # Format parsed items for reference
-        items_text = "\n".join([
-            f"{item['number']}. {item['name']}: {item['description']}" 
-            for item in parsed_items
-        ])
-        
+        items_text = "\n".join([f"{item['number']}. {item['name']}: {item['description']}" for item in parsed_items])
+
         prompt = f"""Analyze the construction documents against this checklist.
 
 You are a construction professional reviewing project documents to verify compliance with a checklist.
@@ -93,13 +88,10 @@ For each checklist item, determine:
 - Status: FOUND/MISSING/RISK/CONDITIONS/PENDING_CLARIFICATION
   - FOUND: Information is present and complete in the documents
   - MISSING: Required information is absent from the documents
-  - RISK: Information exists but presents potential risks or concerns
-  - CONDITIONS: Item has dependencies or conditional requirements  
-  - PENDING_CLARIFICATION: Information is unclear or requires further review
+  - PARTIALLY_FOUND: Information exists but presents potential risks or concerns. Information is unclear or requires further review. 
 
 - Provide detailed description of findings
 - When citing sources, reference the actual document name and page number (e.g., "specifications.pdf, Page 12")
-- Explain any risks, conditions, or clarifications needed
 - Be specific about what was found or what is missing
 
 IMPORTANT: When referencing information, cite the specific document name and page number directly 
@@ -112,9 +104,9 @@ Be thorough and specific in your findings with proper document citations."""
 
         response = await call_llm(llm_client, prompt)
         logger.info(f"Analysis completed for {len(parsed_items)} checklist items")
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Error in checklist analysis: {e}")
         raise

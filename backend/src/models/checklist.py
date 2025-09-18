@@ -79,7 +79,7 @@ class ChecklistAnalysisResponse(BaseModel):
 
 
 class ChecklistTemplate(BaseModel):
-    """Checklist template model for future use."""
+    """Checklist template model."""
     id: UUID
     user_id: Optional[UUID] = None
     name: str
@@ -89,3 +89,24 @@ class ChecklistTemplate(BaseModel):
     access_level: str = "private"
     created_at: datetime
     updated_at: datetime
+
+
+class ChecklistTemplateRequest(BaseModel):
+    """Request model for creating/updating checklist template."""
+    name: str = Field(..., description="Name of the template")
+    content: str = Field(..., description="Template content")
+    category: str = Field(default="custom", description="Template category")
+    is_public: bool = Field(default=True, description="Whether template is public")
+
+
+class ChecklistTemplateResponse(BaseModel):
+    """Response model for checklist template."""
+    id: UUID
+    user_id: Optional[UUID] = None
+    name: str
+    content: str
+    category: str
+    is_public: bool
+    created_at: datetime
+    updated_at: datetime
+    is_owner: bool = Field(default=False, description="Whether current user owns this template")

@@ -10,6 +10,8 @@ from src.models.checklist import (
     ChecklistAnalysisRequest,
     ChecklistAnalysisResponse,
     ChecklistAnalysisRun,
+    ChecklistTemplateRequest,
+    ChecklistTemplateResponse,
 )
 from src.pipeline.checklist import ChecklistAnalysisOrchestrator
 from src.services.auth_service import get_current_user_optional
@@ -136,4 +138,130 @@ async def delete_analysis_run(
         raise HTTPException(status_code=e.status_code, detail=e.message)
     except Exception as e:
         logger.error(f"Error deleting analysis run: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Template Management Endpoints
+
+@router.post("/templates", response_model=ChecklistTemplateResponse)
+async def create_template(
+    request: ChecklistTemplateRequest,
+    user=Depends(get_current_user_optional),
+):
+    """
+    Create a new checklist template.
+    Anonymous users can create public templates.
+    Authenticated users can create public or private templates.
+    """
+    try:
+        checklist_service = ChecklistService()
+        template = await checklist_service.create_template(
+            request=request,
+            user_id=str(user.id) if user else None,
+        )
+        return template
+        
+    except AppError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Error creating template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/templates", response_model=list[ChecklistTemplateResponse])
+async def list_templates(
+    user=Depends(get_current_user_optional),
+):
+    """
+    List available checklist templates.
+    Returns all public templates plus user's own private templates if authenticated.
+    """
+    try:
+        checklist_service = ChecklistService()
+        templates = await checklist_service.list_templates_for_user(
+            user_id=str(user.id) if user else None
+        )
+        return templates
+        
+    except Exception as e:
+        logger.error(f"Error listing templates: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/templates/{template_id}", response_model=ChecklistTemplateResponse)
+async def get_template(
+    template_id: str,
+    user=Depends(get_current_user_optional),
+):
+    """
+    Get a specific checklist template by ID.
+    """
+    try:
+        checklist_service = ChecklistService()
+        template = await checklist_service.get_template_by_id(
+            template_id=template_id,
+            user_id=str(user.id) if user else None,
+        )
+        
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        
+        return template
+        
+    except HTTPException:
+        raise
+    except AppError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Error fetching template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/templates/{template_id}", response_model=ChecklistTemplateResponse)
+async def update_template(
+    template_id: str,
+    request: ChecklistTemplateRequest,
+    user=Depends(get_current_user_optional),
+):
+    """
+    Update an existing checklist template.
+    Only the owner can update a template.
+    """
+    try:
+        checklist_service = ChecklistService()
+        template = await checklist_service.update_template(
+            template_id=template_id,
+            request=request,
+            user_id=str(user.id) if user else None,
+        )
+        return template
+        
+    except AppError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Error updating template: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(
+    template_id: str,
+    user=Depends(get_current_user_optional),
+):
+    """
+    Delete a checklist template.
+    Only the owner can delete a template.
+    """
+    try:
+        checklist_service = ChecklistService()
+        await checklist_service.delete_template(
+            template_id=template_id,
+            user_id=str(user.id) if user else None,
+        )
+        return {"message": "Template deleted successfully"}
+        
+    except AppError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    except Exception as e:
+        logger.error(f"Error deleting template: {e}")
         raise HTTPException(status_code=400, detail=str(e))

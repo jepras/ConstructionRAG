@@ -191,6 +191,9 @@ async def _structure_with_langchain_structured_output(
 
 You are a construction professional formatting detailed analysis results into a standardized database structure.
 
+CRITICAL: Write ALL text content (item_name, description, excerpt fields) in {output_language}. 
+The output language is {output_language} - use this language for all descriptive text.
+
 ORIGINAL CHECKLIST ITEMS ({len(parsed_items)} items):
 {items_list}
 
@@ -199,25 +202,26 @@ RAW ANALYSIS TO STRUCTURE:
 
 For each of the {len(parsed_items)} checklist items above, create a structured result entry with:
 - item_number: The number from the original list (e.g., "1", "2", etc.)
-- item_name: The exact name from the original checklist
+- item_name: The exact name from the original checklist (in {output_language})
 - status: Based on the analysis, use exactly one of: found, missing, risk, conditions, pending_clarification
-- description: Clean summary of the key findings WITHOUT document citations (those go in sources)
+- description: Clean summary of the key findings WITHOUT document citations (those go in sources) - WRITE IN {output_language}
 - confidence_score: 0.0 to 1.0 based on how confident you are in the finding
 - sources: Array of source references that support this finding
 
 SOURCES ARRAY FORMAT:
 sources: [
-  {{"document": "specifications.pdf", "page": 12, "excerpt": "Short relevant quote"}},
-  {{"document": "manual.pdf", "page": 25, "excerpt": "Another supporting quote"}}
+  {{"document": "specifications.pdf", "page": 12, "excerpt": "Short relevant quote in {output_language}"}},
+  {{"document": "manual.pdf", "page": 25, "excerpt": "Another supporting quote in {output_language}"}}
 ]
 
 CITATION EXTRACTION EXAMPLES:
 - If analysis mentions "As specified in drawings.pdf, Page 5" and "According to manual.pdf, Page 23"
   → Include both sources in the array
 - Extract ALL document references mentioned for each item, not just the primary one
-- Each source should have: document name, page number, and a short supporting excerpt
+- Each source should have: document name, page number, and a short supporting excerpt (in {output_language})
 
 DESCRIPTION FIELD: Keep descriptions clean and factual WITHOUT citations. All citation info goes in the sources array.
+LANGUAGE REQUIREMENT: Write all text content (descriptions, excerpts) in {output_language}.
 
 IMPORTANT: You MUST include ALL {len(parsed_items)} items from the original checklist, even if not explicitly mentioned in the analysis."""
 
@@ -270,6 +274,9 @@ async def _structure_with_robust_json_parsing(
     
     prompt = f"""Convert the raw analysis into a JSON array. Output ONLY valid JSON, no markdown or explanations.
 
+CRITICAL LANGUAGE REQUIREMENT: Write ALL text content in {output_language}. 
+Use {output_language} for all descriptive fields (item_name, description, excerpt).
+
 CHECKLIST ITEMS ({len(parsed_items)} items):
 {items_list}
 
@@ -280,25 +287,26 @@ Output a JSON array with this exact structure (no markdown, no extra text):
 [
   {{
     "item_number": "1",
-    "item_name": "Wood species and grade specification",
+    "item_name": "Wood species and grade specification (in {output_language})",
     "status": "found",
-    "description": "Clean summary without citations",
+    "description": "Clean summary without citations (in {output_language})",
     "confidence_score": 0.9,
     "sources": [
-      {{"document": "specifications.pdf", "page": 12, "excerpt": "Supporting quote"}},
-      {{"document": "drawings.pdf", "page": 5, "excerpt": "Additional reference"}}
+      {{"document": "specifications.pdf", "page": 12, "excerpt": "Supporting quote in {output_language}"}},
+      {{"document": "drawings.pdf", "page": 5, "excerpt": "Additional reference in {output_language}"}}
     ]
   }}
 ]
 
 SOURCES ARRAY RULES:
 - Include ALL document references found in the analysis for each item
-- Each source needs: document name, page number (integer), excerpt (short quote)
-- description: Clean findings summary WITHOUT document references 
+- Each source needs: document name, page number (integer), excerpt (short quote in {output_language})
+- description: Clean findings summary WITHOUT document references (in {output_language})
 - Multiple sources per item are encouraged when available
 
 Status values: found, missing, risk, conditions, pending_clarification
-Include ALL {len(parsed_items)} items. Output language: {output_language}"""
+Include ALL {len(parsed_items)} items.
+IMPORTANT: Write ALL text content in {output_language}."""
 
     response = await call_llm(llm_client, prompt)
     logger.info(f"LLM3 Raw response: {response[:500]}...")

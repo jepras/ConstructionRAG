@@ -161,6 +161,26 @@ export interface ChecklistAnalysisRun {
   updated_at: string
 }
 
+// Checklist Template interfaces
+export interface ChecklistTemplateRequest {
+  name: string
+  content: string
+  category?: string
+  is_public?: boolean
+}
+
+export interface ChecklistTemplate {
+  id: string
+  user_id?: string
+  name: string
+  content: string
+  category: string
+  is_public: boolean
+  created_at: string
+  updated_at: string
+  is_owner: boolean
+}
+
 // Pipeline Configuration interfaces (matching actual API structure)
 export interface PipelineConfig {
   storage?: {
@@ -846,7 +866,7 @@ export class ApiClient {
     })
   }
 
-  async getChecklistAnalysisRun(runId: string): Promise<ChecklistAnalysisRun> {
+  async getChecklistAnalysisRun(runId: string, bypassCache: boolean = false): Promise<ChecklistAnalysisRun> {
     // Try to get auth headers, but don't fail if not authenticated
     let headers = {}
     try {
@@ -855,9 +875,15 @@ export class ApiClient {
       // Continue without auth headers
     }
     
-    return this.request<ChecklistAnalysisRun>(`/api/checklist/runs/${runId}`, {
-      headers,
-    })
+    const requestOptions: any = { headers }
+    
+    // Add cache busting for progress polling
+    if (bypassCache) {
+      requestOptions.cache = 'no-store'
+      requestOptions.next = { revalidate: 0 }
+    }
+    
+    return this.request<ChecklistAnalysisRun>(`/api/checklist/runs/${runId}`, requestOptions)
   }
 
   async getChecklistAnalysisRuns(indexingRunId: string): Promise<ChecklistAnalysisRun[]> {
@@ -869,7 +895,7 @@ export class ApiClient {
       // Continue without auth headers
     }
     
-    return this.request<ChecklistAnalysisRun[]>('/api/checklist/runs', {
+    const response = await this.request<{ runs: ChecklistAnalysisRun[] }>('/api/checklist/runs', {
       headers,
       params: {
         indexing_run_id: indexingRunId,
@@ -877,6 +903,101 @@ export class ApiClient {
       next: {
         revalidate: 300, // 5 minutes cache for analysis runs
         tags: [`checklist-runs-${indexingRunId}`, 'checklist-runs']
+      }
+    })
+    
+    return response.runs || []
+  }
+
+  async deleteChecklistAnalysisRun(runId: string): Promise<void> {
+    const headers = await this.getAuthHeaders()
+    
+    await this.request(`/api/checklist/runs/${runId}`, {
+      method: 'DELETE',
+      headers,
+    })
+  }
+
+  // Checklist Template methods
+  async getChecklistTemplates(): Promise<ChecklistTemplate[]> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public templates
+    }
+    
+    return this.request<ChecklistTemplate[]>('/api/checklist/templates', {
+      headers,
+      next: {
+        revalidate: 300, // 5 minutes cache for templates
+        tags: ['checklist-templates']
+      }
+    })
+  }
+
+  async createChecklistTemplate(request: ChecklistTemplateRequest): Promise<ChecklistTemplate> {
+    // Try to get auth headers, but don't fail if not authenticated (anonymous can create)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for anonymous users
+    }
+    
+    return this.request<ChecklistTemplate>('/api/checklist/templates', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    })
+  }
+
+  async updateChecklistTemplate(templateId: string, request: ChecklistTemplateRequest): Promise<ChecklistTemplate> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<ChecklistTemplate>(`/api/checklist/templates/${templateId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(request),
+    })
+  }
+
+  async deleteChecklistTemplate(templateId: string): Promise<{ message: string }> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<{ message: string }>(`/api/checklist/templates/${templateId}`, {
+      method: 'DELETE',
+      headers,
+    })
+  }
+
+  async getChecklistTemplate(templateId: string): Promise<ChecklistTemplate> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<ChecklistTemplate>(`/api/checklist/templates/${templateId}`, {
+      headers,
+      next: {
+        revalidate: 3600, // 1 hour cache for individual templates
+        tags: [`checklist-template-${templateId}`, 'checklist-templates']
       }
     })
   }

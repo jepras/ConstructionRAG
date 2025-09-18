@@ -1,10 +1,21 @@
 'use client';
 
 import React from 'react';
-import { Play, Save, Download } from 'lucide-react';
+import { Play, Trash2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { FileDropzone } from '@/components/upload/FileDropzone';
 import ChecklistBox from '@/components/features/checklist/ChecklistBox';
@@ -228,25 +239,31 @@ export default function ProjectChecklistContent({
   const [rawOutput, setRawOutput] = React.useState<string>('');
   const [currentAnalysisRunId, setCurrentAnalysisRunId] = React.useState<string>('');
   const [analysisProgress, setAnalysisProgress] = React.useState({ current: 0, total: 4 });
+  const pollingIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const hasCompletedRef = React.useRef<boolean>(false);
 
-  // Load existing analysis runs for this indexing run (authenticated users only)
+  // Load existing analysis runs for this indexing run
   React.useEffect(() => {
     const loadExistingAnalysisRuns = async () => {
       try {
+        console.log('🔄 Loading checklist runs for UUID:', indexingRunId);
+        // Always try to load - backend will return appropriate data based on access level
         const runs = await apiClient.getChecklistAnalysisRuns(indexingRunId);
+        console.log('✅ Loaded checklist runs:', runs.length, 'runs');
         setExistingAnalysisRuns(runs);
       } catch (error) {
-        console.error('Failed to load existing analysis runs:', error);
-        // Not a critical error for public users - they can still create new analyses
+        console.error('❌ Failed to load existing analysis runs:', error);
+        // Not a critical error - just means no existing runs or access denied
       }
     };
 
-    // Only load existing runs for authenticated users
-    // Public users can create new analyses but don't see previous runs (similar to Q&A)
-    if (indexingRunId && isAuthenticated) {
+    // Always load if we have an indexingRunId
+    // Backend handles access control: returns all runs for public projects,
+    // user-specific runs for private projects
+    if (indexingRunId) {
       loadExistingAnalysisRuns();
     }
-  }, [indexingRunId, isAuthenticated]);
+  }, [indexingRunId]);
 
   const handleFilesSelected = (files: File[]) => {
     setUploadedFiles(files);
@@ -282,6 +299,7 @@ export default function ProjectChecklistContent({
     try {
       setIsAnalyzing(true);
       setAnalysisProgress({ current: 0, total: 4 });
+      hasCompletedRef.current = false; // Reset completion flag
       
       // Create analysis run
       const response = await apiClient.createChecklistAnalysis({
@@ -295,7 +313,7 @@ export default function ProjectChecklistContent({
       toast.success("Analysis started! Polling for progress...");
       
       // Start polling for progress
-      pollAnalysisProgress(response.analysis_run_id);
+      startPolling(response.analysis_run_id);
       
     } catch (error) {
       setIsAnalyzing(false);
@@ -304,17 +322,31 @@ export default function ProjectChecklistContent({
     }
   };
 
-  const pollAnalysisProgress = async (analysisRunId: string) => {
-    const poll = async () => {
+  const startPolling = (analysisRunId: string) => {
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    const pollFunction = async () => {
       try {
-        const analysisRun = await apiClient.getChecklistAnalysisRun(analysisRunId);
+        const analysisRun = await apiClient.getChecklistAnalysisRun(analysisRunId, true); // Bypass cache for polling
         
         setAnalysisProgress({ 
           current: analysisRun.progress_current, 
           total: analysisRun.progress_total 
         });
         
-        if (analysisRun.status === 'completed') {
+        if (analysisRun.status === 'completed' && !hasCompletedRef.current) {
+          // Mark as completed to prevent multiple toasts
+          hasCompletedRef.current = true;
+          
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          
           setHasAnalyzed(true);
           setAnalysisResults(analysisRun.results || []);
           setRawOutput(analysisRun.raw_output || '');
@@ -326,50 +358,182 @@ export default function ProjectChecklistContent({
           setExistingAnalysisRuns(updatedRuns);
           
         } else if (analysisRun.status === 'failed') {
+          // Stop polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          
           setIsAnalyzing(false);
           toast.error(`Analysis failed: ${analysisRun.error_message || 'Unknown error'}`);
-          
-        } else if (analysisRun.status === 'running' || analysisRun.status === 'pending') {
-          // Continue polling
-          setTimeout(poll, 2000); // Poll every 2 seconds
         }
+        // For 'running' and 'pending' status, the interval will continue automatically
         
       } catch (error) {
-        console.error('Error polling analysis progress:', error);
+        // Stop polling on error
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        
         setIsAnalyzing(false);
         toast.error('Error checking analysis progress');
       }
     };
     
-    // Start polling immediately
-    poll();
+    // Start polling immediately, then every 1 second
+    pollFunction(); // Call immediately
+    pollingIntervalRef.current = setInterval(pollFunction, 1000);
   };
+  
+  // Cleanup polling on unmount
+  React.useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
 
-  const handleSaveAnalysis = () => {
-    toast.success("Analysis run saved successfully!");
+  const handleDeleteAnalysis = async () => {
+    if (!selectedAnalysisRun) {
+      toast.error("No analysis run selected");
+      return;
+    }
+
+    try {
+      await apiClient.deleteChecklistAnalysisRun(selectedAnalysisRun);
+      toast.success("Analysis run deleted successfully!");
+      
+      // Refresh the list and clear selection
+      const updatedRuns = await apiClient.getChecklistAnalysisRuns(indexingRunId);
+      setExistingAnalysisRuns(updatedRuns);
+      setSelectedAnalysisRun('');
+      setHasAnalyzed(false);
+      setAnalysisResults([]);
+      setRawOutput('');
+    } catch (error) {
+      toast.error("Failed to delete analysis run");
+      console.error('Error deleting analysis run:', error);
+    }
   };
 
   const handleExportPDF = () => {
-    toast.success("Exporting analysis to PDF...");
+    if (!hasAnalyzed || analysisResults.length === 0) {
+      toast.error("No analysis results to export");
+      return;
+    }
+
+    // Create PDF content
+    const content = `
+CHECKLIST ANALYSIS RESULTS
+${selectedAnalysisRun ? `Analysis Run: ${existingAnalysisRuns.find(r => r.id === selectedAnalysisRun)?.checklist_name || 'Unknown'}` : ''}
+Generated: ${new Date().toLocaleDateString()}
+
+SUMMARY:
+- Total items: ${analysisResults.length}
+- Found: ${analysisResults.filter(r => r.status === 'found').length}
+- Missing: ${analysisResults.filter(r => r.status === 'missing').length}
+- Risk: ${analysisResults.filter(r => r.status === 'risk').length}
+- Conditions: ${analysisResults.filter(r => r.status === 'conditions').length}
+- Pending Clarification: ${analysisResults.filter(r => r.status === 'pending_clarification').length}
+
+DETAILED RESULTS:
+${analysisResults.map(result => {
+  const primarySource = result.all_sources?.[0] || 
+    (result.source_document ? {
+      document: result.source_document,
+      page: result.source_page || 0
+    } : null);
+  
+  return `
+${result.item_number} - ${result.item_name}
+Status: ${result.status.toUpperCase()}
+Description: ${result.description}${primarySource ? `
+Source: ${primarySource.document}, page ${primarySource.page}` : ''}
+`;
+}).join('\n')}
+
+RAW OUTPUT:
+${rawOutput}
+    `.trim();
+
+    // Create and download PDF-like text file (browsers don't support direct PDF generation)
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `checklist-analysis-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Analysis exported as text file (PDF export requires server-side generation)");
   };
 
   const handleExportCSV = () => {
-    toast.success("Exporting analysis to CSV...");
+    if (!hasAnalyzed || analysisResults.length === 0) {
+      toast.error("No analysis results to export");
+      return;
+    }
+
+    // Create CSV content
+    const headers = ['Number', 'Name', 'Status', 'Description', 'Source Document', 'Source Page'];
+    const rows = analysisResults.map(result => {
+      // Get primary source from all_sources array (fallback to single source fields)
+      const primarySource = result.all_sources?.[0] || 
+        (result.source_document ? {
+          document: result.source_document,
+          page: result.source_page || 0
+        } : null);
+      
+      return [
+        result.item_number || '',
+        result.item_name || '',
+        result.status,
+        result.description.replace(/"/g, '""'), // Escape quotes in CSV
+        primarySource?.document || '',
+        primarySource?.page?.toString() || ''
+      ];
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(field => `"${field}"`).join(','))
+    ].join('\n');
+
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `checklist-analysis-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Analysis exported to CSV successfully!");
   };
 
   return (
     <div className="p-6 space-y-6">
-      {/* Box 0: Existing Analysis Runs (authenticated users only) */}
-      {isAuthenticated && (
-        <ChecklistBox 
-          title="Load Existing Analysis" 
-          number={0}
-          defaultOpen={false}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select a previous analysis run to load the checklist and results.
-            </p>
+      {/* Box 0: Previous Analysis Runs (always shown) */}
+      <ChecklistBox 
+        title={isAuthenticated ? "Your Previous Analyses" : "Previous Analyses"} 
+        number={0}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {isAuthenticated 
+              ? "Select a previous analysis run to load the checklist and results."
+              : "View previous analyses created for this public project."}
+          </p>
+          
+          {existingAnalysisRuns.length > 0 ? (
             <Select value={selectedAnalysisRun} onValueChange={handleAnalysisRunSelect}>
               <SelectTrigger className="bg-input">
                 <SelectValue placeholder="Choose an existing analysis run" />
@@ -385,37 +549,23 @@ export default function ProjectChecklistContent({
                     </div>
                   </SelectItem>
                 ))}
-                {existingAnalysisRuns.length === 0 && (
-                  <SelectItem value="no-runs" disabled>
-                    No existing analysis runs found
-                  </SelectItem>
-                )}
               </SelectContent>
             </Select>
-          </div>
-        </ChecklistBox>
-      )}
-
-      {/* Box 1: Document Information */}
-      <ChecklistBox 
-        title="Document Information" 
-        number={isAuthenticated ? 1 : 0}
-        defaultOpen={false}
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            This analysis will use the documents from indexing run: <strong>{indexingRunId}</strong>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            No need to upload files - we'll analyze the documents that are already indexed in this project.
-          </p>
+          ) : (
+            <div className="bg-muted/50 rounded-lg p-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                No previous analysis has been run on this project.
+              </p>
+            </div>
+          )}
         </div>
       </ChecklistBox>
 
-      {/* Box 2: Define Checklist */}
+
+      {/* Box 1: Define Checklist */}
       <ChecklistBox 
         title="Define Checklist" 
-        number={isAuthenticated ? 2 : 1}
+        number={existingAnalysisRuns.length > 0 ? 1 : 0}
         defaultOpen={true}
       >
         <ChecklistEditor 
@@ -425,7 +575,7 @@ export default function ProjectChecklistContent({
       </ChecklistBox>
 
       {/* Analyze Button */}
-      <div className="flex justify-center py-4">
+      <div className="flex flex-col items-center py-4 space-y-2">
         <Button 
           onClick={handleAnalyze}
           disabled={isAnalyzing}
@@ -444,53 +594,91 @@ export default function ProjectChecklistContent({
             </>
           )}
         </Button>
+        <p className="text-sm text-muted-foreground text-center max-w-md">
+          Analysis typically takes 2-3 minutes to process the checklist against your project documents.
+        </p>
       </div>
 
       {hasAnalyzed && (
         <>
-          {/* Box 3: Raw LLM Output */}
+          {/* Box 2: Raw LLM Output */}
           <ChecklistBox 
             title="Raw LLM Output" 
-            number={isAuthenticated ? 3 : 2}
+            number={existingAnalysisRuns.length > 0 ? 2 : 1}
             defaultOpen={false}
           >
             <AnalysisResults rawOutput={rawOutput} />
           </ChecklistBox>
 
-          {/* Box 4: Structured Results */}
+          {/* Box 3: Structured Results */}
           <ChecklistBox 
             title="Structured Results" 
-            number={isAuthenticated ? 4 : 3}
+            number={existingAnalysisRuns.length > 0 ? 3 : 2}
             defaultOpen={true}
           >
             <ResultsTable results={analysisResults} />
           </ChecklistBox>
 
-          {/* Box 5: Save/Export */}
+          {/* Box 4: Manage/Export */}
           <ChecklistBox 
-            title="Save/Export" 
-            number={isAuthenticated ? 5 : 4}
+            title="Manage/Export" 
+            number={existingAnalysisRuns.length > 0 ? 4 : 3}
             defaultOpen={false}
           >
             <div className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Save Analysis</p>
-                <Button onClick={handleSaveAnalysis} variant="outline" className="w-full">
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Analysis Run
-                </Button>
-              </div>
-              
-              <Separator />
+              {selectedAnalysisRun && (
+                <>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-foreground">Delete Analysis</p>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="w-full">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Selected Analysis Run
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Analysis Run</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete this analysis run? This will permanently remove 
+                            "{existingAnalysisRuns.find(r => r.id === selectedAnalysisRun)?.checklist_name}" 
+                            and all associated results. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleDeleteAnalysis}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete Analysis
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  
+                  <Separator />
+                </>
+              )}
               
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">Export Results</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={handleExportPDF} variant="outline">
+                  <Button 
+                    onClick={handleExportPDF} 
+                    variant="outline"
+                    disabled={!hasAnalyzed || analysisResults.length === 0}
+                  >
                     <Download className="mr-2 h-4 w-4" />
-                    Export PDF
+                    Export Text
                   </Button>
-                  <Button onClick={handleExportCSV} variant="outline">
+                  <Button 
+                    onClick={handleExportCSV} 
+                    variant="outline"
+                    disabled={!hasAnalyzed || analysisResults.length === 0}
+                  >
                     <Download className="mr-2 h-4 w-4" />
                     Export CSV
                   </Button>

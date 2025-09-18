@@ -9,6 +9,9 @@ from src.models.checklist import (
     AnalysisStatus,
     ChecklistAnalysisRun,
     ChecklistResult,
+    ChecklistTemplate,
+    ChecklistTemplateRequest,
+    ChecklistTemplateResponse,
 )
 from src.shared.errors import ErrorCode
 from src.utils.exceptions import AppError
@@ -153,17 +156,56 @@ class ChecklistService:
         user_id: Optional[str] = None,
         indexing_run_id: Optional[str] = None,
     ) -> list[ChecklistAnalysisRun]:
-        """List analysis runs for a user or indexing run."""
+        """List analysis runs for a user or indexing run.
+        
+        For public projects: returns all analysis runs
+        For auth projects: returns all analysis runs if user is authenticated
+        For private projects: returns only the user's own analysis runs
+        """
         try:
-            query = self.supabase.table("checklist_analysis_runs").select("*")
-
             if indexing_run_id:
+                # First, check the access level of the indexing run
+                indexing_result = (
+                    self.supabase.table("indexing_runs")
+                    .select("access_level, user_id")
+                    .eq("id", indexing_run_id)
+                    .execute()
+                )
+                
+                if not indexing_result.data:
+                    return []
+                
+                access_level = indexing_result.data[0]["access_level"]
+                indexing_run_owner = indexing_result.data[0]["user_id"]
+                
+                # Build query based on access level
+                query = self.supabase.table("checklist_analysis_runs").select("*")
                 query = query.eq("indexing_run_id", indexing_run_id)
-
-            # Note: RLS policies will automatically filter based on user access
-            result = query.order("created_at", desc=True).execute()
-
-            return [ChecklistAnalysisRun(**run) for run in result.data]
+                
+                if access_level == "public":
+                    # For public projects, return all analysis runs
+                    pass  # No additional filtering needed
+                elif access_level == "auth" and user_id:
+                    # For auth projects, return all runs if user is authenticated
+                    pass  # No additional filtering needed
+                elif access_level == "private" and user_id == indexing_run_owner:
+                    # For private projects, only owner can see runs
+                    pass  # No additional filtering needed
+                else:
+                    # No access - return empty list
+                    return []
+                
+                result = query.order("created_at", desc=True).execute()
+                return [ChecklistAnalysisRun(**run) for run in result.data]
+            
+            # If no indexing_run_id specified, return user's runs only
+            if user_id:
+                query = self.supabase.table("checklist_analysis_runs").select("*")
+                query = query.eq("user_id", user_id)
+                result = query.order("created_at", desc=True).execute()
+                return [ChecklistAnalysisRun(**run) for run in result.data]
+            
+            return []
 
         except Exception as e:
             logger.error(f"Error listing analysis runs: {e}")
@@ -367,3 +409,254 @@ class ChecklistService:
         except Exception as e:
             logger.error(f"Error fetching language: {e}")
             return "english"  # fallback
+
+    # Template Management Methods
+
+    async def create_template(
+        self,
+        request: ChecklistTemplateRequest,
+        user_id: Optional[str] = None,
+    ) -> ChecklistTemplateResponse:
+        """Create a new checklist template.
+        
+        For anonymous users: Creates public template with user_id=null
+        For authenticated users: Can create public or private templates
+        """
+        try:
+            # For anonymous users, always create public templates
+            if not user_id:
+                is_public = True
+                access_level = "public"
+            else:
+                is_public = request.is_public
+                access_level = "public" if is_public else "private"
+
+            result = (
+                self.supabase.table("checklist_templates")
+                .insert(
+                    {
+                        "user_id": user_id,
+                        "name": request.name,
+                        "content": request.content,
+                        "category": request.category,
+                        "is_public": is_public,
+                        "access_level": access_level,
+                    }
+                )
+                .execute()
+            )
+
+            if not result.data:
+                raise AppError(
+                    "Failed to create template",
+                    error_code=ErrorCode.INTERNAL_ERROR,
+                )
+
+            template = result.data[0]
+            return ChecklistTemplateResponse(
+                **template,
+                is_owner=True  # Creator is always the owner
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating template: {e}")
+            raise
+
+    async def list_templates_for_user(
+        self, user_id: Optional[str] = None
+    ) -> list[ChecklistTemplateResponse]:
+        """List templates available to a user.
+        
+        Returns all public templates plus user's own private templates.
+        """
+        try:
+            # Start with public templates
+            query = (
+                self.supabase.table("checklist_templates")
+                .select("*")
+                .eq("is_public", True)
+            )
+            public_result = query.execute()
+            
+            templates = []
+            
+            # Add public templates
+            for template in public_result.data:
+                templates.append(ChecklistTemplateResponse(
+                    **template,
+                    is_owner=user_id is not None and template.get("user_id") == user_id
+                ))
+            
+            # Add user's private templates if authenticated
+            if user_id:
+                private_query = (
+                    self.supabase.table("checklist_templates")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .eq("is_public", False)
+                )
+                private_result = private_query.execute()
+                
+                for template in private_result.data:
+                    templates.append(ChecklistTemplateResponse(
+                        **template,
+                        is_owner=True
+                    ))
+            
+            # Sort by created_at descending
+            templates.sort(key=lambda x: x.created_at, reverse=True)
+            return templates
+
+        except Exception as e:
+            logger.error(f"Error listing templates: {e}")
+            raise
+
+    async def get_template_by_id(
+        self, template_id: str, user_id: Optional[str] = None
+    ) -> Optional[ChecklistTemplateResponse]:
+        """Get a specific template by ID.
+        
+        Validates access based on template visibility and ownership.
+        """
+        try:
+            result = (
+                self.supabase.table("checklist_templates")
+                .select("*")
+                .eq("id", template_id)
+                .execute()
+            )
+
+            if not result.data:
+                return None
+
+            template = result.data[0]
+            
+            # Check access
+            if not template["is_public"] and template["user_id"] != user_id:
+                raise AppError(
+                    "You don't have access to this template",
+                    error_code=ErrorCode.FORBIDDEN,
+                )
+
+            return ChecklistTemplateResponse(
+                **template,
+                is_owner=bool(user_id and template.get("user_id") == user_id)
+            )
+
+        except Exception as e:
+            logger.error(f"Error fetching template: {e}")
+            raise
+
+    async def update_template(
+        self,
+        template_id: str,
+        request: ChecklistTemplateRequest,
+        user_id: Optional[str] = None,
+    ) -> ChecklistTemplateResponse:
+        """Update an existing template.
+        
+        Only the owner can update a template.
+        For anonymous users, we'll rely on frontend tracking.
+        """
+        try:
+            # Get existing template
+            existing = (
+                self.supabase.table("checklist_templates")
+                .select("*")
+                .eq("id", template_id)
+                .execute()
+            )
+
+            if not existing.data:
+                raise AppError(
+                    "Template not found",
+                    error_code=ErrorCode.NOT_FOUND,
+                )
+
+            template = existing.data[0]
+            
+            # Check ownership
+            # For anonymous templates (user_id=null), we trust frontend validation
+            if template["user_id"] and template["user_id"] != user_id:
+                raise AppError(
+                    "You don't have permission to update this template",
+                    error_code=ErrorCode.FORBIDDEN,
+                )
+
+            # Update access level based on is_public
+            access_level = "public" if request.is_public else "private"
+
+            # Update template
+            result = (
+                self.supabase.table("checklist_templates")
+                .update(
+                    {
+                        "name": request.name,
+                        "content": request.content,
+                        "category": request.category,
+                        "is_public": request.is_public,
+                        "access_level": access_level,
+                        "updated_at": "NOW()",
+                    }
+                )
+                .eq("id", template_id)
+                .execute()
+            )
+
+            if not result.data:
+                raise AppError(
+                    "Failed to update template",
+                    error_code=ErrorCode.INTERNAL_ERROR,
+                )
+
+            return ChecklistTemplateResponse(
+                **result.data[0],
+                is_owner=True
+            )
+
+        except Exception as e:
+            logger.error(f"Error updating template: {e}")
+            raise
+
+    async def delete_template(
+        self, template_id: str, user_id: Optional[str] = None
+    ):
+        """Delete a template.
+        
+        Only the owner can delete a template.
+        """
+        try:
+            # Get existing template
+            existing = (
+                self.supabase.table("checklist_templates")
+                .select("*")
+                .eq("id", template_id)
+                .execute()
+            )
+
+            if not existing.data:
+                raise AppError(
+                    "Template not found",
+                    error_code=ErrorCode.NOT_FOUND,
+                )
+
+            template = existing.data[0]
+            
+            # Check ownership
+            # For anonymous templates (user_id=null), we trust frontend validation
+            if template["user_id"] and template["user_id"] != user_id:
+                raise AppError(
+                    "You don't have permission to delete this template",
+                    error_code=ErrorCode.FORBIDDEN,
+                )
+
+            # Delete template
+            self.supabase.table("checklist_templates").delete().eq(
+                "id", template_id
+            ).execute()
+
+            logger.info(f"Deleted template {template_id}")
+
+        except Exception as e:
+            logger.error(f"Error deleting template: {e}")
+            raise

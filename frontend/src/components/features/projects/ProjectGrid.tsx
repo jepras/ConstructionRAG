@@ -41,13 +41,10 @@ export default function ProjectGrid() {
   // Transform wiki runs to project format
   const projects: Project[] = wikiRuns && wikiRuns.length > 0
     ? wikiRuns.map((wikiRun, index) => {
-      console.log(`🔄 Processing wiki run ${index + 1}:`, wikiRun);
+      
 
       const wikiStructure = wikiRun.wiki_structure || {};
       const pagesMetadata = wikiRun.pages_metadata || [];
-
-      console.log(`📝 Wiki structure title: "${wikiStructure.title || 'NOT FOUND'}"`);
-      console.log(`📄 Pages metadata count: ${pagesMetadata.length}`);
 
       return {
         id: wikiRun.id, // Use wiki run ID instead of indexing_run_id to ensure uniqueness
