@@ -2,18 +2,8 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-
-export interface ChecklistResult {
-  id: string;
-  number: string;
-  name: string;
-  status: 'pending_clarification' | 'conditions' | 'risk' | 'missing' | 'found';
-  description: string;
-  source?: {
-    document: string;
-    page: number;
-  };
-}
+import { Button } from '@/components/ui/button';
+import { ChecklistResult } from '@/lib/api-client';
 
 interface ResultsTableProps {
   results: ChecklistResult[];
@@ -90,17 +80,11 @@ export default function ResultsTable({ results }: ResultsTableProps) {
                     <tbody>
                       {statusResults.map((result, index) => (
                         <tr key={result.id} className={index !== statusResults.length - 1 ? "border-b border-border" : ""}>
-                          <td className="p-3 text-sm text-foreground font-mono">{result.number}</td>
-                          <td className="p-3 text-sm text-foreground font-medium">{result.name}</td>
+                          <td className="p-3 text-sm text-foreground font-mono">{result.item_number}</td>
+                          <td className="p-3 text-sm text-foreground font-medium">{result.item_name}</td>
                           <td className="p-3 text-sm text-foreground">{result.description}</td>
                           <td className="p-3 text-sm text-muted-foreground">
-                            {result.source ? (
-                              <span>
-                                {result.source.document} (p. {result.source.page})
-                              </span>
-                            ) : (
-                              <span className="italic">Not specified</span>
-                            )}
+                            <SourceCitation result={result} />
                           </td>
                         </tr>
                       ))}
@@ -118,6 +102,120 @@ export default function ResultsTable({ results }: ResultsTableProps) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Smart source citation component with multi-source support
+function SourceCitation({ result }: { result: ChecklistResult }) {
+  const [showAllSources, setShowAllSources] = React.useState(false);
+
+  // Helper function to group sources by document
+  const groupSourcesByDocument = (sources: typeof result.all_sources) => {
+    if (!sources || sources.length === 0) return {};
+    
+    const grouped = sources.reduce((acc, source) => {
+      const docKey = source.document;
+      if (!acc[docKey]) {
+        acc[docKey] = [];
+      }
+      acc[docKey].push(source);
+      return acc;
+    }, {} as Record<string, typeof sources>);
+    
+    return grouped;
+  };
+
+  // Primary source (fallback to single source fields if all_sources not available)
+  const primarySource = result.all_sources?.[0] || 
+    (result.source_document ? {
+      document: result.source_document,
+      page: result.source_page || 0,
+      excerpt: result.source_excerpt
+    } : null);
+
+  const hasMultipleSources = result.all_sources && result.all_sources.length > 1;
+
+  if (!primarySource) {
+    return <span className="italic">Not specified</span>;
+  }
+
+  if (!hasMultipleSources) {
+    // Single source - simple display
+    return (
+      <div className="space-y-1">
+        <div>
+          {primarySource.document} (p. {primarySource.page})
+        </div>
+        {primarySource.excerpt && (
+          <div className="text-xs text-muted-foreground italic">
+            "{primarySource.excerpt}"
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Multiple sources - smart grouping and expandable display
+  const groupedSources = groupSourcesByDocument(result.all_sources!);
+  const documentNames = Object.keys(groupedSources);
+
+  if (!showAllSources) {
+    // Show condensed view
+    return (
+      <div className="space-y-1">
+        <div>
+          {primarySource.document} (p. {primarySource.page})
+        </div>
+        {primarySource.excerpt && (
+          <div className="text-xs text-muted-foreground italic">
+            "{primarySource.excerpt}"
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto p-0 text-xs text-primary hover:text-primary/80"
+          onClick={() => setShowAllSources(true)}
+        >
+          Show all {result.all_sources!.length} sources
+        </Button>
+      </div>
+    );
+  }
+
+  // Expanded view - show all sources grouped by document
+  return (
+    <div className="space-y-2">
+      {documentNames.map((docName) => {
+        const docSources = groupedSources[docName];
+        const pages = docSources.map(s => s.page).filter(p => p > 0);
+        const uniquePages = [...new Set(pages)].sort((a, b) => a - b);
+        
+        return (
+          <div key={docName} className="space-y-1">
+            <div>
+              {docName} (p. {uniquePages.length > 3 
+                ? `${uniquePages.slice(0, 3).join(', ')}, +${uniquePages.length - 3} more`
+                : uniquePages.join(', ')
+              })
+            </div>
+            {docSources[0].excerpt && (
+              <div className="text-xs text-muted-foreground italic">
+                "{docSources[0].excerpt}"
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-auto p-0 text-xs text-primary hover:text-primary/80"
+        onClick={() => setShowAllSources(false)}
+      >
+        Show less
+      </Button>
     </div>
   );
 }

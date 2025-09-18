@@ -109,6 +109,58 @@ export interface WikiInitialData {
   message?: string
 }
 
+// Checklist Analysis interfaces
+export interface ChecklistAnalysisRequest {
+  indexing_run_id: string
+  checklist_content: string
+  checklist_name: string
+  model_name?: string
+}
+
+export interface ChecklistAnalysisResponse {
+  analysis_run_id: string
+  status: string
+  message: string
+}
+
+export interface ChecklistSourceReference {
+  document: string
+  page: number
+  excerpt?: string
+}
+
+export interface ChecklistResult {
+  id: string
+  item_number: string
+  item_name: string
+  status: 'found' | 'missing' | 'risk' | 'conditions' | 'pending_clarification'
+  description: string
+  confidence_score?: number
+  source_document?: string
+  source_page?: number
+  source_excerpt?: string
+  all_sources?: ChecklistSourceReference[]
+  created_at?: string
+}
+
+export interface ChecklistAnalysisRun {
+  id: string
+  indexing_run_id: string
+  user_id?: string
+  checklist_name: string
+  checklist_content: string
+  model_name: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  raw_output?: string
+  progress_current: number
+  progress_total: number
+  error_message?: string
+  access_level: string
+  results?: ChecklistResult[]
+  created_at: string
+  updated_at: string
+}
+
 // Pipeline Configuration interfaces (matching actual API structure)
 export interface PipelineConfig {
   storage?: {
@@ -773,6 +825,58 @@ export class ApiClient {
       next: {
         revalidate: 3600, // 1 hour cache for individual queries
         tags: [`query-${queryId}`, 'queries']
+      }
+    })
+  }
+
+  // Checklist Analysis methods
+  async createChecklistAnalysis(request: ChecklistAnalysisRequest): Promise<ChecklistAnalysisResponse> {
+    // Try to get auth headers, but don't fail if not authenticated (public projects)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+    
+    return this.request<ChecklistAnalysisResponse>('/api/checklist/analyze', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    })
+  }
+
+  async getChecklistAnalysisRun(runId: string): Promise<ChecklistAnalysisRun> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<ChecklistAnalysisRun>(`/api/checklist/runs/${runId}`, {
+      headers,
+    })
+  }
+
+  async getChecklistAnalysisRuns(indexingRunId: string): Promise<ChecklistAnalysisRun[]> {
+    // Try to get auth headers, but don't fail if not authenticated
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers
+    }
+    
+    return this.request<ChecklistAnalysisRun[]>('/api/checklist/runs', {
+      headers,
+      params: {
+        indexing_run_id: indexingRunId,
+      },
+      next: {
+        revalidate: 300, // 5 minutes cache for analysis runs
+        tags: [`checklist-runs-${indexingRunId}`, 'checklist-runs']
       }
     })
   }

@@ -10,7 +10,16 @@ import { FileDropzone } from '@/components/upload/FileDropzone';
 import ChecklistBox from '@/components/features/checklist/ChecklistBox';
 import ChecklistEditor from '@/components/features/checklist/ChecklistEditor';
 import AnalysisResults from '@/components/features/checklist/AnalysisResults';
-import ResultsTable, { ChecklistResult } from '@/components/features/checklist/ResultsTable';
+import ResultsTable from '@/components/features/checklist/ResultsTable';
+import { apiClient, ChecklistResult, ChecklistAnalysisRun } from '@/lib/api-client';
+
+// Utility function to extract UUID from project slug
+function extractUUIDFromSlug(slug: string): string {
+  // Extract UUID pattern from the end of the slug
+  const uuidPattern = /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i;
+  const match = slug.match(uuidPattern);
+  return match ? match[1] : slug; // Return original if no UUID found
+}
 
 interface ProjectChecklistContentProps {
   projectSlug: string;
@@ -206,13 +215,38 @@ export default function ProjectChecklistContent({
   isAuthenticated, 
   user 
 }: ProjectChecklistContentProps) {
+  // Extract actual UUID from the project slug/runId
+  const indexingRunId = React.useMemo(() => extractUUIDFromSlug(runId), [runId]);
+  
   const [selectedAnalysisRun, setSelectedAnalysisRun] = React.useState<string>('');
+  const [existingAnalysisRuns, setExistingAnalysisRuns] = React.useState<ChecklistAnalysisRun[]>([]);
   const [uploadedFiles, setUploadedFiles] = React.useState<File[]>([]);
   const [checklist, setChecklist] = React.useState<string>(DEFAULT_CHECKLIST);
   const [isAnalyzing, setIsAnalyzing] = React.useState<boolean>(false);
   const [hasAnalyzed, setHasAnalyzed] = React.useState<boolean>(false);
   const [analysisResults, setAnalysisResults] = React.useState<ChecklistResult[]>([]);
   const [rawOutput, setRawOutput] = React.useState<string>('');
+  const [currentAnalysisRunId, setCurrentAnalysisRunId] = React.useState<string>('');
+  const [analysisProgress, setAnalysisProgress] = React.useState({ current: 0, total: 4 });
+
+  // Load existing analysis runs for this indexing run (authenticated users only)
+  React.useEffect(() => {
+    const loadExistingAnalysisRuns = async () => {
+      try {
+        const runs = await apiClient.getChecklistAnalysisRuns(indexingRunId);
+        setExistingAnalysisRuns(runs);
+      } catch (error) {
+        console.error('Failed to load existing analysis runs:', error);
+        // Not a critical error for public users - they can still create new analyses
+      }
+    };
+
+    // Only load existing runs for authenticated users
+    // Public users can create new analyses but don't see previous runs (similar to Q&A)
+    if (indexingRunId && isAuthenticated) {
+      loadExistingAnalysisRuns();
+    }
+  }, [indexingRunId, isAuthenticated]);
 
   const handleFilesSelected = (files: File[]) => {
     setUploadedFiles(files);
@@ -223,39 +257,92 @@ export default function ProjectChecklistContent({
     setUploadedFiles(files => files.filter((_, i) => i !== index));
   };
 
-  const handleAnalysisRunSelect = (runId: string) => {
-    const selectedRun = MOCK_ANALYSIS_RUNS.find(run => run.id === runId);
-    if (selectedRun) {
-      setSelectedAnalysisRun(runId);
-      setHasAnalyzed(true);
-      setAnalysisResults(MOCK_ANALYSIS_RESULTS);
-      setRawOutput(MOCK_RAW_OUTPUT);
-      toast.success(`Loaded analysis: ${selectedRun.name}`);
+  const handleAnalysisRunSelect = async (analysisRunId: string) => {
+    try {
+      const analysisRun = await apiClient.getChecklistAnalysisRun(analysisRunId);
+      setSelectedAnalysisRun(analysisRunId);
+      setChecklist(analysisRun.checklist_content);
+      setRawOutput(analysisRun.raw_output || '');
+      setAnalysisResults(analysisRun.results || []);
+      setHasAnalyzed(analysisRun.status === 'completed' && (analysisRun.results?.length || 0) > 0);
+      toast.success(`Loaded analysis: ${analysisRun.checklist_name}`);
+    } catch (error) {
+      toast.error('Failed to load analysis run');
+      console.error('Error loading analysis run:', error);
     }
   };
 
   const handleAnalyze = async () => {
-    if (uploadedFiles.length === 0) {
-      toast.error("Please upload at least one PDF file");
-      return;
-    }
-    
+    // No file upload needed - use existing indexing run documents
     if (!checklist.trim()) {
       toast.error("Please define a checklist");
       return;
     }
 
-    setIsAnalyzing(true);
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress({ current: 0, total: 4 });
+      
+      // Create analysis run
+      const response = await apiClient.createChecklistAnalysis({
+        indexing_run_id: indexingRunId,
+        checklist_content: checklist,
+        checklist_name: `Analysis - ${new Date().toLocaleDateString()}`,
+        model_name: 'google/gemini-2.5-flash-lite'
+      });
+      
+      setCurrentAnalysisRunId(response.analysis_run_id);
+      toast.success("Analysis started! Polling for progress...");
+      
+      // Start polling for progress
+      pollAnalysisProgress(response.analysis_run_id);
+      
+    } catch (error) {
+      setIsAnalyzing(false);
+      toast.error('Failed to start analysis');
+      console.error('Error starting analysis:', error);
+    }
+  };
+
+  const pollAnalysisProgress = async (analysisRunId: string) => {
+    const poll = async () => {
+      try {
+        const analysisRun = await apiClient.getChecklistAnalysisRun(analysisRunId);
+        
+        setAnalysisProgress({ 
+          current: analysisRun.progress_current, 
+          total: analysisRun.progress_total 
+        });
+        
+        if (analysisRun.status === 'completed') {
+          setHasAnalyzed(true);
+          setAnalysisResults(analysisRun.results || []);
+          setRawOutput(analysisRun.raw_output || '');
+          setIsAnalyzing(false);
+          toast.success("Analysis completed successfully!");
+          
+          // Refresh the list of existing analysis runs
+          const updatedRuns = await apiClient.getChecklistAnalysisRuns(indexingRunId);
+          setExistingAnalysisRuns(updatedRuns);
+          
+        } else if (analysisRun.status === 'failed') {
+          setIsAnalyzing(false);
+          toast.error(`Analysis failed: ${analysisRun.error_message || 'Unknown error'}`);
+          
+        } else if (analysisRun.status === 'running' || analysisRun.status === 'pending') {
+          // Continue polling
+          setTimeout(poll, 2000); // Poll every 2 seconds
+        }
+        
+      } catch (error) {
+        console.error('Error polling analysis progress:', error);
+        setIsAnalyzing(false);
+        toast.error('Error checking analysis progress');
+      }
+    };
     
-    // Simulate analysis process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    setHasAnalyzed(true);
-    setAnalysisResults(MOCK_ANALYSIS_RESULTS);
-    setRawOutput(MOCK_RAW_OUTPUT);
-    setIsAnalyzing(false);
-    
-    toast.success("Analysis completed successfully!");
+    // Start polling immediately
+    poll();
   };
 
   const handleSaveAnalysis = () => {
@@ -272,60 +359,63 @@ export default function ProjectChecklistContent({
 
   return (
     <div className="p-6 space-y-6">
-      {/* Box 0: Existing Analysis Runs */}
+      {/* Box 0: Existing Analysis Runs (authenticated users only) */}
+      {isAuthenticated && (
+        <ChecklistBox 
+          title="Load Existing Analysis" 
+          number={0}
+          defaultOpen={false}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select a previous analysis run to load the checklist and results.
+            </p>
+            <Select value={selectedAnalysisRun} onValueChange={handleAnalysisRunSelect}>
+              <SelectTrigger className="bg-input">
+                <SelectValue placeholder="Choose an existing analysis run" />
+              </SelectTrigger>
+              <SelectContent>
+                {existingAnalysisRuns.map((run) => (
+                  <SelectItem key={run.id} value={run.id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{run.checklist_name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(run.created_at).toLocaleDateString()} • {run.status} • {run.model_name}
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+                {existingAnalysisRuns.length === 0 && (
+                  <SelectItem value="no-runs" disabled>
+                    No existing analysis runs found
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </ChecklistBox>
+      )}
+
+      {/* Box 1: Document Information */}
       <ChecklistBox 
-        title="Load Existing Analysis" 
-        number={0}
+        title="Document Information" 
+        number={isAuthenticated ? 1 : 0}
         defaultOpen={false}
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Select a previous analysis run to load the checklist and results.
+            This analysis will use the documents from indexing run: <strong>{indexingRunId}</strong>
           </p>
-          <Select value={selectedAnalysisRun} onValueChange={handleAnalysisRunSelect}>
-            <SelectTrigger className="bg-input">
-              <SelectValue placeholder="Choose an existing analysis run" />
-            </SelectTrigger>
-            <SelectContent>
-              {MOCK_ANALYSIS_RUNS.map((run) => (
-                <SelectItem key={run.id} value={run.id}>
-                  <div className="flex flex-col">
-                    <span className="font-medium">{run.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(run.date).toLocaleDateString()} • {run.checklist}
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </ChecklistBox>
-
-      {/* Box 1: Upload PDF Files */}
-      <ChecklistBox 
-        title="Upload Your PDF Files" 
-        number={1}
-        defaultOpen={true}
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Select construction documents, specifications, and drawings
+          <p className="text-xs text-muted-foreground">
+            No need to upload files - we'll analyze the documents that are already indexed in this project.
           </p>
-          <FileDropzone
-            onFilesSelected={handleFilesSelected}
-            selectedFiles={uploadedFiles}
-            onRemoveFile={handleRemoveFile}
-            maxFiles={10}
-            showValidation={false}
-          />
         </div>
       </ChecklistBox>
 
       {/* Box 2: Define Checklist */}
       <ChecklistBox 
         title="Define Checklist" 
-        number={2}
+        number={isAuthenticated ? 2 : 1}
         defaultOpen={true}
       >
         <ChecklistEditor 
@@ -345,7 +435,7 @@ export default function ProjectChecklistContent({
           {isAnalyzing ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground mr-2"></div>
-              Analyzing...
+              Analyzing... (Step {analysisProgress.current}/{analysisProgress.total})
             </>
           ) : (
             <>
@@ -361,7 +451,7 @@ export default function ProjectChecklistContent({
           {/* Box 3: Raw LLM Output */}
           <ChecklistBox 
             title="Raw LLM Output" 
-            number={3}
+            number={isAuthenticated ? 3 : 2}
             defaultOpen={false}
           >
             <AnalysisResults rawOutput={rawOutput} />
@@ -370,7 +460,7 @@ export default function ProjectChecklistContent({
           {/* Box 4: Structured Results */}
           <ChecklistBox 
             title="Structured Results" 
-            number={4}
+            number={isAuthenticated ? 4 : 3}
             defaultOpen={true}
           >
             <ResultsTable results={analysisResults} />
@@ -379,7 +469,7 @@ export default function ProjectChecklistContent({
           {/* Box 5: Save/Export */}
           <ChecklistBox 
             title="Save/Export" 
-            number={5}
+            number={isAuthenticated ? 5 : 4}
             defaultOpen={false}
           >
             <div className="space-y-4">
