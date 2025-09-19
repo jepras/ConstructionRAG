@@ -48,59 +48,101 @@ class ChecklistAnalysisOrchestrator:
             )
             await self.checklist_service.update_progress(analysis_run_id, 0, 4)
             
-            # STEP 1: Generate queries from checklist
-            logger.info(f"Step 1/4: Parsing checklist for analysis {analysis_run_id}")
-            parsed_data = await generate_queries_from_checklist(
-                analysis_run.checklist_content,
-                language,
-                analysis_run.model_name
-            )
+            # Use @chain decorator approach for proper trace grouping
+            from langchain_core.runnables import chain
             
-            await self.checklist_service.update_progress(analysis_run_id, 1, 4)
+            @chain
+            async def checklist_analysis_chain(inputs):
+                checklist_content = inputs["checklist_content"]
+                language = inputs["language"] 
+                model_name = inputs["model_name"]
+                analysis_run_id = inputs["analysis_run_id"]
+                indexing_run_id = inputs["indexing_run_id"]
+                
+                # STEP 1: Generate queries from checklist
+                logger.info(f"Step 1/4: Parsing checklist for analysis {analysis_run_id}")
+                parsed_data = await generate_queries_from_checklist(
+                    checklist_content,
+                    language,
+                    model_name
+                )
+                
+                await self.checklist_service.update_progress(analysis_run_id, 1, 4)
+                
+                # STEP 2: Retrieve chunks for all queries (optimized batch processing)
+                logger.info(
+                    f"Step 2/4: Retrieving documents for {len(parsed_data['queries'])} queries using batch processing"
+                )
+                
+                # Use batch retrieval for better performance (single embedding API call instead of N calls)
+                unique_chunks = await retrieve_chunks_for_queries_batch(
+                    parsed_data["queries"], 
+                    indexing_run_id
+                )
+                logger.info(f"Retrieved {len(unique_chunks)} unique chunks")
+                
+                await self.checklist_service.update_progress(analysis_run_id, 2, 4)
+                
+                # STEP 3: Analyze chunks against checklist
+                logger.info(
+                    f"Step 3/4: Analyzing {len(unique_chunks)} chunks against checklist"
+                )
+                raw_analysis = await analyze_checklist_with_chunks(
+                    parsed_data["items"],
+                    unique_chunks,
+                    language,
+                    model_name
+                )
+                
+                # Store raw output
+                await self.checklist_service.update_analysis_raw_output(
+                    analysis_run_id, raw_analysis
+                )
+                await self.checklist_service.update_progress(analysis_run_id, 3, 4)
+                
+                # STEP 4: Structure the analysis output
+                logger.info(f"Step 4/4: Structuring analysis results")
+                structured_results = await structure_analysis_output(
+                    raw_analysis,
+                    parsed_data["items"],
+                    language,
+                    model_name
+                )
+                
+                return {
+                    "parsed_data": parsed_data,
+                    "unique_chunks": unique_chunks, 
+                    "raw_analysis": raw_analysis,
+                    "structured_results": structured_results
+                }
             
-            # STEP 2: Retrieve chunks for all queries (optimized batch processing)
-            logger.info(
-                f"Step 2/4: Retrieving documents for {len(parsed_data['queries'])} queries using batch processing"
-            )
-            
-            # Use batch retrieval for better performance (single embedding API call instead of N calls)
-            unique_chunks = await retrieve_chunks_for_queries_batch(
-                parsed_data["queries"], 
-                str(analysis_run.indexing_run_id)
-            )
-            logger.info(f"Retrieved {len(unique_chunks)} unique chunks")
-            
-            await self.checklist_service.update_progress(analysis_run_id, 2, 4)
-            
-            # STEP 3: Analyze chunks against checklist
-            logger.info(
-                f"Step 3/4: Analyzing {len(unique_chunks)} chunks against checklist"
-            )
-            raw_analysis = await analyze_checklist_with_chunks(
-                parsed_data["items"],
-                unique_chunks,
-                language,
-                analysis_run.model_name
-            )
-            
-            # Store raw output
-            await self.checklist_service.update_analysis_raw_output(
-                analysis_run_id, raw_analysis
-            )
-            await self.checklist_service.update_progress(analysis_run_id, 3, 4)
-            
-            # STEP 4: Structure the analysis output
-            logger.info(f"Step 4/4: Structuring analysis results")
-            structured_results = await structure_analysis_output(
-                raw_analysis,
-                parsed_data["items"],
-                language,
-                analysis_run.model_name
+            # Execute the chain with metadata
+            result = await checklist_analysis_chain.ainvoke(
+                {
+                    "checklist_content": analysis_run.checklist_content,
+                    "language": language,
+                    "model_name": analysis_run.model_name,
+                    "analysis_run_id": analysis_run_id,
+                    "indexing_run_id": str(analysis_run.indexing_run_id)
+                },
+                config={
+                    "run_name": f"checklist_analysis_{analysis_run_id[:8]}",
+                    "metadata": {
+                        "analysis_run_id": analysis_run_id,
+                        "indexing_run_id": str(analysis_run.indexing_run_id),
+                        "checklist_id": analysis_run.checklist_id if hasattr(analysis_run, 'checklist_id') else None
+                    },
+                    "tags": [
+                        "checklist_analysis",
+                        analysis_run.model_name,
+                        "production"
+                    ]
+                }
             )
             
             # Store structured results
             await self.checklist_service.store_checklist_results(
-                analysis_run_id, structured_results
+                analysis_run_id, result["structured_results"]
             )
             await self.checklist_service.update_progress(analysis_run_id, 4, 4)
             

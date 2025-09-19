@@ -29,7 +29,7 @@ def create_llm_client(model_name: str) -> ChatOpenAI:
 async def call_llm(llm_client: ChatOpenAI, prompt: str) -> str:
     """Make async LLM call following existing patterns."""
     message = HumanMessage(content=prompt)
-    response = await llm_client.ainvoke([message])
+    response = await llm_client.ainvoke([message], config={"run_name": "analyzer"})
     return response.content
 
 
@@ -78,21 +78,15 @@ From {doc_name}, Page {page_number}:
 
 You are a construction professional reviewing project documents to verify compliance with a checklist.
 
-Checklist Items to Analyze:
-{items_text}
-
-Retrieved Document Excerpts:
-{chunks_text}
-
-For each checklist item, determine:
-- Status: FOUND/MISSING/RISK/CONDITIONS/PENDING_CLARIFICATION
+For each checklist item, provide a status:
+- Status: FOUND/MISSING/PARTIALLY_FOUND
   - FOUND: Information is present and complete in the documents
   - MISSING: Required information is absent from the documents
   - PARTIALLY_FOUND: Information exists but presents potential risks or concerns. Information is unclear or requires further review. 
 
-- Provide detailed description of findings
+For each checklist item, provide also a description:
+- A description of what was found or what is missing. If possible, provide the answer to the checklist item. 
 - When citing sources, reference the actual document name and page number (e.g., "specifications.pdf, Page 12")
-- Be specific about what was found or what is missing
 
 IMPORTANT: When referencing information, cite the specific document name and page number directly 
 (e.g., "As specified in drawings.pdf, Page 5" or "According to manual.pdf, Page 23").
@@ -100,6 +94,13 @@ Do NOT use phrases like "Document Excerpt" or "Excerpt 1" - use the actual docum
 
 Write your analysis in {output_language} as detailed text. 
 Structure your response by going through each checklist item in order.
+
+Checklist Items to Analyze:
+{items_text}
+
+Retrieved Document Excerpts:
+{chunks_text}
+
 Be thorough and specific in your findings with proper document citations."""
 
         response = await call_llm(llm_client, prompt)

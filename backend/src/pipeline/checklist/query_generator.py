@@ -31,7 +31,7 @@ def create_llm_client(model_name: str) -> ChatOpenAI:
 async def call_llm(llm_client: ChatOpenAI, prompt: str) -> str:
     """Make async LLM call following existing patterns."""
     message = HumanMessage(content=prompt)
-    response = await llm_client.ainvoke([message])
+    response = await llm_client.ainvoke([message], config={"run_name": "query_generator"})
     return response.content
 
 
