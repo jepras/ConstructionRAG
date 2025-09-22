@@ -6,6 +6,7 @@ services:
     environment:
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
+      - BACKEND_API_URL=${BACKEND_API_URL}
     env_file:
       - backend/.env
     volumes:

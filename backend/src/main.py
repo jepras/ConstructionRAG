@@ -67,6 +67,13 @@ async def validate_startup_config() -> None:
         logger.info("📍 API available at: http://localhost:8000")
         logger.info("📚 Docs available at: http://localhost:8000/docs") 
         logger.info("✅ Health check: http://localhost:8000/health")
+        
+        # Environment debugging - use error level to ensure visibility in Docker logs
+        logger.error("🔍 Environment Variables:")
+        logger.error(f"   SUPABASE_URL: {os.getenv('SUPABASE_URL', 'NOT SET')}")
+        logger.error(f"   SUPABASE_ANON_KEY: {os.getenv('SUPABASE_ANON_KEY', 'NOT SET')[:20]}...")
+        logger.error(f"   ENVIRONMENT: {os.getenv('ENVIRONMENT', 'NOT SET')}")
+        logger.error(f"   Backend will connect to: {os.getenv('SUPABASE_URL', 'NOT SET')}")
         return
         
     from src.services.config_service import ConfigService

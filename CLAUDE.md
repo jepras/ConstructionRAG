@@ -64,11 +64,28 @@ Production React Frontend on Railway
 - **Important**: Frontend production environment variables are correctly configured to point to production API URLs. Do not suggest env var configuration issues for production.
 
 #### Local Development
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-- Health Check: http://localhost:8000/health
-- Legacy Streamlit Frontend: http://localhost:8501 (if running)
+
+**IMPORTANT**: Local development now uses a **local Supabase database** for complete isolation from production data.
+
+**Quick Start:**
+```bash
+# 1. Start local Supabase (if not running)
+supabase start
+
+# 2. Start backend with webhook support
+./start-local-dev.sh
+
+# 3. In separate terminal: Start frontend
+cd frontend && npm run dev
+```
+
+**Local URLs:**
+- **Frontend**: http://localhost:3000 (auto-assigned port, check terminal output)
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+- **Supabase Studio**: http://127.0.0.1:54323
+- **Ngrok Public URL**: Displayed in `start-local-dev.sh` output (for webhook testing)
 
 ## Architecture
 
@@ -147,7 +164,6 @@ The current working webhook path for automatic wiki generation after indexing:
 ## Key Development Practices
 
 ### Database Operations
-- Uses **production Supabase database** (not local)
 - All database operations via Supabase client
 - Vector operations use pgvector extension
 - Migrations needs to be applied with supabase db push - ask for permission before doing that. 
