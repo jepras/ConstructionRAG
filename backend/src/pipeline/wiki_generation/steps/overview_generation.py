@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.shared.langchain_helpers import create_llm_client, call_llm_with_tracing
 from src.models import StepResult
 
 # Reuse the production Voyage client from the indexing pipeline
@@ -66,19 +67,12 @@ class OverviewGenerationStep(PipelineStep):
         self.content_preview_length = config.get("content_preview_length", 600)  # Reduced from 800
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
 
-        # Initialize LangChain OpenAI client with OpenRouter configuration - AFTER all attributes are set
+        # Initialize LangChain OpenAI client using shared helper
         try:
-            settings = get_settings()
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-
-            # Create LangChain ChatOpenAI client configured for OpenRouter
-            self.llm_client = ChatOpenAI(
-                model=self.model,
-                openai_api_key=self.openrouter_api_key,
-                openai_api_base="https://openrouter.ai/api/v1",
-                default_headers={"HTTP-Referer": "https://constructionrag.com"},
+            self.llm_client = create_llm_client(
+                model_name=self.model,
+                max_tokens=4000,
+                temperature=0.1
             )
         except Exception as e:
             logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
@@ -413,14 +407,22 @@ class OverviewGenerationStep(PipelineStep):
         self, overview_data: dict[str, Any], metadata: dict[str, Any], indexing_run_id: str = None
     ) -> str:
         """Generate project overview using LLM."""
-        if not self.openrouter_api_key:
-            raise ValueError("OpenRouter API key not configured")
-
         # Prepare prompt
         prompt = self._create_overview_prompt(overview_data, metadata)
 
-        # Call LLM with analytics tracking
-        response = await self._call_openrouter_api(prompt, max_tokens=2000, indexing_run_id=indexing_run_id)
+        # Call LLM with tracing
+        response = await call_llm_with_tracing(
+            llm_client=self.llm_client,
+            prompt=prompt,
+            run_name="overview_generator",
+            metadata={
+                "step": "overview_generation",
+                "indexing_run_id": indexing_run_id,
+                "model": self.model,
+                "chunks_processed": len(overview_data.get("retrieved_chunks", [])),
+                "max_tokens": 2000
+            }
+        )
 
         return response
 
@@ -483,54 +485,3 @@ Output your response in {output_language}:"""
 
         return prompt
 
-    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 4000, indexing_run_id: str = None) -> str:
-        """Call OpenRouter API via LangChain ChatOpenAI with PostHog LangChain callback for analytics."""
-        print(
-            f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain client configured: {'✓' if self.llm_client else '✗'}"
-        )
-
-        if not self.llm_client:
-            raise Exception("LangChain ChatOpenAI client not configured")
-
-        try:
-            # Create message for LangChain
-            message = HumanMessage(content=prompt)
-
-            # Get PostHog callback for automatic LLM tracking
-            posthog_callback = posthog_service.get_langchain_callback(
-                pipeline_step="wiki_overview_generation",
-                indexing_run_id=indexing_run_id,
-                additional_properties={
-                    "max_tokens": max_tokens,
-                    "step_type": "overview_generation",
-                    "model": self.model,
-                },
-            )
-
-            # Configure callbacks for the LangChain call
-            callbacks = [posthog_callback] if posthog_callback else []
-
-            # Make async call to LangChain ChatOpenAI with PostHog callback
-            response = await self.llm_client.ainvoke([message], config={"callbacks": callbacks} if callbacks else None)
-            content = response.content
-
-            # Ensure proper UTF-8 encoding for all characters (Danish æøå, quotes, symbols, etc.)
-            if isinstance(content, bytes):
-                content = content.decode("utf-8")
-            elif isinstance(content, str):
-                # Fix any double-encoding issues by re-encoding/decoding
-                try:
-                    content = content.encode("utf-8").decode("utf-8")
-                except UnicodeError:
-                    # If already properly encoded, keep as-is
-                    pass
-
-            print(
-                f"🔍 [DEBUG] OverviewGenerationStep._call_openrouter_api() - API call successful, content length: {len(content)}"
-            )
-            return content
-
-        except Exception as e:
-            print(f"❌ [DEBUG] OverviewGenerationStep._call_openrouter_api() - LangChain API error: {e}")
-            logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
-            raise

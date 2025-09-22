@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.shared.langchain_helpers import create_llm_client, call_llm_with_tracing
 from src.models import StepResult
 from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
@@ -40,28 +41,21 @@ class StructureGenerationStep(PipelineStep):
         # Use config passed from orchestrator (no fresh ConfigService calls)
         gen_cfg = config.get("generation", {})
         self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
-
-        # Initialize LangChain OpenAI client with OpenRouter configuration
-        try:
-            settings = get_settings()
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-
-            # Create LangChain ChatOpenAI client configured for OpenRouter
-            self.llm_client = ChatOpenAI(
-                model=self.model,
-                openai_api_key=self.openrouter_api_key,
-                openai_api_base="https://openrouter.ai/api/v1",
-                default_headers={"HTTP-Referer": "https://constructionrag.com"},
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
-            raise
         self.language = config.get("defaults", {}).get("language", "english")
         self.max_tokens = config.get("structure_max_tokens", 6000)
         self.temperature = gen_cfg.get("temperature", config.get("temperature", 0.3))
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
+
+        # Initialize LangChain OpenAI client using shared helper
+        try:
+            self.llm_client = create_llm_client(
+                model_name=self.model,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
+            raise
 
         # Add new config for testing limits
         self.max_pages = gen_cfg.get("max_pages", 10)  # Default to 10 if not specified
@@ -139,14 +133,22 @@ class StructureGenerationStep(PipelineStep):
         self, project_overview: str, semantic_analysis: dict, metadata: dict[str, Any], indexing_run_id: str = None
     ) -> dict[str, Any]:
         """Generate wiki structure using LLM."""
-        if not self.openrouter_api_key:
-            raise ValueError("OpenRouter API key not configured")
-
         # Prepare prompt
         prompt = self._create_structure_prompt(project_overview, semantic_analysis, metadata)
 
         # Call LLM with analytics tracking
-        response = await self._call_openrouter_api(prompt, max_tokens=3000, indexing_run_id=indexing_run_id)
+        response = await call_llm_with_tracing(
+            llm_client=self.llm_client,
+            prompt=prompt,
+            run_name="structure_generator",
+            metadata={
+                "step": "structure_generation",
+                "indexing_run_id": indexing_run_id,
+                "model": self.model,
+                "max_tokens": 3000,
+                "language": self.language
+            }
+        )
 
         # Debug logging for LLM response
         logger.info(f"📋 [Wiki:Structure] LLM response received, length: {len(response)} chars")
@@ -265,36 +267,6 @@ IMPORTANT FORMATTING INSTRUCTIONS:
 
         return prompt
 
-    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 6000, indexing_run_id: str = None) -> str:
-        """Call OpenRouter API via LangChain ChatOpenAI with PostHog LangChain callback for analytics."""
-        if not self.llm_client:
-            raise Exception("LangChain ChatOpenAI client not configured")
-
-        try:
-            # Create message for LangChain
-            message = HumanMessage(content=prompt)
-
-            # Get PostHog callback for automatic LLM tracking
-            posthog_callback = posthog_service.get_langchain_callback(
-                pipeline_step="wiki_structure_generation",
-                indexing_run_id=indexing_run_id,
-                additional_properties={
-                    "max_tokens": max_tokens,
-                    "step_type": "structure_generation",
-                    "model": self.model,
-                },
-            )
-
-            # Configure callbacks for the LangChain call
-            callbacks = [posthog_callback] if posthog_callback else []
-
-            # Make async call to LangChain ChatOpenAI with PostHog callback
-            response = await self.llm_client.ainvoke([message], config={"callbacks": callbacks} if callbacks else None)
-            return response.content
-
-        except Exception as e:
-            logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
-            raise Exception(f"LangChain API error: {e}")
 
     def _parse_json_response(self, llm_response: str) -> dict[str, Any]:
         """Parse JSON response from LLM, handling markdown code blocks."""

@@ -20,6 +20,7 @@ from langchain_openai import ChatOpenAI
 
 from src.config.database import get_supabase_admin_client
 from src.config.settings import get_settings
+from src.shared.langchain_helpers import create_llm_client, call_llm_with_tracing
 from src.models import StepResult
 from src.services.config_service import ConfigService
 from src.services.storage_service import StorageService
@@ -46,38 +47,21 @@ class SemanticClusteringStep(PipelineStep):
         # Allow DI of db client; default to admin for pipeline safety
         self.supabase = db_client or get_supabase_admin_client()
 
-        # Load OpenRouter API key from settings
-        try:
-            settings = get_settings()
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-        except Exception as e:
-            logger.error(f"Failed to load OpenRouter API key: {e}")
-            raise
-
         # Use config passed from orchestrator (no fresh ConfigService calls)
         gen_cfg = config.get("generation", {})
         self.model = gen_cfg.get("model", "google/gemini-2.5-flash-lite")
-        self.language = config.get("defaults", {}).get("language", "english")  # Updated default
+        self.language = config.get("defaults", {}).get("language", "english")
         self.api_timeout = config.get("api_timeout_seconds", 30.0)
 
         # Semantic clustering configuration matching original
         self.semantic_clusters_config = config.get("semantic_clusters", {"min_clusters": 4, "max_clusters": 10})
         
-        # Initialize LangChain OpenAI client with OpenRouter configuration - AFTER all attributes are set
+        # Initialize LangChain OpenAI client using shared helper
         try:
-            settings = get_settings()
-            self.openrouter_api_key = settings.openrouter_api_key
-            if not self.openrouter_api_key:
-                raise ValueError("OPENROUTER_API_KEY not found in environment variables")
-            
-            # Create LangChain ChatOpenAI client configured for OpenRouter
-            self.llm_client = ChatOpenAI(
-                model=self.model,
-                openai_api_key=self.openrouter_api_key,
-                openai_api_base="https://openrouter.ai/api/v1",
-                default_headers={"HTTP-Referer": "https://constructionrag.com"},
+            self.llm_client = create_llm_client(
+                model_name=self.model,
+                max_tokens=500,
+                temperature=0.3
             )
         except Exception as e:
             logger.error(f"Failed to initialize LangChain ChatOpenAI client: {e}")
@@ -304,7 +288,18 @@ Output your response in {output_language}. Only respond with the names in the sp
 
         try:
             start_time = datetime.utcnow()
-            llm_response = await self._call_openrouter_api(prompt, max_tokens=500)
+            llm_response = await call_llm_with_tracing(
+                llm_client=self.llm_client,
+                prompt=prompt,
+                run_name="semantic_clustering_generator",
+                metadata={
+                    "step": "semantic_clustering",
+                    "model": self.model,
+                    "max_tokens": 500,
+                    "language": self.language,
+                    "clusters_count": len(cluster_samples)
+                }
+            )
             end_time = datetime.utcnow()
 
             print(f"LLM klyngenavne genereret på {(end_time - start_time).total_seconds():.1f} sekunder")
@@ -382,38 +377,3 @@ Output your response in {output_language}. Only respond with the names in the sp
 
             return cluster_names
 
-    async def _call_openrouter_api(self, prompt: str, max_tokens: int = 500, indexing_run_id: str = None) -> str:
-        """Call OpenRouter API via LangChain ChatOpenAI with PostHog LangChain callback for analytics."""
-        if not self.llm_client:
-            raise Exception("LangChain ChatOpenAI client not configured")
-
-        try:
-            # Create message for LangChain
-            message = HumanMessage(content=prompt)
-            
-            # Get PostHog callback for automatic LLM tracking
-            from src.services.posthog_service import posthog_service
-            posthog_callback = posthog_service.get_langchain_callback(
-                pipeline_step="wiki_semantic_clustering",
-                indexing_run_id=indexing_run_id,
-                additional_properties={
-                    "max_tokens": max_tokens,
-                    "step_type": "semantic_clustering",
-                    "model": self.model
-                }
-            )
-            
-            # Configure callbacks for the LangChain call
-            callbacks = [posthog_callback] if posthog_callback else []
-            
-            # Make async call to LangChain ChatOpenAI with PostHog callback
-            response = await self.llm_client.ainvoke(
-                [message],
-                config={"callbacks": callbacks} if callbacks else None
-            )
-            
-            return response.content
-
-        except Exception as e:
-            logger.error(f"Exception during LangChain ChatOpenAI call: {e}")
-            raise Exception(f"LangChain API error: {e}")

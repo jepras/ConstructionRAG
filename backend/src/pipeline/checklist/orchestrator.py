@@ -5,6 +5,7 @@ from typing import Optional
 
 from src.models.checklist import AnalysisStatus
 from src.services.checklist_service import ChecklistService
+from src.config.settings import get_settings
 from .query_generator import generate_queries_from_checklist
 from .retriever import retrieve_chunks_for_query, retrieve_chunks_for_queries_batch, deduplicate_chunks
 from .analyzer import analyze_checklist_with_chunks
@@ -30,6 +31,9 @@ class ChecklistAnalysisOrchestrator:
         4. Structure the output (LLM)
         """
         try:
+            # Get settings for environment-specific configuration
+            settings = get_settings()
+            
             # Get analysis run details
             analysis_run = await self.checklist_service.get_analysis_run_by_id(
                 analysis_run_id
@@ -135,7 +139,7 @@ class ChecklistAnalysisOrchestrator:
                     "tags": [
                         "checklist_analysis",
                         analysis_run.model_name,
-                        "production"
+                        settings.environment
                     ]
                 }
             )

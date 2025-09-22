@@ -142,131 +142,187 @@ class WikiGenerationOrchestrator:
             # Create wiki generation run record
             wiki_run = await self._create_wiki_run(index_run_id, user_id, project_id, upload_type_enum)
 
-            # Step 1: Metadata Collection
-            logger.info("Step 1: Metadata Collection")
-            metadata_result = await self.steps["metadata_collection"].execute(
-                {
-                    "index_run_id": index_run_id,
-                }
-            )
-
-            if metadata_result.status == "failed":
-                print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 failed: {metadata_result.error_message}"
+            # Use @chain decorator approach for proper trace grouping
+            from langchain_core.runnables import chain
+            
+            @chain
+            async def wiki_generation_chain(inputs):
+                index_run_id = inputs["index_run_id"]
+                user_id = inputs["user_id"]
+                project_id = inputs["project_id"]
+                upload_type_enum = inputs["upload_type_enum"]
+                wiki_run = inputs["wiki_run"]
+                
+                # Step 1: Metadata Collection
+                logger.info("Step 1: Metadata Collection")
+                metadata_result = await self.steps["metadata_collection"].execute(
+                    {
+                        "index_run_id": index_run_id,
+                    }
                 )
-                await self._update_wiki_run_status(wiki_run.id, "failed", metadata_result.error_message)
-                return wiki_run
 
-            metadata = to_metadata_output(metadata_result.data).model_dump(exclude_none=True)
+                if metadata_result.status == "failed":
+                    print(
+                        f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 1 failed: {metadata_result.error_message}"
+                    )
+                    await self._update_wiki_run_status(wiki_run.id, "failed", metadata_result.error_message)
+                    return {"wiki_run": wiki_run, "status": "failed"}
 
-            # Step 2: Overview Generation
-            logger.info("Step 2: Overview Generation")
-            overview_result = await self.steps["overview_generation"].execute(
-                {
-                    "metadata": metadata,
-                }
-            )
+                metadata = to_metadata_output(metadata_result.data).model_dump(exclude_none=True)
 
-            if overview_result.status == "failed":
-                print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 failed: {overview_result.error_message}"
+                # Step 2: Overview Generation
+                logger.info("Step 2: Overview Generation")
+                overview_result = await self.steps["overview_generation"].execute(
+                    {
+                        "metadata": metadata,
+                        "index_run_id": index_run_id,
+                    }
                 )
-                await self._update_wiki_run_status(wiki_run.id, "failed", overview_result.error_message)
-                return wiki_run
 
-            project_overview = to_overview_output(overview_result.data).project_overview
+                if overview_result.status == "failed":
+                    print(
+                        f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 2 failed: {overview_result.error_message}"
+                    )
+                    await self._update_wiki_run_status(wiki_run.id, "failed", overview_result.error_message)
+                    return {"wiki_run": wiki_run, "status": "failed"}
 
-            # Step 3: Semantic Clustering
-            logger.info("Step 3: Semantic Clustering")
-            clustering_result = await self.steps["semantic_clustering"].execute(
-                {
-                    "metadata": metadata,
-                }
-            )
+                project_overview = to_overview_output(overview_result.data).project_overview
 
-            if clustering_result.status == "failed":
-                print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 failed: {clustering_result.error_message}"
+                # Step 3: Semantic Clustering
+                logger.info("Step 3: Semantic Clustering")
+                clustering_result = await self.steps["semantic_clustering"].execute(
+                    {
+                        "metadata": metadata,
+                    }
                 )
-                await self._update_wiki_run_status(wiki_run.id, "failed", clustering_result.error_message)
-                return wiki_run
 
-            semantic_analysis = to_semantic_output(clustering_result.data).model_dump(exclude_none=True)
+                if clustering_result.status == "failed":
+                    print(
+                        f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 3 failed: {clustering_result.error_message}"
+                    )
+                    await self._update_wiki_run_status(wiki_run.id, "failed", clustering_result.error_message)
+                    return {"wiki_run": wiki_run, "status": "failed"}
 
-            # Step 4: Structure Generation
-            logger.info("Step 4: Structure Generation")
-            structure_result = await self.steps["structure_generation"].execute(
-                {
+                semantic_analysis = to_semantic_output(clustering_result.data).model_dump(exclude_none=True)
+
+                # Step 4: Structure Generation
+                logger.info("Step 4: Structure Generation")
+                structure_result = await self.steps["structure_generation"].execute(
+                    {
+                        "metadata": metadata,
+                        "project_overview": project_overview,
+                        "semantic_analysis": semantic_analysis,
+                        "index_run_id": index_run_id,
+                    }
+                )
+
+                if structure_result.status == "failed":
+                    print(
+                        f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 failed: {structure_result.error_message}"
+                    )
+                    await self._update_wiki_run_status(wiki_run.id, "failed", structure_result.error_message)
+                    return {"wiki_run": wiki_run, "status": "failed"}
+
+                wiki_structure = to_structure_output(structure_result.data).wiki_structure
+
+                # Step 5: Page Content Retrieval
+                logger.info("Step 5: Page Content Retrieval")
+                content_result = await self.steps["page_content_retrieval"].execute(
+                    {
+                        "metadata": metadata,
+                        "wiki_structure": wiki_structure,
+                    }
+                )
+
+                if content_result.status == "failed":
+                    print(
+                        f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 failed: {content_result.error_message}"
+                    )
+                    await self._update_wiki_run_status(wiki_run.id, "failed", content_result.error_message)
+                    return {"wiki_run": wiki_run, "status": "failed"}
+
+                page_contents = to_page_contents_output(content_result.data).page_contents
+
+                # Step 6: Markdown Generation
+                logger.info("Step 6: Markdown Generation")
+                markdown_result = await self.steps["markdown_generation"].execute(
+                    {
+                        "metadata": metadata,
+                        "wiki_structure": wiki_structure,
+                        "page_contents": page_contents,
+                        "index_run_id": index_run_id,
+                    }
+                )
+
+                if markdown_result.status == "failed":
+                    print(
+                        f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 failed: {markdown_result.error_message}"
+                    )
+                    await self._update_wiki_run_status(wiki_run.id, "failed", markdown_result.error_message)
+                    return {"wiki_run": wiki_run, "status": "failed"}
+
+                generated_pages = to_markdown_output(markdown_result.data).generated_pages
+
+                # Step 7: Save to Storage
+                logger.info("Step 7: Saving to Storage")
+                await self._save_wiki_to_storage(
+                    wiki_run.id,
+                    wiki_structure,
+                    generated_pages,
+                    metadata,
+                    upload_type_enum,
+                    user_id,
+                    project_id,
+                    index_run_id,
+                )
+
+                return {
+                    "wiki_run": wiki_run,
+                    "status": "completed",
                     "metadata": metadata,
                     "project_overview": project_overview,
                     "semantic_analysis": semantic_analysis,
-                }
-            )
-
-            if structure_result.status == "failed":
-                print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 4 failed: {structure_result.error_message}"
-                )
-                await self._update_wiki_run_status(wiki_run.id, "failed", structure_result.error_message)
-                return wiki_run
-
-            wiki_structure = to_structure_output(structure_result.data).wiki_structure
-
-            # Step 5: Page Content Retrieval
-            logger.info("Step 5: Page Content Retrieval")
-            content_result = await self.steps["page_content_retrieval"].execute(
-                {
-                    "metadata": metadata,
-                    "wiki_structure": wiki_structure,
-                }
-            )
-
-            if content_result.status == "failed":
-                print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 5 failed: {content_result.error_message}"
-                )
-                await self._update_wiki_run_status(wiki_run.id, "failed", content_result.error_message)
-                return wiki_run
-
-            page_contents = to_page_contents_output(content_result.data).page_contents
-
-            # Step 6: Markdown Generation
-            logger.info("Step 6: Markdown Generation")
-            markdown_result = await self.steps["markdown_generation"].execute(
-                {
-                    "metadata": metadata,
                     "wiki_structure": wiki_structure,
                     "page_contents": page_contents,
+                    "generated_pages": generated_pages
+                }
+            
+            # Execute the chain with metadata
+            result = await wiki_generation_chain.ainvoke(
+                {
+                    "index_run_id": index_run_id,
+                    "user_id": user_id,
+                    "project_id": project_id,
+                    "upload_type_enum": upload_type_enum,
+                    "wiki_run": wiki_run
+                },
+                config={
+                    "run_name": f"wiki_generation_{index_run_id[:8]}",
+                    "metadata": {
+                        "index_run_id": index_run_id,
+                        "wiki_run_id": wiki_run.id,
+                        "user_id": str(user_id) if user_id else None,
+                        "project_id": str(project_id) if project_id else None,
+                        "upload_type": str(upload_type_enum),
+                        "language": self.config.get("defaults", {}).get("language", "english")
+                    },
+                    "tags": [
+                        "wiki_generation",
+                        "production",
+                        self.config.get("generation", {}).get("model", "google/gemini-2.5-flash-lite")
+                    ]
                 }
             )
-
-            if markdown_result.status == "failed":
-                print(
-                    f"❌ [DEBUG] WikiGenerationOrchestrator.run_pipeline() - Step 6 failed: {markdown_result.error_message}"
-                )
-                await self._update_wiki_run_status(wiki_run.id, "failed", markdown_result.error_message)
-                return wiki_run
-
-            generated_pages = to_markdown_output(markdown_result.data).generated_pages
-
-            # Step 7: Save to Storage
-            logger.info("Step 7: Saving to Storage")
-            await self._save_wiki_to_storage(
-                wiki_run.id,
-                wiki_structure,
-                generated_pages,
-                metadata,
-                upload_type_enum,
-                user_id,
-                project_id,
-                index_run_id,
-            )
-
+            
+            # Check if pipeline failed
+            if result["status"] == "failed":
+                return result["wiki_run"]
+            
             # Update wiki run status to completed
             await self._update_wiki_run_status(
                 wiki_run.id,
                 "completed",
-                f"Successfully generated {len(generated_pages)} wiki pages",
+                f"Successfully generated {len(result['generated_pages'])} wiki pages",
             )
 
             # Send completion email for anonymous uploads
