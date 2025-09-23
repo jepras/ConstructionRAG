@@ -1,4 +1,5 @@
 .env
+.env.indexing
 venv/
 test_venv/
 notebooks/figures/

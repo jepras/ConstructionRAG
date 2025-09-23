@@ -14,13 +14,24 @@ class BeamService:
     """Service for communicating with Beam task queue."""
 
     def __init__(self):
-        self.beam_url = os.getenv("BEAM_WEBHOOK_URL")
-        self.beam_token = os.getenv("BEAM_AUTH_TOKEN")
+        # Check if we're in local development mode
+        self.use_local_indexing = os.getenv("USE_LOCAL_INDEXING", "false").lower() == "true"
+        
+        if self.use_local_indexing:
+            # Use local indexing container
+            self.beam_url = "http://indexing:8001/process"
+            self.beam_token = "local-development"  # Not used for local
+            logger.info("[DEBUG] Using local indexing container at http://indexing:8001")
+        else:
+            # Use external Beam
+            self.beam_url = os.getenv("BEAM_WEBHOOK_URL")
+            self.beam_token = os.getenv("BEAM_AUTH_TOKEN")
 
-        if not self.beam_url:
-            raise ValueError("BEAM_WEBHOOK_URL environment variable not set")
-        if not self.beam_token:
-            raise ValueError("BEAM_AUTH_TOKEN environment variable not set")
+            if not self.beam_url:
+                raise ValueError("BEAM_WEBHOOK_URL environment variable not set")
+            if not self.beam_token:
+                raise ValueError("BEAM_AUTH_TOKEN environment variable not set")
+            logger.info(f"[DEBUG] Using external Beam at {self.beam_url}")
 
     async def trigger_indexing_pipeline(
         self,
@@ -69,32 +80,53 @@ class BeamService:
             else:
                 logger.warning(f"[DEBUG] Missing env vars - BACKEND_API_URL: {backend_url}, BEAM_WEBHOOK_API_KEY: {'present' if webhook_api_key else 'missing'} - wiki generation will be skipped")
 
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.beam_token}",
-            }
+            # Prepare headers based on local vs external Beam
+            if self.use_local_indexing:
+                headers = {
+                    "Content-Type": "application/json",
+                }
+                timeout = 3600.0  # Longer timeout for local processing
+            else:
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.beam_token}",
+                }
+                timeout = 30.0
 
-            logger.info(f"Triggering Beam task for indexing run: {indexing_run_id}")
+            logger.info(f"Triggering {'local indexing' if self.use_local_indexing else 'Beam'} task for indexing run: {indexing_run_id}")
             logger.info(f"Document IDs: {document_ids}")
-            logger.info(f"[DEBUG] Full payload to Beam: {payload}")
+            logger.info(f"[DEBUG] Full payload: {payload}")
+            logger.info(f"[DEBUG] Target URL: {self.beam_url}")
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     self.beam_url,
                     json=payload,
                     headers=headers,
-                    timeout=30.0,
+                    timeout=timeout,
                 )
 
                 if response.status_code == 200:
                     result = response.json()
-                    task_id = result.get("task_id")
-                    logger.info(f"(beam service) - Beam task triggered successfully: {task_id}")
-                    return {
-                        "status": "triggered",
-                        "task_id": task_id,
-                        "beam_url": self.beam_url,
-                    }
+                    
+                    if self.use_local_indexing:
+                        # Local indexing response format
+                        logger.info(f"(beam service) - Local indexing triggered successfully: {result.get('indexing_run_id')}")
+                        return {
+                            "status": "triggered",
+                            "task_id": result.get("indexing_run_id"),  # Use run_id as task_id
+                            "beam_url": self.beam_url,
+                            "local": True
+                        }
+                    else:
+                        # External Beam response format
+                        task_id = result.get("task_id")
+                        logger.info(f"(beam service) - Beam task triggered successfully: {task_id}")
+                        return {
+                            "status": "triggered",
+                            "task_id": task_id,
+                            "beam_url": self.beam_url,
+                        }
                 else:
                     logger.error(f"Beam API error: {response.status_code} - {response.text}")
                     return {

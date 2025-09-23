@@ -1,0 +1,6 @@
+# Local container dependencies
+# These are only needed for the HTTP wrapper in local development
+# Beam doesn't need these since it provides its own interface
+
+fastapi==0.104.1
+uvicorn==0.24.0

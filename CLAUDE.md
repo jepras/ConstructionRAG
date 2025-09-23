@@ -67,7 +67,9 @@ Production React Frontend on Railway
 
 **IMPORTANT**: Local development now uses a **local Supabase database** for complete isolation from production data.
 
-**Quick Start:**
+**Quick Start Options:**
+
+**Option A: Backend + Frontend only (fast startup)**
 ```bash
 # 1. Start local Supabase (if not running)
 supabase start
@@ -79,13 +81,31 @@ supabase start
 cd frontend && npm run dev
 ```
 
+**Option B: Full stack with local indexing (complete testing)**
+```bash
+# 1. Start local Supabase (if not running)
+supabase start
+
+# 2. Start complete stack (backend + indexing container + ngrok)
+./start-local-dev-with-indexing.sh
+
+# 3. In separate terminal: Start frontend
+cd frontend && npm run dev
+```
+
+**Docker Rebuild Guidelines:**
+- **Rebuild required**: Dependencies change (`beam_requirements.txt`, `requirements-local.txt`), Dockerfile changes
+- **No rebuild needed**: Code changes (volume mounted), environment variables, config changes
+- **Command**: `docker-compose build indexing` (volume mounts provide 2-second restart vs 500-second rebuild)
+
 **Local URLs:**
 - **Frontend**: http://localhost:3000 (auto-assigned port, check terminal output)
 - **Backend API**: http://localhost:8000
+- **Indexing API**: http://localhost:8001 (Option B only)
 - **API Documentation**: http://localhost:8000/docs
 - **Health Check**: http://localhost:8000/health
 - **Supabase Studio**: http://127.0.0.1:54323
-- **Ngrok Public URL**: Displayed in `start-local-dev.sh` output (for webhook testing)
+- **Ngrok Public URL**: Displayed in startup script output (for webhook testing)
 
 ## Architecture
 

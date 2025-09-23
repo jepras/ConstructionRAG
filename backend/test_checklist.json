@@ -1,6 +1,0 @@
-{
-  "indexing_run_id": "70ac5dc0-bf46-407c-94de-9f1a3ff12a9e",
-  "checklist_name": "Wood Construction Compliance Checklist",
-  "checklist_content": "Wood Construction Requirements Checklist:\n1. Wood species and grade specification - Verify that wood species and structural grades are clearly specified\n2. Moisture content requirements - Check that moisture content limits are defined (typically 19% or less)\n3. Treatment specifications - Confirm preservation treatment against rot, fungi, and insects\n4. Fire protection requirements - Verify fire retardant treatment specifications where required\n5. Structural connections - Check specifications for fasteners, connectors, and joining methods\n6. Load-bearing capacity - Verify structural calculations and load ratings\n7. Installation guidelines - Confirm proper installation procedures are documented\n8. Quality control procedures - Check inspection and testing requirements\n9. Environmental protection - Verify sustainable sourcing and environmental compliance\n10. Building code compliance - Confirm adherence to local building codes and standards",
-  "model_name": "google/gemini-2.5-flash-lite"
-}
