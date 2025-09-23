@@ -89,6 +89,8 @@ class WikiGenerationOrchestrator:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         upload_type: UploadType | str = "user_project",
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> WikiGenerationRun:
         """Run the complete wiki generation pipeline."""
         start_time = datetime.utcnow()
@@ -138,6 +140,25 @@ class WikiGenerationOrchestrator:
                 upload_type_enum = UploadType.EMAIL if upload_type == "email" else UploadType.USER_PROJECT
             else:
                 upload_type_enum = upload_type
+
+            # Fetch project information for unified storage if not provided
+            if not username or not project_slug:
+                if project_id:
+                    try:
+                        project_result = self.supabase.table("projects").select("username, project_slug").eq("id", str(project_id)).execute()
+                        if project_result.data:
+                            username = project_result.data[0].get("username", "anonymous")
+                            project_slug = project_result.data[0].get("project_slug", "unknown")
+                            logger.info(f"📁 Wiki: Fetched project info - username: {username}, project_slug: {project_slug}")
+                        else:
+                            logger.warning(f"⚠️ Wiki: No project found for project_id: {project_id}")
+                    except Exception as e:
+                        logger.error(f"❌ Wiki: Failed to fetch project info: {e}")
+                        username = username or "anonymous"
+                        project_slug = project_slug or "unknown"
+                else:
+                    username = username or "anonymous"
+                    project_slug = project_slug or "unknown"
 
             # Create wiki generation run record
             wiki_run = await self._create_wiki_run(index_run_id, user_id, project_id, upload_type_enum)
@@ -274,6 +295,8 @@ class WikiGenerationOrchestrator:
                     user_id,
                     project_id,
                     index_run_id,
+                    username,
+                    project_slug,
                 )
 
                 return {
@@ -510,6 +533,8 @@ class WikiGenerationOrchestrator:
         user_id: UUID | None,
         project_id: UUID | None,
         index_run_id: str,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> None:
         """Save wiki content to storage and database."""
         try:
@@ -520,6 +545,8 @@ class WikiGenerationOrchestrator:
                 user_id=user_id,
                 project_id=project_id,
                 index_run_id=index_run_id,
+                username=username,
+                project_slug=project_slug,
             )
 
             # Prepare pages metadata for database storage
@@ -544,6 +571,8 @@ class WikiGenerationOrchestrator:
                     project_id=project_id,
                     index_run_id=index_run_id,
                     content=markdown_content,
+                    username=username,
+                    project_slug=project_slug,
                 )
 
                 # Store the storage path for the first page (base path)

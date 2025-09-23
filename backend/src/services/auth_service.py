@@ -5,7 +5,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.config.database import get_supabase_admin_client, get_supabase_client
 from src.config.settings import get_settings
-from src.models.user import UserProfile
+from src.models.user import UserProfile, UserContext
+from src.constants import ANONYMOUS_USER_ID, ANONYMOUS_USERNAME
 from src.utils.exceptions import AppError, AuthenticationError
 from src.utils.logging import get_logger
 
@@ -150,13 +151,12 @@ class AuthService:
             logger.error("Password reset failed", email=email, error=str(e))
             raise AppError("Password reset failed")
 
-    async def get_current_user(self, access_token: str) -> dict[str, Any] | None:
-        """Verify the access token with Supabase and return a minimal user dict."""
+    async def get_current_user_context(self, access_token: str) -> UserContext | None:
+        """Verify the access token with Supabase and return UserContext."""
         try:
             # Use admin client to verify the JWT token
-            # The get_user method with access_token parameter verifies the token
             response = self.admin_client.auth.get_user(access_token)
-            
+
             if not response or not response.user:
                 logger.warning("Failed to verify access token - no user returned")
                 return None
@@ -164,23 +164,40 @@ class AuthService:
             user = response.user
             user_id = user.id
             email = user.email
-            
+
             if not user_id:
                 logger.warning("User ID missing from token response")
                 return None
 
             profile = await self._get_user_profile(user_id)
+            if not profile:
+                logger.warning("User profile not found", user_id=user_id)
+                return None
+
             logger.debug("Successfully authenticated user", user_id=user_id)
-            
-            return {
-                "id": user_id,
-                "email": email,
-                "profile": profile,
-            }
+
+            return UserContext.authenticated(
+                user_id=str(user_id),
+                username=profile.username,
+                email=email or profile.email
+            )
         except Exception as e:
             # Log the specific error for debugging
             logger.warning(f"Token verification failed: {str(e)}")
             return None
+
+    async def get_current_user(self, access_token: str) -> dict[str, Any] | None:
+        """Legacy method - verify the access token with Supabase and return a minimal user dict."""
+        user_context = await self.get_current_user_context(access_token)
+        if not user_context:
+            return None
+
+        profile = await self._get_user_profile(user_context.id)
+        return {
+            "id": user_context.id,
+            "email": user_context.email,
+            "profile": profile,
+        }
 
     async def refresh_token(self, refresh_token: str) -> dict[str, Any]:
         """Refresh access token - Simple approach"""
@@ -208,15 +225,45 @@ class AuthService:
     async def _create_user_profile(self, user_id: str, email: str) -> UserProfile:
         """Create user profile in database"""
         try:
+            # Generate username from email prefix
+            username = email.split('@')[0].lower() if email else f"user_{str(user_id)[:8]}"
+
+            # Ensure username is unique by checking existing usernames
+            existing_response = (
+                self.admin_client.table("user_profiles")
+                .select("username")
+                .eq("username", username)
+                .execute()
+            )
+
+            # If username exists, append a number
+            if existing_response.data:
+                counter = 1
+                original_username = username
+                while existing_response.data:
+                    username = f"{original_username}_{counter}"
+                    existing_response = (
+                        self.admin_client.table("user_profiles")
+                        .select("username")
+                        .eq("username", username)
+                        .execute()
+                    )
+                    counter += 1
+
             # Insert into user_profiles table
             response = (
                 self.admin_client.table("user_profiles")
-                .insert({"id": user_id, "email": email, "full_name": None})
+                .insert({
+                    "id": user_id,
+                    "username": username,
+                    "email": email,
+                    "full_name": None
+                })
                 .execute()
             )
 
             if response.data:
-                logger.info(f"User profile created for: {user_id}")
+                logger.info(f"User profile created for: {user_id} with username: {username}")
                 return UserProfile(**response.data[0])
             else:
                 logger.error(f"No data returned when creating user profile for {user_id}")
@@ -303,3 +350,31 @@ async def get_current_user_optional(
         return await get_current_user(credentials)
     except AuthenticationError:
         return None
+
+
+async def get_user_context(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> UserContext:
+    """Dependency to get current authenticated user as UserContext"""
+    access_token = credentials.credentials
+
+    user_context = await auth_service.get_current_user_context(access_token)
+
+    if not user_context:
+        raise AuthenticationError("Invalid authentication credentials")
+
+    return user_context
+
+
+async def get_user_context_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+) -> UserContext:
+    """Dependency to get current user context (returns anonymous if not authenticated)"""
+    if not credentials:
+        return UserContext.anonymous()
+
+    try:
+        user_context = await auth_service.get_current_user_context(credentials.credentials)
+        return user_context if user_context else UserContext.anonymous()
+    except AuthenticationError:
+        return UserContext.anonymous()

@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.api import auth_router, checklist, documents, pipeline, projects as projects_api, queries, wiki
+from src.api import auth_router, checklist, documents, pipeline, projects as projects_api, queries, wiki, unified_projects
 from src.config.settings import get_settings
 from src.middleware.error_handler import (
     app_error_handler,
@@ -142,6 +142,7 @@ app.include_router(queries.flat_router, tags=["Queries"])  # flat endpoints
 app.include_router(documents.router, tags=["Documents"])
 app.include_router(wiki.router, prefix="/api", tags=["Wiki"])
 app.include_router(projects_api.router, tags=["Projects"])
+app.include_router(unified_projects.router, prefix="/api", tags=["Unified Projects"])
 app.include_router(checklist.router, tags=["Checklist"])
 
 if __name__ == "__main__":

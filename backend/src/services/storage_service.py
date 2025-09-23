@@ -338,13 +338,18 @@ class StorageService:
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
         content: str | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload a wiki page markdown file."""
         try:
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and migration status
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/wiki/
+                storage_path = f"{username}/{project_slug}/wiki/{wiki_run_id}/{filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = (
                     f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
                 )
@@ -390,15 +395,20 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload wiki metadata JSON file."""
         try:
             filename = "wiki_metadata.json"
 
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and migration status
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/wiki/
+                storage_path = f"{username}/{project_slug}/wiki/{wiki_run_id}/{filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = (
                     f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}/{filename}"
                 )
@@ -442,12 +452,16 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> str:
         """Get the content of a wiki page markdown file."""
         try:
-            # Create storage path based on upload type
-            # Handle converted projects: upload_type='email' but files remain in users/ path
-            if upload_type == UploadType.EMAIL and user_id is not None:
+            # Create storage path based on upload type and migration status
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/wiki/
+                storage_path = f"{username}/{project_slug}/wiki/{wiki_run_id}/{filename}"
+            elif upload_type == UploadType.EMAIL and user_id is not None:
                 # Potential converted project - check if it has pages metadata with storage paths
                 from ..config.database import get_supabase_admin_client
 
@@ -507,45 +521,6 @@ class StorageService:
             logger.error(f"Failed to get wiki page content: {e}")
             raise StorageError(f"Failed to get wiki page content: {str(e)}")
 
-    async def list_wiki_pages(
-        self,
-        wiki_run_id: UUID,
-        upload_type: UploadType,
-        user_id: UUID | None = None,
-        project_id: UUID | None = None,
-        index_run_id: UUID | None = None,
-    ) -> list[dict[str, Any]]:
-        """List all wiki pages for a specific wiki run."""
-        try:
-            # Create base path based on upload type
-            if upload_type == UploadType.EMAIL:
-                base_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-            else:  # USER_PROJECT
-                base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-
-            # List files in the wiki directory
-            files = await self.list_files(base_path)
-
-            # Filter for markdown files and metadata
-            wiki_files = []
-            for file_info in files:
-                if isinstance(file_info, dict) and "name" in file_info:
-                    filename = file_info["name"]
-                    if filename.endswith(".md") or filename == "wiki_metadata.json":
-                        wiki_files.append(
-                            {
-                                "filename": filename,
-                                "storage_path": f"{base_path}/{filename}",
-                                "size": file_info.get("size", 0),
-                                "created_at": file_info.get("created_at"),
-                            }
-                        )
-
-            return wiki_files
-
-        except Exception as e:
-            logger.error(f"Failed to list wiki pages: {e}")
-            raise StorageError(f"Failed to list wiki pages: {str(e)}")
 
     async def create_wiki_storage_structure(
         self,
@@ -554,13 +529,18 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> bool:
         """Create the storage folder structure for wiki generation."""
         try:
-            if upload_type == UploadType.EMAIL:
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/wiki/
+                base_path = f"{username}/{project_slug}/wiki/{wiki_run_id}"
+            elif upload_type == UploadType.EMAIL:
                 # Create email upload wiki structure
                 base_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 # Create user project wiki structure
                 base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
 
@@ -584,13 +564,18 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> bool:
         """Delete entire wiki run directory and all its contents."""
         try:
-            # Create base path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create base path based on upload type and migration status
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/wiki/
+                base_path = f"{username}/{project_slug}/wiki/{wiki_run_id}"
+            elif upload_type == UploadType.EMAIL:
                 base_path = f"email-uploads/index-runs/{index_run_id}/wiki/{wiki_run_id}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 base_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/wiki/{wiki_run_id}"
 
             # List all files in the wiki directory
@@ -769,4 +754,83 @@ class StorageService:
                 "total_size_bytes": 0,
                 "total_size_mb": 0,
                 "error": str(e),
+            }
+
+    async def list_wiki_pages(
+        self,
+        wiki_run_id: UUID,
+        upload_type: UploadType,
+        user_id: UUID | None = None,
+        project_id: UUID | None = None,
+        index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
+    ) -> dict:
+        """List all wiki pages for a wiki run."""
+        try:
+            # Determine storage path based on how wikis are actually saved
+            # Use unified GitHub-style structure when username and project_slug are provided
+            if username and project_slug:
+                # Use unified GitHub-style structure as seen in storage: /username/project-slug/wiki/
+                storage_prefix = f"{username}/{project_slug}/wiki/{wiki_run_id}/"
+            elif upload_type == UploadType.EMAIL:
+                # Fallback to email upload path
+                storage_prefix = f"email-uploads/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/"
+            else:  # USER_PROJECT
+                # Regular user project - use users/ path
+                storage_prefix = f"users/{str(user_id)}/projects/{str(project_id)}/index-runs/{str(index_run_id)}/wiki/{str(wiki_run_id)}/"
+
+            logger.info(f"Listing wiki pages from storage prefix: {storage_prefix}")
+
+            # List files in the storage bucket with the prefix
+            admin = self._resolver.get_client(trusted=True)
+            logger.info(f"[DEBUG] Using admin client with URL: {admin.supabase_url}")
+            logger.info(f"[DEBUG] Admin client key ends with: {admin.supabase_key[-10:] if hasattr(admin, 'supabase_key') else 'No key attr'}")
+            logger.info(f"[DEBUG] Using bucket name: {self.bucket_name}")
+            result = admin.storage.from_(self.bucket_name).list(storage_prefix)
+
+            pages = []
+            if result:
+                for file_obj in result:
+                    if file_obj['name'].endswith('.md'):
+                        # Create signed URL for the file - include full path with prefix
+                        filename = file_obj['name']
+                        full_file_path = f"{storage_prefix}{filename}"
+                        signed_url_response = admin.storage.from_(self.bucket_name).create_signed_url(
+                            full_file_path,
+                            expires_in=24 * 3600  # 24 hours
+                        )
+
+                        # Extract page info
+                        page_name = filename.replace('.md', '')
+
+                        pages.append({
+                            "filename": filename,
+                            "name": page_name,
+                            "title": page_name.replace('-', ' ').title(),
+                            "size": file_obj.get('metadata', {}).get('size', 0),
+                            "storage_path": full_file_path,
+                            "storage_url": signed_url_response.get('signedURL') if signed_url_response else None,
+                            "order": int(page_name.split('-')[1]) if page_name.startswith('page-') else 999
+                        })
+
+            # Sort pages by order
+            pages.sort(key=lambda x: x['order'])
+
+            logger.info(f"Found {len(pages)} wiki pages in storage")
+
+            return {
+                "pages": pages,
+                "total_pages": len(pages),
+                "wiki_run_id": str(wiki_run_id),
+                "storage_prefix": storage_prefix
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to list wiki pages for run {wiki_run_id}: {e}")
+            return {
+                "pages": [],
+                "total_pages": 0,
+                "wiki_run_id": str(wiki_run_id),
+                "error": str(e)
             }

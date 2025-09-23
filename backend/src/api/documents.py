@@ -196,17 +196,22 @@ async def validate_uploads(
 async def create_upload(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),  # noqa: B008
+    project_name: str = Form(...),  # noqa: B008 - REQUIRED for unified structure
     email: str | None = Form(None),  # noqa: B008
-    project_id: UUID | None = Form(None),  # noqa: B008
+    project_id: UUID | None = Form(None),  # noqa: B008 - Legacy support
     email_notifications_enabled: bool = Form(True),  # noqa: B008
     language: str = Form("english"),  # noqa: B008
     current_user: dict[str, Any] | None = CURRENT_USER_OPT_DEP,
     credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
 ):
-    """Create an upload for email (anonymous) or project (authenticated).
+    """Create an upload with unified project structure.
 
-    - If project_id provided: requires authentication; creates project-scoped upload with private access.
-    - Else: email upload allowed anonymously; creates public resources tied to an indexing run.
+    Creates a project with GitHub-style URLs (specfinder.io/username/project-slug) for both
+    anonymous and authenticated users. All uploads now require a project_name.
+
+    - Anonymous uploads: Creates project under 'anonymous' username with public visibility
+    - Authenticated uploads: Creates project under user's username with private visibility
+    - Legacy project_id parameter supported for backward compatibility
     """
     if not files:
         raise ValidationError(
@@ -215,10 +220,20 @@ async def create_upload(
             request_id=get_request_id(),
         )
 
+    # Validate project name
+    from src.utils.validation import validate_project_name
+    validation = validate_project_name(project_name)
+    if not validation["valid"]:
+        raise ValidationError(
+            validation["error"],
+            details={"field_errors": [{"field": "project_name", "message": validation["error"]}]},
+            request_id=get_request_id(),
+        )
+
     # Different limits for anonymous vs authenticated uploads
-    max_files_limit = 5 if project_id is None else 200  # 5 for email uploads, 200 for project uploads
+    max_files_limit = 5 if current_user is None else 200  # 5 for anonymous uploads, 200 for authenticated uploads
     if len(files) > max_files_limit:
-        upload_type = "anonymous" if project_id is None else "authenticated"
+        upload_type = "anonymous" if current_user is None else "authenticated"
         raise ValidationError(
             f"Maximum {max_files_limit} PDF files allowed per {upload_type} upload",
             details={
@@ -244,10 +259,13 @@ async def create_upload(
             )
 
     index_run_id = str(uuid4())
+    project_id_str = str(uuid4())  # Create new project ID
 
     try:
         from src.services.document_service import DocumentService
         from src.services.config_service import ConfigService
+        from src.services.project_service import ProjectService
+        from src.constants import ANONYMOUS_USER_ID, ANONYMOUS_USERNAME, VisibilityLevel
 
         # Load base config and override language
         config_service = ConfigService()
@@ -267,159 +285,152 @@ async def create_upload(
             f"🌐 Final config will be stored with language: {base_config.get('defaults', {}).get('language', 'unknown')}"
         )
 
-        # Anonymous email upload (no project_id)
-        if project_id is None:
-            # Use admin for anonymous/email flow
-            db = get_supabase_admin_client()
-            doc_service = DocumentService(db)
+        # Determine user context for unified structure
+        if current_user is None:
+            # Anonymous upload - use ANONYMOUS_USER_ID and 'anonymous' username
+            user_id = ANONYMOUS_USER_ID
+            username = ANONYMOUS_USERNAME
+            visibility = VisibilityLevel.PUBLIC
             if not email:
                 raise ValidationError(
                     "email is required for anonymous upload",
                     details={"field_errors": [{"field": "email", "message": "Required for anonymous"}]},
                     request_id=get_request_id(),
                 )
+            logger.info(f"🔑 Creating anonymous project with user_id: {user_id}")
+        else:
+            # Authenticated upload - use actual user ID and username
+            user_id = current_user["id"]
+            # Get username from user profile (assuming it exists)
+            username = current_user.get("username", f"user-{user_id[:8]}")  # Fallback if no username
+            visibility = VisibilityLevel.PRIVATE
+            logger.info(f"🔑 Creating authenticated project with user_id: {user_id}, username: {username}")
 
-            await StorageService().create_storage_structure(
-                upload_type=UploadType.EMAIL,
-                index_run_id=UUID(index_run_id),
+        # Generate project slug from name
+        project_service = ProjectService(get_supabase_admin_client())
+        project_slug = project_service.generate_project_slug(project_name)
+
+        # Check if project name is available in the username namespace
+        availability = await project_service.check_project_name_availability(username, project_name)
+        if not availability["available"]:
+            raise ValidationError(
+                f"Project name '{project_name}' is already taken in the {username} namespace",
+                details={"field_errors": [{"field": "project_name", "message": availability["error"]}]},
+                request_id=get_request_id(),
             )
 
-            result = (
-                db.table("indexing_runs")
-                .insert(
-                    {
-                        "id": index_run_id,
-                        "upload_type": "email",
-                        "status": "pending",
-                        "created_at": "now()",
-                        "access_level": "public",
-                        "email": email,
-                        "email_notifications_enabled": email_notifications_enabled,
-                        "pipeline_config": base_config,  # Store complete config with language
-                    }
-                )
-                .execute()
+        # Use admin client for all operations to ensure proper access
+        db = get_supabase_admin_client()
+        doc_service = DocumentService(db)
+
+        # Create the project with unified structure
+        project_data = {
+            "id": project_id_str,
+            "name": project_name,
+            "user_id": user_id,
+            "username": username,
+            "project_slug": project_slug,
+            "visibility": visibility,
+            "created_at": "now()",
+            "updated_at": "now()"
+        }
+
+        logger.info(f"📁 Creating project: {project_data}")
+
+        project_result = db.table("projects").insert(project_data).execute()
+        if not project_result.data:
+            raise AppError(
+                "Failed to create project",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                request_id=get_request_id(),
             )
 
-            # Verify the config was stored
-            logger.info(
-                f"📋 Stored pipeline_config for run {index_run_id} with language: {base_config.get('defaults', {}).get('language', 'unknown')}"
-            )
+        # Create storage structure for the new unified pattern
+        await StorageService().create_storage_structure(
+            upload_type=UploadType.EMAIL if current_user is None else UploadType.USER_PROJECT,
+            index_run_id=UUID(index_run_id),
+            project_id=UUID(project_id_str) if current_user else None,
+        )
 
-            # Read all files first (this is fast)
-            file_data = []
-            for file in files:
-                content = await file.read()
-                file_data.append((content, file.filename))
+        # Create indexing run with unified structure
+        indexing_run_data = {
+            "id": index_run_id,
+            "user_id": user_id,  # Always a valid UUID, never NULL
+            "project_id": project_id_str,
+            "upload_type": "email" if current_user is None else "user_project",  # Keep for legacy compatibility
+            "visibility": visibility,  # New unified field
+            "status": "pending",
+            "created_at": "now()",
+            "access_level": "public" if visibility == VisibilityLevel.PUBLIC else "private",  # Legacy field
+            "email": email,
+            "email_notifications_enabled": email_notifications_enabled,
+            "pipeline_config": base_config,
+        }
 
-            # Create all documents in parallel
+        logger.info(f"🏃 Creating indexing run: {index_run_id} for project: {project_id_str}")
+
+        result = db.table("indexing_runs").insert(indexing_run_data).execute()
+
+        # Process and create documents
+        document_ids: list[str] = []
+        file_data = []
+
+        for file in files:
+            content = await file.read()
+            file_data.append((content, file.filename))
+
+        # Create documents based on upload type
+        if current_user is None:
+            # Anonymous documents
             created_docs = await doc_service.create_email_documents_batch(
                 file_data=file_data,
                 index_run_id=index_run_id,
                 email=email,
+                project_slug=project_slug,
+                username=username,
             )
-
-            # Process results
-            document_ids: list[str] = []
-            document_data: list[dict[str, Any]] = []
+            document_data = []
             for i, created in enumerate(created_docs):
                 document_ids.append(created["document_id"])
-                document_data.append(
-                    {
-                        "document_id": created["document_id"],
-                        "filename": file_data[i][1],  # Original filename
-                        "storage_url": created["storage_url"],
-                    }
+                document_data.append({
+                    "document_id": created["document_id"],
+                    "filename": file_data[i][1],
+                    "storage_url": created["storage_url"],
+                })
+        else:
+            # Authenticated documents
+            document_data = []
+            for content, filename in file_data:
+                created = await doc_service.create_project_document(
+                    file_bytes=content,
+                    filename=filename,
+                    project_id=UUID(project_id_str),
+                    user_id=current_user["id"],
+                    index_run_id=index_run_id,
+                    username=username,
+                    project_slug=project_slug,
                 )
+                document_ids.append(created["document_id"])
+                document_data.append(created["document_id"])
 
-            background_tasks.add_task(
-                process_upload_async,
-                index_run_id=index_run_id,
-                email=email,
-                document_data=document_data,
-                user_id=None,
-                project_id=None,
-            )
-
-            return UploadCreateResponse(
-                index_run_id=index_run_id,
-                document_count=len(document_ids),
-                document_ids=document_ids,
-                status="accepted",
-                message="Email upload accepted. Processing will start shortly.",
-            )
-
-        # Project upload (requires auth)
-        if not current_user:
-            raise AppError(
-                "Authentication required",
-                error_code=ErrorCode.AUTHENTICATION_REQUIRED,
-                request_id=get_request_id(),
-            )
-
-        # Use anon client for user-scoped project flow
-        from src.config.database import get_supabase_client
-
-        db = get_supabase_client()
-
-        proj = (
-            db.table("projects")
-            .select("id")
-            .eq("id", str(project_id))
-            .eq("user_id", current_user["id"])
-            .limit(1)
-            .execute()
-        )
-        if not proj.data:
-            raise AppError(
-                "Project not found or access denied",
-                error_code=ErrorCode.NOT_FOUND,
-                request_id=get_request_id(),
-            )
-
-        db.table("indexing_runs").insert(
-            {
-                "id": index_run_id,
-                "upload_type": "user_project",
-                "status": "pending",
-                "user_id": current_user["id"],
-                "project_id": str(project_id),
-                "access_level": "private",
-                "email_notifications_enabled": email_notifications_enabled,
-                "pipeline_config": base_config,  # Store complete config with language
-            }
-        ).execute()
-
-        document_ids: list[str] = []
-        for file in files:
-            content = await file.read()
-            # Reuse project-scoped doc service with anon client
-            created = await DocumentService(db).create_project_document(
-                file_bytes=content,
-                filename=file.filename,
-                project_id=project_id,  # type: ignore[arg-type]
-                user_id=current_user["id"],
-                index_run_id=index_run_id,
-                file_size=file.size,
-            )
-            document_ids.append(created["document_id"])
-
-        # Trigger background processing for project uploads
+        # Trigger background processing
         background_tasks.add_task(
             process_upload_async,
             index_run_id=index_run_id,
-            email=None,
-            document_data=document_ids,  # Pass the document IDs directly
-            user_id=current_user["id"],
-            project_id=str(project_id),
+            email=email,
+            document_data=document_data,
+            user_id=user_id,
+            project_id=project_id_str,
         )
+
+        message = f"Project '{project_name}' created successfully at /{username}/{project_slug}. Processing will start shortly."
 
         return UploadCreateResponse(
             index_run_id=index_run_id,
             document_count=len(document_ids),
             document_ids=document_ids,
             status="accepted",
-            message="Project upload accepted. Processing will start shortly.",
+            message=message,
         )
 
     except (AppError, StorageError):

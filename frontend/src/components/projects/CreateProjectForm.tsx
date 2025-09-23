@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { FileDropzone } from "@/components/upload/FileDropzone"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Globe, Lock, ExternalLink, Shield, Loader2, FolderOpen } from "lucide-react"
-import { useCreateProject } from "@/hooks/useApiQueries"
+import { Globe, Lock, ExternalLink, Shield, Loader2, FolderOpen, Check, X, AlertCircle } from "lucide-react"
+import { useCreateProject, useCheckProjectNameAvailability, useCurrentUser } from "@/hooks/useApiQueries"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import posthog from 'posthog-js'
@@ -29,7 +29,22 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
   const [estimatedTime, setEstimatedTime] = useState(0)
   const [isValidating, setIsValidating] = useState(false)
 
+  // Project name validation state
+  const [projectNameValidation, setProjectNameValidation] = useState<{
+    isValid: boolean | null
+    isChecking: boolean
+    error: string | null
+    projectSlug: string
+  }>({
+    isValid: null,
+    isChecking: false,
+    error: null,
+    projectSlug: ""
+  })
+
   const createProjectMutation = useCreateProject()
+  const checkNameMutation = useCheckProjectNameAvailability()
+  const { data: currentUser } = useCurrentUser()
 
   const availableExperts = [
     { id: "security", name: "🛡️ Security Tender Expert" },
@@ -37,6 +52,51 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
     { id: "structural", name: "🏗️ Structural Integrity Analyst" },
     { id: "leed", name: "🏢 LEED Certification Assistant" }
   ]
+
+  // Debounced project name validation
+  const debouncedValidateProjectName = useCallback(
+    (name: string) => {
+      if (!name.trim() || !currentUser?.profile?.username) {
+        setProjectNameValidation(prev => ({ ...prev, isValid: null, error: null, isChecking: false }))
+        return
+      }
+
+      setProjectNameValidation(prev => ({ ...prev, isChecking: true, error: null }))
+
+      const timeoutId = setTimeout(() => {
+        checkNameMutation.mutate(
+          { project_name: name.trim(), username: currentUser.profile.username },
+          {
+            onSuccess: (response) => {
+              setProjectNameValidation({
+                isValid: response.available,
+                isChecking: false,
+                error: response.error || null,
+                projectSlug: response.project_slug
+              })
+            },
+            onError: () => {
+              setProjectNameValidation({
+                isValid: false,
+                isChecking: false,
+                error: "Failed to validate project name",
+                projectSlug: ""
+              })
+            }
+          }
+        )
+      }, 500) // 500ms debounce
+
+      return () => clearTimeout(timeoutId)
+    },
+    [currentUser?.profile?.username, checkNameMutation]
+  )
+
+  // Effect to validate project name when it changes
+  useEffect(() => {
+    const cleanup = debouncedValidateProjectName(projectName)
+    return cleanup
+  }, [projectName, debouncedValidateProjectName])
 
   const handleFilesSelected = (newFiles: File[]) => {
     setFiles(newFiles)
@@ -133,14 +193,47 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="project-name">Project Name*</Label>
-            <Input
-              id="project-name"
-              placeholder="e.g., Downtown Tower Construction"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              disabled={createProjectMutation.isPending}
-              className="mt-1"
-            />
+            <div className="relative">
+              <Input
+                id="project-name"
+                placeholder="e.g., Downtown Tower Construction"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                disabled={createProjectMutation.isPending}
+                className={cn(
+                  "mt-1 pr-10",
+                  projectNameValidation.isValid === true && "border-green-500 focus:border-green-500",
+                  projectNameValidation.isValid === false && "border-red-500 focus:border-red-500"
+                )}
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                {projectNameValidation.isChecking ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : projectNameValidation.isValid === true ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : projectNameValidation.isValid === false ? (
+                  <X className="h-4 w-4 text-red-500" />
+                ) : null}
+              </div>
+            </div>
+
+            {/* Validation feedback */}
+            {projectNameValidation.error && (
+              <div className="mt-1 flex items-center gap-1 text-sm text-red-600">
+                <AlertCircle className="h-3 w-3" />
+                <span>{projectNameValidation.error}</span>
+              </div>
+            )}
+
+            {/* Project URL preview */}
+            {projectNameValidation.isValid === true && projectNameValidation.projectSlug && currentUser?.profile?.username && (
+              <div className="mt-2 text-sm text-green-600">
+                <div className="flex items-center gap-1">
+                  <Check className="h-3 w-3" />
+                  <span>Available at: specfinder.io/{currentUser.profile.username}/{projectNameValidation.projectSlug}</span>
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <Label htmlFor="initial-version">Initial Version Name</Label>
@@ -295,6 +388,8 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
           createProjectMutation.isPending ||
           files.length === 0 ||
           !projectName.trim() ||
+          projectNameValidation.isChecking ||
+          projectNameValidation.isValid !== true ||
           isValidating ||
           (files.length > 0 && !validationComplete) ||
           hasValidationErrors
@@ -306,6 +401,13 @@ export function CreateProjectForm({ onProjectCreated }: CreateProjectFormProps) 
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Creating Project...
           </>
+        ) : projectNameValidation.isChecking ? (
+          <>
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Checking Project Name...
+          </>
+        ) : projectNameValidation.isValid === false ? (
+          "Fix Project Name to Continue"
         ) : isValidating || (files.length > 0 && !validationComplete) ? (
           <>
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />

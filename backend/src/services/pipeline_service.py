@@ -44,12 +44,23 @@ class PipelineService:
 
     async def create_indexing_run(
         self,
-        upload_type: UploadType = UploadType.USER_PROJECT,
         user_id: UUID | None = None,
         project_id: UUID | None = None,
     ) -> IndexingRun:
-        """Create a new indexing run."""
+        """Create a new indexing run.
+
+        Upload type is automatically determined from project visibility:
+        - public projects -> 'email' for backward compatibility
+        - private projects -> 'user_project'
+        """
         try:
+            # Determine upload_type from project visibility
+            upload_type = UploadType.USER_PROJECT  # default
+            if project_id:
+                project_result = self.supabase.table("projects").select("visibility").eq("id", str(project_id)).execute()
+                if project_result.data and project_result.data[0].get("visibility") == "public":
+                    upload_type = UploadType.EMAIL
+
             indexing_run_data = IndexingRunCreate(
                 upload_type=upload_type,
                 user_id=user_id,

@@ -1,10 +1,10 @@
-t=2025-09-22T17:56:04+0200 lvl=info msg="no configuration paths supplied"
-t=2025-09-22T17:56:04+0200 lvl=info msg="using configuration at default config path" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml"
-t=2025-09-22T17:56:04+0200 lvl=info msg="open config file" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml" err=nil
-t=2025-09-22T17:56:04+0200 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
-t=2025-09-22T17:56:05+0200 lvl=info msg="client session established" obj=tunnels.session
-t=2025-09-22T17:56:05+0200 lvl=info msg="tunnel session started" obj=tunnels.session
-t=2025-09-22T17:56:05+0200 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://localhost:8000 url=https://4f79affc3ac8.ngrok-free.app
-t=2025-09-22T17:56:07+0200 lvl=info msg="update available" obj=updater
-t=2025-09-22T17:56:09+0200 lvl=info msg=start pg=/api/tunnels id=eec82f4ba360c865
-t=2025-09-22T17:56:09+0200 lvl=info msg=end pg=/api/tunnels id=eec82f4ba360c865 status=200 dur=296.917µs
+t=2025-09-23T17:08:08+0200 lvl=info msg="no configuration paths supplied"
+t=2025-09-23T17:08:08+0200 lvl=info msg="using configuration at default config path" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml"
+t=2025-09-23T17:08:08+0200 lvl=info msg="open config file" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml" err=nil
+t=2025-09-23T17:08:08+0200 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
+t=2025-09-23T17:08:10+0200 lvl=info msg="client session established" obj=tunnels.session
+t=2025-09-23T17:08:10+0200 lvl=info msg="tunnel session started" obj=tunnels.session
+t=2025-09-23T17:08:10+0200 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://localhost:8000 url=https://45d905e2847c.ngrok-free.app
+t=2025-09-23T17:08:13+0200 lvl=info msg=start pg=/api/tunnels id=784f593df6b832b3
+t=2025-09-23T17:08:13+0200 lvl=info msg=end pg=/api/tunnels id=784f593df6b832b3 status=200 dur=283.291µs
+t=2025-09-23T17:08:13+0200 lvl=warn msg="failed to check for update" obj=updater err="Post \"https://update.equinox.io/check\": context deadline exceeded"

@@ -39,11 +39,11 @@ class QueryService:
                 self.logger.info(f"🔍 Resolving access for indexing_run_id: {indexing_run_id}")
                 self.logger.info(f"🔍 User context: {user['id'] if user else 'anonymous'}")
 
-                # For anonymous: verify the run is public/auth and from email uploads
-                # For authenticated: ensure ownership or public/auth
+                # For anonymous: verify the project is public
+                # For authenticated: ensure ownership or public access
                 run_res = (
                     self.db.table("indexing_runs")
-                    .select("id, upload_type, project_id, user_id, access_level")
+                    .select("id, upload_type, project_id, user_id, access_level, projects!inner(visibility)")
                     .eq("id", indexing_run_id)
                     .limit(1)
                     .execute()
@@ -60,12 +60,14 @@ class QueryService:
                 self.logger.info(f"🔍 Run data: {run}")
 
                 if user is None:
+                    # For anonymous users, only allow access to public projects
+                    project_visibility = run.get("projects", {}).get("visibility", "private") if run.get("projects") else "private"
                     self.logger.info(
-                        f"🔍 Anonymous user check - access_level: {run.get('access_level')}, upload_type: {run.get('upload_type')}"
+                        f"🔍 Anonymous user check - access_level: {run.get('access_level')}, project_visibility: {project_visibility}"
                     )
-                    if run.get("access_level") not in {"public", "auth"} or run.get("upload_type") != "email":
+                    if run.get("access_level") not in {"public", "auth"} or project_visibility != "public":
                         self.logger.error(
-                            f"❌ Access denied for anonymous user - access_level: {run.get('access_level')}, upload_type: {run.get('upload_type')}"
+                            f"❌ Access denied for anonymous user - access_level: {run.get('access_level')}, project_visibility: {project_visibility}"
                         )
                         raise AppError("Access denied", error_code=ErrorCode.AUTHORIZATION_FAILED)
                     self.logger.info("✅ Anonymous user access granted")

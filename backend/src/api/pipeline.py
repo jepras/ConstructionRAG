@@ -107,11 +107,16 @@ async def list_indexing_runs_with_wikis(
                         wiki_structure,
                         pages_metadata,
                         language
+                    ),
+                    projects!inner(
+                        visibility,
+                        username,
+                        project_slug
                     )
                 """)
                 .eq("wiki_status", "completed")
                 .eq("access_level", "public")
-                .eq("upload_type", "email")
+                .eq("projects.visibility", "public")
                 .gt("pages_count", 0)
                 .order("created_at", desc=True)
                 .range(offset, offset + limit - 1)
@@ -181,13 +186,13 @@ async def list_user_projects_with_wikis(
         # Start with a basic query to see what exists
         basic_query = (
             db.table("project_wikis")
-            .select("*")
+            .select("*, projects!inner(visibility)")
             .eq("user_id", current_user["id"])
-            .eq("upload_type", "user_project")
+            .neq("projects.visibility", "public")  # Get user's private/internal projects
             .limit(10)
         )
-        
-        logger.info(f"🔍 First checking basic query: user_id={current_user['id']}, upload_type=user_project")
+
+        logger.info(f"🔍 First checking basic query: user_id={current_user['id']}, non-public projects")
         basic_res = basic_query.execute()
         logger.info(f"🔢 Basic query returned {len(basic_res.data or [])} rows")
         
@@ -206,13 +211,13 @@ async def list_user_projects_with_wikis(
                 )
             """)
             .eq("user_id", current_user["id"])
-            .eq("upload_type", "user_project")
+            .neq("projects.visibility", "public")  # Get user's private/internal projects
             .eq("wiki_status", "completed")
             .gt("pages_count", 0)
             .order("project_id, created_at", desc=True)
         )
-        
-        logger.info(f"🔍 Full query filters: user_id={current_user['id']}, upload_type=user_project, wiki_status=completed, pages_count>0")
+
+        logger.info(f"🔍 Full query filters: user_id={current_user['id']}, non-public projects, wiki_status=completed, pages_count>0")
         
         logger.info(f"📊 Executing query for user {current_user['id']}")
         res = query.execute()
@@ -243,7 +248,7 @@ async def list_user_projects_with_wikis(
                 "indexing_run_id": row.get("indexing_run_id"),
                 "wiki_run_id": row.get("wiki_run_id"),
                 "project_name": row.get("project_name"),  # From project_wikis table
-                "upload_type": row.get("upload_type"),
+                "visibility": row.get("projects", {}).get("visibility", "private"),
                 "access_level": row.get("access_level"),
                 "user_id": row.get("user_id"),
                 "pages_count": row.get("pages_count", 0),
@@ -314,11 +319,12 @@ async def list_indexing_runs(
         db = get_supabase_client()
         
         if current_user is None:
-            # Anonymous access: only show email uploads
+            # Anonymous access: only show public projects
             res = (
                 db.table("indexing_runs")
-                .select("id, upload_type, project_id, status, started_at, completed_at, error_message")
-                .eq("upload_type", "email")
+                .select("indexing_runs.id, indexing_runs.project_id, indexing_runs.status, indexing_runs.started_at, indexing_runs.completed_at, indexing_runs.error_message, projects.visibility")
+                .join("projects", "indexing_runs.project_id = projects.id")
+                .eq("projects.visibility", "public")
                 .order("started_at", desc=True)
                 .range(offset, offset + limit - 1)
                 .execute()
@@ -345,7 +351,7 @@ async def list_indexing_runs(
             return []
         res = (
             db.table("indexing_runs")
-            .select("id, upload_type, project_id, status, started_at, completed_at, error_message")
+            .select("id, project_id, status, started_at, completed_at, error_message, projects!inner(visibility)")
             .eq("project_id", str(project_id))
             .order("started_at", desc=True)
             .range(offset, offset + limit - 1)
@@ -388,16 +394,32 @@ async def get_indexing_run(
 
             raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
     else:
-        # Anonymous only permitted for email uploads
-        if getattr(run, "upload_type", None) != "email":
+        # Anonymous users can only access public projects
+        # Get project visibility for this indexing run
+        project_result = (
+            svc.supabase.table("projects")
+            .select("visibility")
+            .eq("id", str(run.project_id))
+            .execute()
+        )
+        if not project_result.data or project_result.data[0].get("visibility") != "public":
             from ..shared.errors import ErrorCode
             from ..utils.exceptions import AppError
 
             raise AppError("Access denied: Authentication required", error_code=ErrorCode.ACCESS_DENIED)
 
+    # Get project visibility for response
+    project_result = (
+        svc.supabase.table("projects")
+        .select("visibility")
+        .eq("id", str(run.project_id))
+        .execute()
+    )
+    visibility = project_result.data[0].get("visibility", "private") if project_result.data else "private"
+
     return {
         "id": str(run.id),
-        "upload_type": run.upload_type,
+        "visibility": visibility,
         "project_id": (str(run.project_id) if run.project_id else None),
         "status": run.status,
         "started_at": (run.started_at.isoformat() if run.started_at else None),
@@ -430,7 +452,15 @@ async def get_flat_indexing_run_progress(
 
             raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
     else:
-        if getattr(run, "upload_type", None) != "email":
+        # Anonymous users can only access public projects
+        # Get project visibility for this indexing run
+        project_result = (
+            svc.supabase.table("projects")
+            .select("visibility")
+            .eq("id", str(run.project_id))
+            .execute()
+        )
+        if not project_result.data or project_result.data[0].get("visibility") != "public":
             from ..shared.errors import ErrorCode
             from ..utils.exceptions import AppError
 
@@ -504,10 +534,19 @@ async def get_flat_indexing_run_progress(
     for step_name, step_data in run_step_results_dict.items():
         all_step_results[f"run_{step_name}"] = {**step_data, "step_type": "batch_level"}
 
+    # Get project visibility for response
+    project_result = (
+        svc.supabase.table("projects")
+        .select("visibility")
+        .eq("id", str(run.project_id))
+        .execute()
+    )
+    visibility = project_result.data[0].get("visibility", "private") if project_result.data else "private"
+
     return {
         "run_id": str(run_id),
         "status": run.status,
-        "upload_type": run.upload_type,
+        "visibility": visibility,
         "progress": {
             "documents_processed": completed_docs,
             "total_documents": total_docs,
@@ -565,7 +604,15 @@ async def get_flat_indexing_run_summary(
 
                 raise AppError("Indexing run not found or access denied", error_code=ErrorCode.NOT_FOUND)
         else:
-            if getattr(run, "upload_type", None) != "email":
+            # Anonymous users can only access public projects
+            # Get project visibility for this indexing run
+            project_result = (
+                svc.supabase.table("projects")
+                .select("visibility")
+                .eq("id", str(run.project_id))
+                .execute()
+            )
+            if not project_result.data or project_result.data[0].get("visibility") != "public":
                 from ..shared.errors import ErrorCode
                 from ..utils.exceptions import AppError
 
@@ -659,13 +706,21 @@ async def create_indexing_run(
 
                 raise AppError("Project not found or access denied", error_code=ErrorCode.NOT_FOUND)
         run = await pipeline_service.create_indexing_run(
-            upload_type="user_project",
             user_id=UUID(current_user["id"]),
             project_id=project_id,
         )
+        # Get project visibility for response
+        project_result = (
+            pipeline_service.supabase.table("projects")
+            .select("visibility")
+            .eq("id", str(run.project_id))
+            .execute()
+        )
+        visibility = project_result.data[0].get("visibility", "private") if project_result.data else "private"
+
         return {
             "id": str(run.id),
-            "upload_type": run.upload_type,
+            "visibility": visibility,
             "project_id": (str(run.project_id) if run.project_id else None),
             "status": run.status,
             "started_at": (run.started_at.isoformat() if run.started_at else None),

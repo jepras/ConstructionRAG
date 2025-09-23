@@ -8,12 +8,15 @@ services:
       - LOG_LEVEL=INFO
       - BACKEND_API_URL=${BACKEND_API_URL}
       - USE_LOCAL_INDEXING=true
+      - SUPABASE_URL=http://host.docker.internal:54321
     env_file:
       - backend/.env
     volumes:
       - ./backend:/app
       - /app/__pycache__
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-delay 0.5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s

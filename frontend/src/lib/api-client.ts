@@ -334,6 +334,18 @@ export interface QueryHistoryItem {
   created_at: string
 }
 
+export interface ProjectNameCheckRequest {
+  project_name: string
+  username: string
+}
+
+export interface ProjectNameCheckResponse {
+  available: boolean
+  project_slug: string
+  username: string
+  error?: string
+}
+
 export class ApiClient {
   private baseURL: string
   private authCache: {
@@ -792,6 +804,59 @@ export class ApiClient {
     })
   }
 
+  // Unified project method for GitHub-style URLs
+  async getUnifiedProject(username: string, projectSlug: string): Promise<any> {
+    // Try to get auth headers, but don't fail if not authenticated (for public projects)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+
+    return this.request<any>(`/api/projects/${username}/${projectSlug}`, {
+      headers,
+      next: {
+        revalidate: 300, // 5 minutes cache for unified projects
+        tags: [`unified-project-${username}-${projectSlug}`, 'projects']
+      }
+    })
+  }
+
+  async getProjectRuns(username: string, projectSlug: string): Promise<any> {
+    // Try to get auth headers, but don't fail if not authenticated (for public projects)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+    return this.request<any>(`/api/projects/${username}/${projectSlug}/runs`, {
+      headers,
+      next: {
+        revalidate: 300, // 5 minutes cache for project runs
+        tags: [`project-runs-${username}-${projectSlug}`, 'projects']
+      }
+    })
+  }
+
+  async getProjectWiki(username: string, projectSlug: string): Promise<any> {
+    // Try to get auth headers, but don't fail if not authenticated (for public projects)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+    return this.request<any>(`/api/projects/${username}/${projectSlug}/wiki`, {
+      headers,
+      next: {
+        revalidate: 300, // 5 minutes cache for wiki data
+        tags: [`project-wiki-${username}-${projectSlug}`, 'wiki']
+      }
+    })
+  }
+
   // Query methods
   async createQuery(request: CreateQueryRequest): Promise<QueryResponse> {
     // Try to get auth headers, but don't fail if not authenticated (public projects)
@@ -1017,6 +1082,14 @@ export class ApiClient {
         revalidate: 3600, // 1 hour cache for individual templates
         tags: [`checklist-template-${templateId}`, 'checklist-templates']
       }
+    })
+  }
+
+  // Project methods
+  async checkProjectNameAvailability(request: ProjectNameCheckRequest): Promise<ProjectNameCheckResponse> {
+    return this.request<ProjectNameCheckResponse>('/api/projects/check-name', {
+      method: 'POST',
+      body: JSON.stringify(request),
     })
   }
 }

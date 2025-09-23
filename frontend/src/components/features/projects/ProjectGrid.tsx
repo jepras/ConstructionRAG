@@ -41,10 +41,15 @@ export default function ProjectGrid() {
   // Transform wiki runs to project format
   const projects: Project[] = wikiRuns && wikiRuns.length > 0
     ? wikiRuns.map((wikiRun, index) => {
-      
+
 
       const wikiStructure = wikiRun.wiki_structure || {};
       const pagesMetadata = wikiRun.pages_metadata || [];
+
+      // Extract unified project info from API response
+      const projects = wikiRun.projects || {};
+      const username = projects.username || 'anonymous';
+      const projectSlug = projects.project_slug || 'unknown-project';
 
       return {
         id: wikiRun.id, // Use wiki run ID instead of indexing_run_id to ensure uniqueness
@@ -52,7 +57,7 @@ export default function ProjectGrid() {
         description: wikiStructure.description || 'Construction project documentation',
         language: wikiRun.language || 'da', // Default to Danish if language not specified
         accessLevel: wikiRun.access_level || 'public',
-        slug: `${(wikiStructure.title || 'name-not-found').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-${wikiRun.indexing_run_id}`
+        slug: `${username}/${projectSlug}` // Use unified GitHub-style URL structure
       };
     })
     : []; // No fallback - show empty state if no real data

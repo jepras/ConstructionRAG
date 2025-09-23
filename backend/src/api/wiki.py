@@ -79,6 +79,20 @@ async def trigger_wiki_from_beam(
             # User project uploads: Use admin client but pass user context
             orchestrator = WikiGenerationOrchestrator(db_client=None)
         
+        # Fetch project information for unified storage
+        username = "anonymous"
+        project_slug = "unknown"
+
+        if project_id:
+            try:
+                project_result = admin_db.table("projects").select("username, project_slug").eq("id", str(project_id)).execute()
+                if project_result.data:
+                    username = project_result.data[0].get("username", "anonymous")
+                    project_slug = project_result.data[0].get("project_slug", "unknown")
+                    logger.info(f"📁 Webhook: Fetched project info - username: {username}, project_slug: {project_slug}")
+            except Exception as e:
+                logger.error(f"❌ Webhook: Failed to fetch project info: {e}")
+
         # Start wiki generation in background
         background_tasks.add_task(
             orchestrator.run_pipeline,
@@ -86,6 +100,8 @@ async def trigger_wiki_from_beam(
             user_id,
             project_id,
             upload_type,
+            username,
+            project_slug,
         )
         
         return {
@@ -268,6 +284,21 @@ async def create_wiki_generation_run(
                     error_code=ErrorCode.ACCESS_DENIED,
                 )
 
+        # Fetch project information for unified storage
+        username = "anonymous"
+        project_slug = "unknown"
+
+        if project_id:
+            try:
+                db = get_supabase_client()
+                project_result = db.table("projects").select("username, project_slug").eq("id", str(project_id)).execute()
+                if project_result.data:
+                    username = project_result.data[0].get("username", "anonymous")
+                    project_slug = project_result.data[0].get("project_slug", "unknown")
+                    logger.info(f"📁 Manual Wiki: Fetched project info - username: {username}, project_slug: {project_slug}")
+            except Exception as e:
+                logger.error(f"❌ Manual Wiki: Failed to fetch project info: {e}")
+
         # Start wiki generation in background
         background_tasks.add_task(
             orchestrator.run_pipeline,
@@ -275,6 +306,8 @@ async def create_wiki_generation_run(
             user_id,
             project_id,
             upload_type,
+            username,
+            project_slug,
         )
         return {
             "message": "Wiki generation started",
@@ -478,6 +511,20 @@ async def get_wiki_page_content(
         from ..services.storage_service import UploadType as StorageUploadType
         storage_upload_type = StorageUploadType.EMAIL if wiki_run.upload_type == "email" else StorageUploadType.USER_PROJECT
         
+        # Fetch project information for unified storage
+        username = "anonymous"
+        project_slug = "unknown"
+
+        if wiki_run.project_id:
+            try:
+                db = get_supabase_client()
+                project_result = db.table("projects").select("username, project_slug").eq("id", str(wiki_run.project_id)).execute()
+                if project_result.data:
+                    username = project_result.data[0].get("username", "anonymous")
+                    project_slug = project_result.data[0].get("project_slug", "unknown")
+            except Exception as e:
+                logger.error(f"❌ Page Content: Failed to fetch project info: {e}")
+
         content = await storage_service.get_wiki_page_content(
             wiki_run_id=str(wiki_run_id),
             filename=page_name,
@@ -485,6 +532,8 @@ async def get_wiki_page_content(
             user_id=wiki_run.user_id,
             project_id=wiki_run.project_id,
             index_run_id=wiki_run.indexing_run_id,
+            username=username,
+            project_slug=project_slug,
         )
 
         return {

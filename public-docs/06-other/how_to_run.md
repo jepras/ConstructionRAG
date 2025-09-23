@@ -3,11 +3,20 @@
 ## For local development
 ### Backend
 # From project root
-source venv/bin/activate
-cd backend
-python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-or
-docker-compose up backend
+supabase start 
+(if not started already)
+
+./start-local-dev-with-indexing.sh
+
+Flow:
+1. Prerequisites Check: Validates ngrok, jq, and local Supabase are available
+2. Ngrok Setup: Creates public tunnel on port 8000 for webhook testing
+3. Environment Setup: Sets BACKEND_API_URL to ngrok URL for webhook callbacks
+4. Docker Launch: Starts both backend and indexing services via docker-compose
+
+Key Features:
+- Public webhook endpoint: Beam can call back to {ngrok_url}/api/wiki/internal/webhook
+- Local isolation: Uses local Supabase database (port 54321)
 
 ### Frontend
 # From project root (in a new terminal)
@@ -115,4 +124,9 @@ curl -X POST "https://localhost:8000/api/uploads" \
     -F "email=test-config-flow@example.com"
 
     
-curl -X POST "http://localhost:8000/api/wiki/runs?index_run_id=33ad4089-99cc-43de-a646-7c6d7ddd99c7"
+curl -X POST "http://localhost:8000/api/wiki/runs?index_run_id=d5fa952a-4a67-4413-aebc-daad6eac7a68"
+
+
+curl -X POST "http://localhost:8000/api/wiki/runs?index_run_id=fdf37869-4ba6-4743-b73e-1587af8d6e1b" \
+        -H "Content-Type: application/json" \
+        -v

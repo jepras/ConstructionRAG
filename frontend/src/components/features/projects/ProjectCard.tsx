@@ -27,8 +27,8 @@ export default function ProjectCard({ project }: ProjectCardProps) {
     e.preventDefault();
     setIsNavigating(true);
     
-    // Navigate to project page (server-side rendering for public projects)
-    router.push(`/projects/${project.slug}`);
+    // Navigate to project page using unified GitHub-style URL structure
+    router.push(`/${project.slug}`);
   };
 
   const handleMouseEnter = () => {

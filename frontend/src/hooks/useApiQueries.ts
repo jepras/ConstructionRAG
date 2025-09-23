@@ -257,12 +257,20 @@ export function useUpdateProject(projectId: string) {
 
 export function useDeleteProject() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: (projectId: string) => apiClient.deleteProject(projectId),
     onSuccess: () => {
       // Invalidate projects list when project is deleted
       queryClient.invalidateQueries({ queryKey: ['user-projects'] })
     },
+  })
+}
+
+// Project name validation
+export function useCheckProjectNameAvailability() {
+  return useMutation({
+    mutationFn: ({ project_name, username }: { project_name: string; username: string }) =>
+      apiClient.checkProjectNameAvailability({ project_name, username }),
   })
 }

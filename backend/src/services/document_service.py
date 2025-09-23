@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+from src.constants import ANONYMOUS_USER_ID
 from src.services.db_service import DbService
 from src.services.storage_service import StorageService
 from src.utils.exceptions import DatabaseError, StorageError
@@ -34,6 +35,8 @@ class DocumentService:
         filename: str,
         index_run_id: str,
         email: str,
+        project_slug: str,
+        username: str = "anonymous",
     ) -> dict[str, Any]:
         """Create a document for email upload: upload file and insert DB rows.
 
@@ -49,7 +52,8 @@ class DocumentService:
             tmp.write(file_bytes)
             temp_path = tmp.name
         try:
-            storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
+            # Use unified GitHub-style storage structure: /username/project-slug/documents/
+            storage_path = f"{username}/{project_slug}/documents/{sanitized_filename}"
             storage_url = await self.storage.upload_file(file_path=temp_path, storage_path=storage_path)
         except StorageError:
             raise
@@ -63,7 +67,7 @@ class DocumentService:
         # Insert document row
         doc_row = {
             "id": document_id,
-            "user_id": None,
+            "user_id": ANONYMOUS_USER_ID,  # Use anonymous user for unified storage
             "filename": sanitized_filename,
             "file_size": len(file_bytes),
             "file_path": storage_url,
@@ -102,6 +106,8 @@ class DocumentService:
         user_id: str,
         index_run_id: str,
         file_size: int | None,
+        username: str,
+        project_slug: str,
     ) -> dict[str, Any]:
         """Create a document for a user project: insert row, upload, and update path."""
         document_id = str(uuid4())
@@ -135,7 +141,8 @@ class DocumentService:
             tmp.write(file_bytes)
             temp_path = tmp.name
         try:
-            storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
+            # Use unified GitHub-style storage structure: /username/project-slug/documents/
+            storage_path = f"{username}/{project_slug}/documents/{sanitized_filename}"
             storage_url = await self.storage.upload_file(file_path=temp_path, storage_path=storage_path)
         except StorageError:
             raise
@@ -164,6 +171,8 @@ class DocumentService:
         file_data: list[tuple[bytes, str]],  # List of (file_bytes, filename) tuples
         index_run_id: str,
         email: str,
+        project_slug: str,
+        username: str = "anonymous",
     ) -> list[dict[str, Any]]:
         """Create multiple documents for email upload in parallel.
         
@@ -182,7 +191,7 @@ class DocumentService:
         
         # Create tasks for parallel processing
         tasks = [
-            self._create_single_email_document(file_bytes, filename, index_run_id, email)
+            self._create_single_email_document(file_bytes, filename, index_run_id, email, project_slug, username)
             for file_bytes, filename in file_data
         ]
         
@@ -214,6 +223,8 @@ class DocumentService:
         filename: str,
         index_run_id: str,
         email: str,
+        project_slug: str,
+        username: str = "anonymous",
     ) -> dict[str, Any]:
         """Helper method to create a single email document (for parallel processing)."""
         document_id = str(uuid4())
@@ -226,7 +237,8 @@ class DocumentService:
             tmp.write(file_bytes)
             temp_path = tmp.name
         try:
-            storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
+            # Use unified GitHub-style storage structure: /username/project-slug/documents/
+            storage_path = f"{username}/{project_slug}/documents/{sanitized_filename}"
             storage_url = await self.storage.upload_file(file_path=temp_path, storage_path=storage_path)
         except StorageError:
             raise
@@ -240,7 +252,7 @@ class DocumentService:
         # Insert document row
         doc_row = {
             "id": document_id,
-            "user_id": None,
+            "user_id": ANONYMOUS_USER_ID,  # Use anonymous user for unified storage
             "filename": sanitized_filename,
             "file_size": len(file_bytes),
             "file_path": storage_url,
