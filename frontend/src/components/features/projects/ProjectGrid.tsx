@@ -41,8 +41,6 @@ export default function ProjectGrid() {
   // Transform wiki runs to project format
   const projects: Project[] = wikiRuns && wikiRuns.length > 0
     ? wikiRuns.map((wikiRun, index) => {
-
-
       const wikiStructure = wikiRun.wiki_structure || {};
       const pagesMetadata = wikiRun.pages_metadata || [];
 

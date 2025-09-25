@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 import { apiClient } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
 import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
-import WikiTitleSetter from '@/components/features/wiki/WikiTitleSetter';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface UnifiedProjectPageProps {
@@ -14,19 +13,21 @@ interface UnifiedProjectPageProps {
 }
 
 export async function generateMetadata({ params }: UnifiedProjectPageProps) {
-  return {
-    title: "Wiki",
-  };
-}
+  const { username, projectSlug } = await params;
 
-// Extract title from metadata
-function extractWikiTitle(metadata: any): string {
   try {
-    return metadata?.metadata?.wiki_structure?.title || 'Project';
+    // Get project details for better metadata
+    const project = await apiClient.getUnifiedProject(username, projectSlug);
+    return {
+      title: `${project.name} - Wiki`,
+    };
   } catch {
-    return 'Project';
+    return {
+      title: "Wiki",
+    };
   }
 }
+
 
 async function UnifiedProjectWikiContent({
   username,
@@ -105,13 +106,24 @@ async function UnifiedProjectWikiContent({
     }
 
     // Map pages to expected format (add name field for compatibility)
+    // Create URL-friendly slug from title for navigation
+    const createSlug = (title: string) => {
+      return title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .trim()
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
+    };
+
     const sortedPages = wikiData.wiki_pages.map(page => ({
       ...page,
-      name: page.filename ? page.filename.replace('.md', '') : page.name // Add name field for compatibility
+      name: createSlug(page.title), // Use title-based slug for URL
+      filename: page.filename // Keep original filename for API calls
     }));
 
     const firstPage = sortedPages[0];
-    const firstPageContent = null; // GitHub-style API doesn't include first page content directly
+    const firstPageContent = wikiData.first_page_content; // Now available from unified API
 
     // Use default content if first page content is not available
     let contentToDisplay = firstPageContent || {
@@ -131,28 +143,22 @@ async function UnifiedProjectWikiContent({
       };
     }
 
-    // Extract title from metadata (GitHub-style API may not have metadata in same format)
-    const wikiTitle = extractWikiTitle(wikiData.metadata) || project.name;
-
     // Use unified slug format for navigation
     const navigationSlug = `${username}/${projectSlug}`;
 
     return (
-      <>
-        <WikiTitleSetter title={wikiTitle} />
-        <WikiLayout
-          pages={sortedPages}
-          projectSlug={navigationSlug}
-          content={contentToDisplay.content}
-          currentPage={firstPage.name}
-        >
-          <LazyWikiContent
-            content={contentToDisplay}
-            showSummaryBar={true}
-            indexingRunId={indexingRunId}
-          />
-        </WikiLayout>
-      </>
+      <WikiLayout
+        pages={sortedPages}
+        projectSlug={navigationSlug}
+        content={contentToDisplay.content}
+        currentPage={firstPage.name}
+      >
+        <LazyWikiContent
+          content={contentToDisplay}
+          showSummaryBar={true}
+          indexingRunId={indexingRunId}
+        />
+      </WikiLayout>
     );
   } catch (error) {
     console.error('Error loading unified project wiki:', error);

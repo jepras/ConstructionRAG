@@ -757,6 +757,8 @@ class PartitionStep(PipelineStep):
                         user_id=document_input.user_id,
                         project_id=document_input.project_id,
                         index_run_id=document_input.run_id,
+                        username=document_input.username,
+                        project_slug=document_input.project_slug,
                     )
 
                     result["extracted_pages"][page_num] = {
@@ -820,6 +822,8 @@ class PartitionStep(PipelineStep):
                         user_id=document_input.user_id,
                         project_id=document_input.project_id,
                         index_run_id=document_input.run_id,
+                        username=document_input.username,
+                        project_slug=document_input.project_slug,
                     )
 
                     # Add image URL to table metadata
@@ -1312,6 +1316,8 @@ class PartitionStep(PipelineStep):
                             user_id=document_input.user_id,
                             project_id=document_input.project_id,
                             index_run_id=document_input.run_id,
+                            username=document_input.username,
+                            project_slug=document_input.project_slug,
                         )
 
                         # Update page info with Supabase URL

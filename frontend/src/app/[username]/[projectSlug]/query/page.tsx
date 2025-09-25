@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { apiClient } from '@/lib/api-client';
-import QueryLayout from '@/components/features/query/QueryLayout';
+import ProjectQueryContent from '@/components/features/project-pages/ProjectQueryContent';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface UnifiedProjectQueryPageProps {
@@ -41,10 +41,25 @@ async function UnifiedProjectQueryContent({
     // For now, use the project ID as the indexing run ID (will be updated when we have multiple runs)
     const indexingRunId = project.id;
 
+    // Determine if this is an anonymous project (public access)
+    const isAuthenticated = username !== 'anonymous';
+
+    // Debug logging
+    console.log('🔍 Query page debug:', {
+      username,
+      projectSlug,
+      project,
+      indexingRunId,
+      isAuthenticated,
+      combinedProjectSlug: `${username}/${projectSlug}`
+    });
+
     return (
-      <QueryLayout
-        indexingRunId={indexingRunId}
+      <ProjectQueryContent
         projectSlug={`${username}/${projectSlug}`}
+        runId={indexingRunId}
+        isAuthenticated={isAuthenticated}
+        user={isAuthenticated ? { username } : null}
       />
     );
   } catch (error) {
@@ -63,17 +78,33 @@ async function UnifiedProjectQueryContent({
 
 function QueryLoadingSkeleton() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <Skeleton className="h-10 w-1/3 mb-8" />
-        <div className="space-y-4 mb-8">
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-10 w-32" />
+    <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-1 h-[calc(100vh-16rem)] lg:h-[calc(100vh-15rem)]">
+      {/* Left Side Skeleton - Query Interface */}
+      <div className="min-w-0 flex flex-col col-span-1 lg:min-h-0">
+        <div className="px-6 py-4 border-b border-border flex-shrink-0">
+          <Skeleton className="h-8 w-1/3 mb-2" />
+          <Skeleton className="h-4 w-2/3" />
         </div>
-        <div className="space-y-4">
-          <Skeleton className="h-6 w-1/4" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="flex-1 p-6 space-y-4">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-10 w-24" />
+          <div className="space-y-2">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side Skeleton - Source Panel */}
+      <div className="hidden lg:block col-span-1 border-l border-border">
+        <div className="p-6 space-y-4">
+          <Skeleton className="h-6 w-1/3" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+          <Skeleton className="h-32 w-full" />
         </div>
       </div>
     </div>

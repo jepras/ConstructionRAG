@@ -49,6 +49,8 @@ class IndexingRequest(BaseModel):
     document_ids: List[str]
     user_id: str = None
     project_id: str = None
+    username: str = None
+    project_slug: str = None
     webhook_url: str = None
     webhook_api_key: str = None
 
@@ -79,6 +81,8 @@ async def process_documents_endpoint(request: IndexingRequest):
                     document_ids=request.document_ids,
                     user_id=request.user_id,
                     project_id=request.project_id,
+                    username=request.username,
+                    project_slug=request.project_slug,
                     webhook_url=request.webhook_url,
                     webhook_api_key=request.webhook_api_key,
                 )

@@ -1,5 +1,6 @@
 .env
 .env.indexing
+.env.backup
 venv/
 test_venv/
 notebooks/figures/

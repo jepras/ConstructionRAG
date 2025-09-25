@@ -947,6 +947,23 @@ async def process_upload_async(
             )
             document_ids = [doc["document_id"] for doc in (docs_result.data or [])]
 
+        # Get project info for unified storage paths
+        username = None
+        project_slug = None
+        if project_id:
+            try:
+                db = get_supabase_admin_client()
+                project_result = db.table("projects").select("username, project_slug").eq("id", project_id).execute()
+                if project_result.data:
+                    project_data = project_result.data[0]
+                    username = project_data.get("username")
+                    project_slug = project_data.get("project_slug")
+                    logger.info(f"[DEBUG] Found project info: username={username}, project_slug={project_slug}")
+                else:
+                    logger.warning(f"[DEBUG] Project {project_id} not found in database")
+            except Exception as e:
+                logger.warning(f"[DEBUG] Failed to get project info: {e}")
+
         # Trigger Beam task for document processing
         try:
             from src.services.beam_service import BeamService
@@ -957,6 +974,8 @@ async def process_upload_async(
                 document_ids=document_ids,
                 user_id=user_id,
                 project_id=project_id,
+                username=username,
+                project_slug=project_slug,
             )
 
             if beam_result["status"] == "triggered":

@@ -330,7 +330,7 @@ class QueryPipelineOrchestrator:
             logger.info(f"🔍 Request type: {type(request)}")
             query_run_data = {
                 "id": query_run_id,
-                "user_id": request.user_id,
+                "user_id": request.user_id or "00000000-0000-0000-0000-000000000000",  # Use anonymous user ID for null users
                 "indexing_run_id": str(request.indexing_run_id) if request.indexing_run_id else None,
                 "access_level": ("public" if not request.user_id else "private"),
                 "original_query": request.query,

@@ -38,6 +38,20 @@ export default function ProjectQueryContent({
   // Extract the actual indexing run ID from the runId parameter
   const indexingRunId = extractUUIDFromSlug(runId);
 
+  // Extract username and project slug from projectSlug (format: "username/project-name")
+  const [username, actualProjectSlug] = projectSlug.split('/');
+  const useUnifiedAPI = username && actualProjectSlug; // Use unified API if we have both parts
+
+  // Debug logging
+  console.log('🔍 ProjectQueryContent debug:', {
+    projectSlug,
+    username,
+    actualProjectSlug,
+    useUnifiedAPI,
+    runId,
+    indexingRunId
+  });
+
   const handleNewQueryResponse = (searchResults: SearchResult[]) => {
     setAllSources(searchResults);
     // Automatically select the first (most relevant) source
@@ -69,6 +83,9 @@ export default function ProjectQueryContent({
             onSourceSelect={handleSourceChange}
             selectedSource={selectedSource}
             initialQuery={initialQuery}
+            useUnifiedAPI={useUnifiedAPI}
+            username={username}
+            projectSlug={actualProjectSlug}
           />
         </div>
       </div>

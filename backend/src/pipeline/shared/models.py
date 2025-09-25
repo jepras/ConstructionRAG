@@ -29,6 +29,9 @@ class DocumentInput(BaseModel):
     index_run_id: Optional[UUID] = Field(
         None, description="Index run ID for user projects"
     )
+    # Unified storage support
+    username: Optional[str] = Field(None, description="Username for unified GitHub-style paths")
+    project_slug: Optional[str] = Field(None, description="Project slug for unified GitHub-style paths")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional document metadata"
     )

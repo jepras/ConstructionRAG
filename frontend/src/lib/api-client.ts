@@ -874,6 +874,23 @@ export class ApiClient {
     })
   }
 
+  // Unified query method for GitHub-style projects
+  async createProjectQuery(username: string, projectSlug: string, question: string): Promise<QueryResponse> {
+    // Try to get auth headers, but don't fail if not authenticated (public projects)
+    let headers = {}
+    try {
+      headers = await this.getAuthHeaders()
+    } catch {
+      // Continue without auth headers for public projects
+    }
+
+    return this.request<QueryResponse>(`/api/projects/${username}/${projectSlug}/queries`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query: question }),
+    })
+  }
+
   async getQueries(limit: number = 50, offset: number = 0): Promise<QueryHistoryItem[]> {
     // Try to get auth headers, but don't fail if not authenticated
     let headers = {}

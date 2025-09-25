@@ -7,14 +7,23 @@ from pydantic import BaseModel
 
 from src.services.auth_service import get_user_context_optional, get_user_context
 from src.services.project_service import ProjectService
-from src.config.database import get_supabase_client
+from src.config.database import get_supabase_client, get_db_client_for_request
 from src.models.user import UserContext
 from src.models.pipeline import UploadType
 from src.utils.logging import get_logger
+from src.pipeline.querying.orchestrator import QueryPipelineOrchestrator
+from src.services.query_service import QueryService
 
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+async def get_query_orchestrator(
+    db_client=Depends(get_db_client_for_request),
+) -> QueryPipelineOrchestrator:
+    """Provide orchestrator bound to request-scoped client for RLS-aware retrieval."""
+    return QueryPipelineOrchestrator(db_client=db_client)
 
 
 class ProjectNameCheckRequest(BaseModel):
@@ -298,6 +307,66 @@ async def get_project_wiki(
             logger.info(f"[DEBUG] Storage service returned: {wiki_pages_response}")
             wiki_pages = wiki_pages_response.get("pages", [])
 
+            # Get wiki_structure from database to get proper page titles
+            wiki_structure = wiki_run.get("wiki_structure", {})
+            wiki_structure_pages = wiki_structure.get("pages", []) if wiki_structure else []
+
+            # Map proper titles from wiki_structure to pages
+            if wiki_structure_pages:
+                # Create a mapping of page ID to title from wiki_structure
+                title_map = {page["id"]: page["title"] for page in wiki_structure_pages if "id" in page and "title" in page}
+
+                # Update wiki_pages with proper titles from wiki_structure
+                for page in wiki_pages:
+                    # Extract page ID from filename (e.g., "page-1.md" -> "page-1")
+                    page_id = page["filename"].replace(".md", "")
+                    if page_id in title_map:
+                        page["title"] = title_map[page_id]
+                        logger.info(f"[DEBUG] Updated page title: {page_id} -> {title_map[page_id]}")
+
+            # Get first page content for immediate display (like old API)
+            first_page_content = None
+            if wiki_pages and wiki_run:
+                first_page = wiki_pages[0]
+                try:
+                    # Use StorageService with unified paths (no legacy upload_type)
+                    from src.services.storage_service import StorageService, UploadType as StorageUploadType
+                    from uuid import UUID
+
+                    storage_service = StorageService()
+
+                    logger.info(f"[DEBUG] Fetching first page content using unified storage path: {first_page['filename']}")
+
+                    # For unified projects, always pass username and project_slug
+                    # The StorageService will use the unified path when these are provided
+                    content_text = await storage_service.get_wiki_page_content(
+                        wiki_run_id=wiki_run["id"],
+                        filename=first_page["filename"],
+                        upload_type=StorageUploadType.USER_PROJECT,  # Default type, but ignored when username/project_slug provided
+                        user_id=UUID(wiki_run["user_id"]) if wiki_run.get("user_id") else None,
+                        project_id=UUID(project["id"]) if project.get("id") else None,
+                        index_run_id=wiki_run["indexing_run_id"],
+                        username=username,
+                        project_slug=project_slug,
+                    )
+
+                    if content_text:
+                        first_page_content = {
+                            "filename": first_page["filename"],
+                            "title": first_page["title"],
+                            "content": content_text,
+                            "storage_path": first_page["storage_path"],
+                            "storage_url": first_page["storage_url"],
+                        }
+                        logger.info(f"[DEBUG] First page content successfully fetched via StorageService")
+                    else:
+                        logger.warning(f"StorageService returned empty content for {first_page['filename']}")
+
+                except Exception as e:
+                    logger.error(f"Could not fetch first page content via StorageService: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+
             # Get metadata from database
             metadata = {}
         except Exception as e:
@@ -318,6 +387,7 @@ async def get_project_wiki(
 
         return {
             "wiki_pages": wiki_pages,
+            "first_page_content": first_page_content,
             "wiki_run": {
                 "id": wiki_run["id"],
                 "status": wiki_run["status"],
@@ -343,8 +413,9 @@ async def get_project_wiki(
 async def create_project_query(
     username: str,
     project_slug: str,
-    question: str = Form(...),
-    user: UserContext = Depends(get_user_context_optional)
+    request: Dict[str, Any],
+    user: UserContext = Depends(get_user_context_optional),
+    orchestrator: QueryPipelineOrchestrator = Depends(get_query_orchestrator)
 ):
     """Create and execute query within project context"""
     project_service = ProjectService(get_supabase_client())
@@ -355,8 +426,6 @@ async def create_project_query(
 
     # Execute query within project context
     try:
-        from src.services.query_service import QueryService
-
         db = get_supabase_client()
 
         # Find the latest indexing run for this project
@@ -381,15 +450,28 @@ async def create_project_query(
                 "indexing_run_id": indexing_run["id"]
             }
 
-        # Create query using existing query service
-        query_service = QueryService(db)
+        # Extract question from request body
+        question = request.get("query")
+        if not question:
+            raise HTTPException(400, "Query field is required")
 
-        # Create query with project context
-        query_result = await query_service.create_query(
-            question=question,
-            user_id=user.id if user and user.isAuthenticated else None,
-            index_run_id=indexing_run["id"],
-            project_id=project["id"]
+        # Create query using orchestrator like the legacy endpoint
+        svc = QueryService()
+
+        # Convert UserContext to the same format as legacy endpoint
+        user_dict = None
+        if user and user.is_authenticated:
+            user_dict = {
+                "id": user.id,
+                "email": user.email,
+                "profile": None  # Profile not needed for query processing
+            }
+
+        query_result = await svc.create_query(
+            user=user_dict,
+            query_text=question,
+            indexing_run_id=indexing_run["id"],
+            orchestrator=orchestrator,
         )
 
         logger.info(
@@ -403,17 +485,8 @@ async def create_project_query(
             is_authenticated=user.isAuthenticated if user else False
         )
 
-        return {
-            "query": query_result,
-            "project": {
-                "id": project["id"],
-                "name": project["name"],
-                "username": project["username"],
-                "project_slug": project["project_slug"]
-            },
-            "indexing_run_id": indexing_run["id"],
-            "status": "success"
-        }
+        # Return the same format as the legacy endpoint
+        return query_result
 
     except HTTPException:
         raise

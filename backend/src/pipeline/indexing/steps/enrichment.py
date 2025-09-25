@@ -581,11 +581,17 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning table image: {image_url}")
+
+                # Convert to external URL for VLM access (ngrok tunnel in local development)
+                from src.services.storage_service import StorageService
+                storage_service = StorageService()
+                external_url = storage_service.get_external_url_for_vlm(image_url)
+
                 # Use structural_metadata which already contains bbox from metadata step
                 context = table_element["structural_metadata"].copy()
                 # Bbox is already in structural_metadata, no need to add separately
 
-                vlm_result = await self.vlm_captioner.caption_table_image_async(image_url, context)
+                vlm_result = await self.vlm_captioner.caption_table_image_async(external_url, context)
                 enrichment_metadata["table_image_caption"] = vlm_result["caption"]
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]
                 enrichment_metadata["prompt_template"] = vlm_result["prompt_template"]
@@ -648,10 +654,16 @@ class EnrichmentStep(PipelineStep):
 
             if image_url:
                 logger.debug(f"Captioning full-page image: {image_url}")
+
+                # Convert to external URL for VLM access (ngrok tunnel in local development)
+                from src.services.storage_service import StorageService
+                storage_service = StorageService()
+                external_url = storage_service.get_external_url_for_vlm(image_url)
+
                 # Use structural_metadata which already contains full_page_bbox from metadata step
                 context = page_info["structural_metadata"].copy()
                 vlm_result = await self.vlm_captioner.caption_full_page_image_async(
-                    image_url, context, page_text_context
+                    external_url, context, page_text_context
                 )
                 enrichment_metadata["full_page_image_caption"] = vlm_result["caption"]
                 enrichment_metadata["prompt_used"] = vlm_result["prompt"]

@@ -39,6 +39,8 @@ class BeamService:
         document_ids: List[str],
         user_id: str = None,
         project_id: str = None,
+        username: str = None,
+        project_slug: str = None,
     ) -> Dict[str, Any]:
         """
         Trigger the indexing pipeline on Beam.
@@ -48,6 +50,8 @@ class BeamService:
             document_ids: List of document IDs to process
             user_id: User ID (optional for email uploads)
             project_id: Project ID (optional for email uploads)
+            username: Username for unified GitHub-style storage paths (optional)
+            project_slug: Project slug for unified GitHub-style storage paths (optional)
 
         Returns:
             Dict containing the task_id and status
@@ -63,6 +67,10 @@ class BeamService:
                 payload["user_id"] = user_id
             if project_id:
                 payload["project_id"] = project_id
+            if username:
+                payload["username"] = username
+            if project_slug:
+                payload["project_slug"] = project_slug
 
             # Add webhook URL and API key for wiki generation
             backend_url = os.getenv("BACKEND_API_URL")

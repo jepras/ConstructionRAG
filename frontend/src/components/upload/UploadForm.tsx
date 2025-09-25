@@ -16,8 +16,20 @@ interface UploadFormProps {
   onUploadComplete: (indexingRunId: string) => void
 }
 
+// Helper function to convert project name to URL slug
+function generateProjectSlug(name: string): string {
+  if (!name.trim()) return 'project-name'
+
+  return name
+    .toLowerCase()
+    .replace(/[^a-zA-Z0-9]/g, '-')  // Replace non-alphanumeric with dashes
+    .replace(/-+/g, '-')            // Replace multiple dashes with single dash
+    .replace(/^-+|-+$/g, '')        // Remove leading/trailing dashes
+}
+
 export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [files, setFiles] = useState<File[]>([])
+  const [projectName, setProjectName] = useState("")
   const [email, setEmail] = useState("")
   const [isPublic] = useState(true) // Always true for public upload form
   const [shareWithAI] = useState(true) // Always true for public upload form
@@ -26,7 +38,7 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
   const [filesAreValid, setFilesAreValid] = useState(false)
   const [estimatedTime, setEstimatedTime] = useState(0)
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true)
-  
+
   const uploadMutation = useUploadFiles()
 
   const handleFilesSelected = (newFiles: File[]) => {
@@ -48,6 +60,10 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
   const handleSubmit = async () => {
     if (files.length === 0) {
+      return // Validation handled by button disabled state
+    }
+
+    if (!projectName.trim()) {
       return // Validation handled by button disabled state
     }
 
@@ -78,8 +94,8 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
     files.forEach(file => {
       formData.append("files", file)
     })
+    formData.append("project_name", projectName.trim())
     formData.append("email", email)
-    formData.append("upload_type", "email")
     formData.append("email_notifications_enabled", emailNotificationsEnabled.toString())
     formData.append("language", language.toLowerCase())
 
@@ -121,6 +137,26 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
 
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="space-y-4">
+
+          <div>
+            <Label htmlFor="project-name" className="text-sm font-medium mb-2 block">
+              Project Name *
+            </Label>
+            <div className="space-y-2">
+              <Input
+                id="project-name"
+                type="text"
+                placeholder="my-construction-project"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                disabled={uploadMutation.isPending}
+                required
+              />
+              <div className="text-xs text-muted-foreground">
+                Your project will be available at: <span className="font-medium">specfinder.io/anonymous/{generateProjectSlug(projectName)}</span>
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-4">
             <div>
@@ -292,8 +328,9 @@ export function UploadForm({ onUploadComplete }: UploadFormProps) {
       <Button
         onClick={handleSubmit}
         disabled={
-          uploadMutation.isPending || 
-          files.length === 0 || 
+          uploadMutation.isPending ||
+          files.length === 0 ||
+          !projectName.trim() ||
           !email ||
           (files.length > 0 && (!validationComplete || !filesAreValid))
         }

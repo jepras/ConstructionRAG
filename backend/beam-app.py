@@ -190,6 +190,8 @@ async def run_indexing_pipeline_with_timeout_buffer(
     document_ids: list[str],
     user_id: str = None,
     project_id: str = None,
+    username: str = None,
+    project_slug: str = None,
     webhook_url: str = None,
     webhook_api_key: str = None,
 ) -> dict[str, Any]:
@@ -204,7 +206,7 @@ async def run_indexing_pipeline_with_timeout_buffer(
     try:
         return await asyncio.wait_for(
             run_indexing_pipeline_on_beam(
-                indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
+                indexing_run_id, document_ids, user_id, project_id, username, project_slug, webhook_url, webhook_api_key
             ),
             timeout=internal_timeout
         )
@@ -234,6 +236,8 @@ async def run_indexing_pipeline_on_beam(
     document_ids: list[str],
     user_id: str = None,
     project_id: str = None,
+    username: str = None,
+    project_slug: str = None,
     webhook_url: str = None,
     webhook_api_key: str = None,
 ) -> dict[str, Any]:
@@ -338,6 +342,8 @@ async def run_indexing_pipeline_on_beam(
                     upload_type=(UploadType.EMAIL if not user_id else UploadType.USER_PROJECT),
                     project_id=UUID(project_id) if project_id else None,
                     index_run_id=UUID(indexing_run_id),
+                    username=username,
+                    project_slug=project_slug,
                     metadata={"project_id": str(project_id)} if project_id else {},
                 )
                 document_inputs.append(document_input)
@@ -528,6 +534,8 @@ def process_documents(
     document_ids: list,
     user_id: str = None,
     project_id: str = None,
+    username: str = None,
+    project_slug: str = None,
     webhook_url: str = None,
     webhook_api_key: str = None,
 ):
@@ -542,6 +550,8 @@ def process_documents(
         document_ids: List of document IDs to process
         user_id: User ID who uploaded the documents (optional for email uploads)
         project_id: Project ID the documents belong to (optional for email uploads)
+        username: Username for unified GitHub-style storage paths (optional)
+        project_slug: Project slug for unified GitHub-style storage paths (optional)
     """
     # Log version information at the start of every run
     logger.info("beam_task_started", extra={
@@ -559,7 +569,7 @@ def process_documents(
             # Run the async function with timeout buffer in an event loop
             return asyncio.run(
                 run_indexing_pipeline_with_timeout_buffer(
-                    indexing_run_id, document_ids, user_id, project_id, webhook_url, webhook_api_key
+                    indexing_run_id, document_ids, user_id, project_id, username, project_slug, webhook_url, webhook_api_key
                 )
             )
         except Exception as e:

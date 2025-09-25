@@ -25,6 +25,8 @@ async def run_indexing_pipeline_on_beam(
     document_ids: List[str],
     user_id: str,
     project_id: str,
+    username: str = None,
+    project_slug: str = None,
 ) -> Dict[str, Any]:
     """
     Main Beam worker function for document indexing pipeline.
@@ -37,6 +39,8 @@ async def run_indexing_pipeline_on_beam(
         document_ids: List of document IDs to process
         user_id: User ID who uploaded the documents
         project_id: Project ID the documents belong to
+        username: Username for unified GitHub-style storage paths (optional)
+        project_slug: Project slug for unified GitHub-style storage paths (optional)
 
     Returns:
         Dict containing processing results and statistics
@@ -72,6 +76,8 @@ async def run_indexing_pipeline_on_beam(
                 upload_type=UploadType.USER_PROJECT,
                 project_id=UUID(project_id),
                 index_run_id=UUID(indexing_run_id),
+                username=username,
+                project_slug=project_slug,
                 metadata={"project_id": str(project_id)},
             )
             document_inputs.append(document_input)

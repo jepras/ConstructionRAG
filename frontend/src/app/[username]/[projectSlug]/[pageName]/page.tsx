@@ -53,11 +53,37 @@ async function UnifiedProjectWikiPageContent({
       );
     }
 
-    // For now, use the project ID as the indexing run ID (will be updated when we have multiple runs)
-    const indexingRunId = project.id;
+    // Get the latest indexing run ID for this project using GitHub-style API
+    let indexingRunId: string | null = null;
 
-    // Get all wiki data
-    const wikiData = await apiClient.getWikiInitialData(indexingRunId);
+    try {
+      // Use GitHub-style API to get all runs for this project
+      const runsResponse = await apiClient.getProjectRuns(username, projectSlug);
+      const runs = runsResponse.runs || [];
+
+      if (runs.length > 0) {
+        // Get the latest completed run
+        const latestRun = runs.find(run => run.status === 'completed') || runs[0];
+        indexingRunId = latestRun.id;
+      }
+    } catch (error) {
+      console.warn('Could not get runs for project, will show no wiki message:', error);
+    }
+
+    // If no indexing run found, return no wiki message
+    if (!indexingRunId) {
+      return (
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Not Available</h2>
+          <p className="text-muted-foreground">
+            This project doesn't have a completed indexing run yet.
+          </p>
+        </div>
+      );
+    }
+
+    // Get all wiki data using GitHub-style API
+    const wikiData = await apiClient.getProjectWiki(username, projectSlug);
 
     if (!wikiData.wiki_run) {
       return (
@@ -70,7 +96,7 @@ async function UnifiedProjectWikiPageContent({
       );
     }
 
-    if (wikiData.pages.length === 0) {
+    if (!wikiData.wiki_pages || wikiData.wiki_pages.length === 0) {
       return (
         <div className="text-center py-12">
           <h2 className="text-2xl font-semibold text-foreground mb-4">Wiki Pages Not Found</h2>
@@ -82,12 +108,23 @@ async function UnifiedProjectWikiPageContent({
     }
 
     // Map pages to expected format (add name field for compatibility)
-    const sortedPages = wikiData.pages.map(page => ({
+    // Create URL-friendly slug from title for navigation
+    const createSlug = (title: string) => {
+      return title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .trim()
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
+    };
+
+    const sortedPages = wikiData.wiki_pages.map(page => ({
       ...page,
-      name: page.filename.replace('.md', '')
+      name: createSlug(page.title), // Use title-based slug for URL
+      filename: page.filename // Keep original filename for API calls
     }));
 
-    // Find the requested page
+    // Find the requested page by matching the URL slug to the generated name
     const currentPage = sortedPages.find(page => page.name === pageName);
     if (!currentPage) {
       return (
@@ -113,8 +150,8 @@ async function UnifiedProjectWikiPageContent({
       };
     }
 
-    // Extract title from metadata
-    const wikiTitle = extractWikiTitle(wikiData.metadata);
+    // Extract title from metadata (unified API structure is different)
+    const wikiTitle = wikiData.metadata?.wiki_structure?.title || project.name || 'Project';
 
     // Use unified slug format for navigation
     const navigationSlug = `${username}/${projectSlug}`;

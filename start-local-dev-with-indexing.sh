@@ -30,36 +30,70 @@ if ! curl -s http://localhost:54321/health > /dev/null; then
 fi
 echo "✅ Local Supabase is running"
 
-# Start ngrok in the background
-echo "📡 Starting ngrok tunnel on port 8000..."
-ngrok http 8000 --log=stdout > ngrok.log 2>&1 &
-NGROK_PID=$!
+# Start dual ngrok tunnels in the background
+echo "📡 Starting ngrok tunnel for backend on port 8000..."
+ngrok http 8000 --log=stdout > ngrok_backend.log 2>&1 &
+NGROK_BACKEND_PID=$!
+
+echo "📡 Starting ngrok tunnel for storage on port 54321..."
+ngrok http 54321 --log=stdout > ngrok_storage.log 2>&1 &
+NGROK_STORAGE_PID=$!
 
 # Wait for ngrok to start up
-echo "⏳ Waiting for ngrok to initialize..."
-sleep 5
+echo "⏳ Waiting for ngrok tunnels to initialize..."
+sleep 8
 
-# Get the public URL from ngrok API
-echo "🔍 Fetching ngrok tunnel URL..."
-NGROK_URL=""
-for i in {1..10}; do
-    NGROK_URL=$(curl -s localhost:4040/api/tunnels 2>/dev/null | jq -r '.tunnels[]? | select(.proto=="https") | .public_url' 2>/dev/null || echo "")
-    if [[ -n "$NGROK_URL" && "$NGROK_URL" != "null" ]]; then
+# Get both public URLs from ngrok API
+echo "🔍 Fetching ngrok tunnel URLs..."
+NGROK_BACKEND_URL=""
+NGROK_STORAGE_URL=""
+
+for i in {1..15}; do
+    # Check both ngrok API endpoints (4040 and 4041) since each process starts its own interface
+    for port in 4040 4041; do
+        TUNNELS=$(curl -s localhost:$port/api/tunnels 2>/dev/null || echo "")
+
+        if [[ -n "$TUNNELS" && "$TUNNELS" != "null" ]]; then
+            # Extract backend URL (port 8000)
+            if [[ -z "$NGROK_BACKEND_URL" ]]; then
+                NGROK_BACKEND_URL=$(echo "$TUNNELS" | jq -r '.tunnels[]? | select(.config.addr=="http://localhost:8000") | .public_url' 2>/dev/null || echo "")
+            fi
+
+            # Extract storage URL (port 54321)
+            if [[ -z "$NGROK_STORAGE_URL" ]]; then
+                NGROK_STORAGE_URL=$(echo "$TUNNELS" | jq -r '.tunnels[]? | select(.config.addr=="http://localhost:54321") | .public_url' 2>/dev/null || echo "")
+            fi
+        fi
+    done
+
+    # Check if we have both URLs
+    if [[ -n "$NGROK_BACKEND_URL" && "$NGROK_BACKEND_URL" != "null" && -n "$NGROK_STORAGE_URL" && "$NGROK_STORAGE_URL" != "null" ]]; then
         break
     fi
-    echo "Attempt $i/10: Waiting for ngrok..."
+
+    echo "Attempt $i/15: Waiting for ngrok tunnels..."
     sleep 2
 done
 
-if [[ -z "$NGROK_URL" || "$NGROK_URL" == "null" ]]; then
-    echo "❌ Failed to get ngrok URL after 10 attempts"
-    echo "Check ngrok.log for details:"
-    cat ngrok.log
-    kill $NGROK_PID 2>/dev/null || true
+# Validate we got both URLs
+if [[ -z "$NGROK_BACKEND_URL" || "$NGROK_BACKEND_URL" == "null" ]]; then
+    echo "❌ Failed to get backend ngrok URL after 15 attempts"
+    echo "Check ngrok_backend.log for details:"
+    cat ngrok_backend.log
+    kill $NGROK_BACKEND_PID $NGROK_STORAGE_PID 2>/dev/null || true
     exit 1
 fi
 
-echo "✅ Ngrok tunnel ready: $NGROK_URL"
+if [[ -z "$NGROK_STORAGE_URL" || "$NGROK_STORAGE_URL" == "null" ]]; then
+    echo "❌ Failed to get storage ngrok URL after 15 attempts"
+    echo "Check ngrok_storage.log for details:"
+    cat ngrok_storage.log
+    kill $NGROK_BACKEND_PID $NGROK_STORAGE_PID 2>/dev/null || true
+    exit 1
+fi
+
+echo "✅ Backend ngrok tunnel ready: $NGROK_BACKEND_URL"
+echo "✅ Storage ngrok tunnel ready: $NGROK_STORAGE_URL"
 echo "🌐 Ngrok web interface: http://localhost:4040"
 
 # Update .env.indexing with your actual API keys
@@ -82,9 +116,13 @@ fi
 # Function to cleanup on exit
 cleanup() {
     echo "🧹 Cleaning up..."
-    if [[ -n "$NGROK_PID" ]]; then
-        kill $NGROK_PID 2>/dev/null || true
-        echo "🔴 Stopped ngrok tunnel"
+    if [[ -n "$NGROK_BACKEND_PID" ]]; then
+        kill $NGROK_BACKEND_PID 2>/dev/null || true
+        echo "🔴 Stopped backend ngrok tunnel"
+    fi
+    if [[ -n "$NGROK_STORAGE_PID" ]]; then
+        kill $NGROK_STORAGE_PID 2>/dev/null || true
+        echo "🔴 Stopped storage ngrok tunnel"
     fi
     echo "🛑 Stopping docker containers..."
     docker-compose down
@@ -99,9 +137,12 @@ echo ""
 echo "🔗 Services will be available at:"
 echo "   - Backend API: http://localhost:8000"
 echo "   - Indexing API: http://localhost:8001"
-echo "   - Webhook endpoint: $NGROK_URL/api/wiki/internal/webhook"
+echo "   - Webhook endpoint: $NGROK_BACKEND_URL/api/wiki/internal/webhook"
+echo "   - Storage tunnel (for VLM): $NGROK_STORAGE_URL"
 echo "   - Local Supabase Studio: http://127.0.0.1:54323"
 echo ""
 
-# Start docker-compose with the updated environment
-BACKEND_API_URL=$NGROK_URL docker-compose up backend indexing
+# Start docker-compose with both environment variables
+BACKEND_API_URL=$NGROK_BACKEND_URL \
+NGROK_STORAGE_URL=$NGROK_STORAGE_URL \
+docker-compose up backend indexing

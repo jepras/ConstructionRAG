@@ -136,11 +136,31 @@ class StorageService:
             else:
                 url = str(signed_url_response)
 
+            # Note: In production, URLs should be publicly accessible
+            # In local development, external VLM services cannot access local URLs
+
             return url
 
         except Exception as e:
             logger.error(f"Failed to upload file {file_path}: {e}")
             raise StorageError(f"Failed to upload file: {str(e)}")
+
+    def get_external_url_for_vlm(self, internal_url: str) -> str:
+        """
+        Convert internal Docker URL to external ngrok URL for VLM services.
+        Only used in local development for OpenRouter access.
+        """
+        import os
+
+        # Only apply in development with ngrok tunnel available
+        ngrok_storage_url = os.getenv("NGROK_STORAGE_URL")
+        if ngrok_storage_url and internal_url and "host.docker.internal:54321" in internal_url:
+            external_url = internal_url.replace("http://host.docker.internal:54321", ngrok_storage_url)
+            logger.info(f"[VLM] Converted URL for external access: {external_url}")
+            return external_url
+
+        # In production or when ngrok not available, return original URL
+        return internal_url
 
     async def upload_extracted_page_image(
         self,
@@ -152,15 +172,20 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload an extracted page image and return metadata with URL."""
         try:
             filename = Path(image_path).name
 
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and unified structure support
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/
+                storage_path = f"{username}/{project_slug}/documents/{document_id}/extracted-pages/{filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/{document_id}/extracted-pages/{filename}"
 
             # Upload file
@@ -190,15 +215,20 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload a table image and return metadata with URL."""
         try:
             filename = Path(image_path).name
 
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and unified structure support
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/
+                storage_path = f"{username}/{project_slug}/documents/{document_id}/table-images/{filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/{document_id}/table-images/{filename}"
 
             # Upload file
@@ -227,16 +257,21 @@ class StorageService:
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
         content_type: str | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload a generated file (markdown, etc.) to the generated folder."""
         try:
             # Sanitize filename for storage compatibility
             sanitized_filename = sanitize_filename(filename)
 
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and unified structure support
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/
+                storage_path = f"{username}/{project_slug}/generated/{sanitized_filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/generated/{sanitized_filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = (
                     f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/generated/{sanitized_filename}"
                 )
@@ -264,16 +299,21 @@ class StorageService:
         user_id: UUID | None = None,
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload the original PDF file."""
         try:
             # Sanitize filename for storage compatibility
             sanitized_filename = sanitize_filename(filename)
 
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and unified structure support
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/
+                storage_path = f"{username}/{project_slug}/documents/{sanitized_filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = (
                     f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{sanitized_filename}"
                 )
@@ -303,13 +343,18 @@ class StorageService:
         project_id: UUID | None = None,
         index_run_id: UUID | None = None,
         content_type: str | None = None,
+        username: str | None = None,
+        project_slug: str | None = None,
     ) -> dict[str, Any]:
         """Upload a temporary processing file."""
         try:
-            # Create storage path based on upload type
-            if upload_type == UploadType.EMAIL:
+            # Create storage path based on upload type and unified structure support
+            if username and project_slug:
+                # Use unified GitHub-style structure: /username/project-slug/
+                storage_path = f"{username}/{project_slug}/temp/{step}/{filename}"
+            elif upload_type == UploadType.EMAIL:
                 storage_path = f"email-uploads/index-runs/{index_run_id}/temp/{step}/{filename}"
-            else:  # USER_PROJECT
+            else:  # USER_PROJECT (legacy)
                 storage_path = f"users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/temp/{step}/{filename}"
 
             # Upload file
@@ -804,13 +849,18 @@ class StorageService:
                         # Extract page info
                         page_name = filename.replace('.md', '')
 
+                        # Fix signed URL to be accessible from browser (replace Docker internal URL)
+                        storage_url = signed_url_response.get('signedURL') if signed_url_response else None
+                        if storage_url and 'host.docker.internal:54321' in storage_url:
+                            storage_url = storage_url.replace('host.docker.internal:54321', '127.0.0.1:54321')
+
                         pages.append({
                             "filename": filename,
                             "name": page_name,
                             "title": page_name.replace('-', ' ').title(),
                             "size": file_obj.get('metadata', {}).get('size', 0),
                             "storage_path": full_file_path,
-                            "storage_url": signed_url_response.get('signedURL') if signed_url_response else None,
+                            "storage_url": storage_url,
                             "order": int(page_name.split('-')[1]) if page_name.startswith('page-') else 999
                         })
 

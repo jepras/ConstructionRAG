@@ -1,22 +1,24 @@
 import { Suspense } from 'react';
 import { apiClient } from '@/lib/api-client';
-import ProjectIndexingContent from '@/components/features/project-pages/ProjectIndexingContent';
+import ProjectChecklistContent from '@/components/features/project-pages/ProjectChecklistContent';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface UnifiedProjectIndexingPageProps {
+interface ProjectChecklistPageProps {
   params: Promise<{
     username: string;
     projectSlug: string;
   }>;
 }
 
-export async function generateMetadata({ params }: UnifiedProjectIndexingPageProps) {
+export async function generateMetadata({ params }: ProjectChecklistPageProps) {
+  const { username, projectSlug } = await params;
+
   return {
-    title: "Indexing",
+    title: `Checklist - ${username}/${projectSlug}`,
   };
 }
 
-async function UnifiedProjectIndexingContent({
+async function UnifiedProjectChecklistContent({
   username,
   projectSlug
 }: {
@@ -45,7 +47,7 @@ async function UnifiedProjectIndexingContent({
     const isAuthenticated = username !== 'anonymous';
 
     return (
-      <ProjectIndexingContent
+      <ProjectChecklistContent
         projectSlug={`${username}/${projectSlug}`}
         runId={indexingRunId}
         isAuthenticated={isAuthenticated}
@@ -53,7 +55,7 @@ async function UnifiedProjectIndexingContent({
       />
     );
   } catch (error) {
-    console.error('Error loading unified project indexing:', error);
+    console.error('Error loading unified project checklist:', error);
 
     return (
       <div className="text-center py-12">
@@ -66,37 +68,35 @@ async function UnifiedProjectIndexingContent({
   }
 }
 
-function IndexingLoadingSkeleton() {
+function ChecklistLoadingSkeleton() {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <Skeleton className="h-10 w-1/3 mb-8" />
-        <div className="space-y-6">
-          <div className="bg-card border border-border rounded-lg p-6">
-            <Skeleton className="h-6 w-1/4 mb-4" />
-            <Skeleton className="h-4 w-full mb-2" />
-            <Skeleton className="h-2 w-full" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Skeleton className="h-32 bg-card border border-border rounded-lg" />
-            <Skeleton className="h-32 bg-card border border-border rounded-lg" />
-            <Skeleton className="h-32 bg-card border border-border rounded-lg" />
-          </div>
+    <div className="p-6 space-y-6">
+      <div className="bg-card border border-border rounded-lg p-6">
+        <Skeleton className="h-6 w-1/3 mb-4" />
+        <Skeleton className="h-4 w-full mb-2" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+      <div className="bg-card border border-border rounded-lg p-6">
+        <Skeleton className="h-6 w-1/4 mb-4" />
+        <div className="space-y-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
+      </div>
+      <div className="flex justify-center">
+        <Skeleton className="h-10 w-32" />
       </div>
     </div>
   );
 }
 
-export default async function UnifiedProjectIndexingPage({ params }: UnifiedProjectIndexingPageProps) {
+export default async function ProjectChecklistPage({ params }: ProjectChecklistPageProps) {
   const { username, projectSlug } = await params;
 
   return (
-    <Suspense fallback={<IndexingLoadingSkeleton />}>
-      <UnifiedProjectIndexingContent username={username} projectSlug={projectSlug} />
+    <Suspense fallback={<ChecklistLoadingSkeleton />}>
+      <UnifiedProjectChecklistContent username={username} projectSlug={projectSlug} />
     </Suspense>
   );
 }
-
-// Enable ISR without automatic revalidation
-export const revalidate = 3600; // Revalidate every hour

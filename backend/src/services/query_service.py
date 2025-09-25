@@ -43,7 +43,7 @@ class QueryService:
                 # For authenticated: ensure ownership or public access
                 run_res = (
                     self.db.table("indexing_runs")
-                    .select("id, upload_type, project_id, user_id, access_level, projects!inner(visibility)")
+                    .select("id, upload_type, project_id, user_id, visibility, projects!inner(visibility)")
                     .eq("id", indexing_run_id)
                     .limit(1)
                     .execute()
@@ -63,11 +63,11 @@ class QueryService:
                     # For anonymous users, only allow access to public projects
                     project_visibility = run.get("projects", {}).get("visibility", "private") if run.get("projects") else "private"
                     self.logger.info(
-                        f"🔍 Anonymous user check - access_level: {run.get('access_level')}, project_visibility: {project_visibility}"
+                        f"🔍 Anonymous user check - visibility: {run.get('visibility')}, project_visibility: {project_visibility}"
                     )
-                    if run.get("access_level") not in {"public", "auth"} or project_visibility != "public":
+                    if run.get("visibility") not in {"public", "internal"} or project_visibility != "public":
                         self.logger.error(
-                            f"❌ Access denied for anonymous user - access_level: {run.get('access_level')}, project_visibility: {project_visibility}"
+                            f"❌ Access denied for anonymous user - visibility: {run.get('visibility')}, project_visibility: {project_visibility}"
                         )
                         raise AppError("Access denied", error_code=ErrorCode.AUTHORIZATION_FAILED)
                     self.logger.info("✅ Anonymous user access granted")
@@ -99,11 +99,11 @@ class QueryService:
             # No specific run provided → resolve accessible documents
             if user is None:
                 # Anonymous → public only
-                res = self.db.table("documents").select("id").eq("access_level", "public").execute()
+                res = self.db.table("documents").select("id").eq("visibility", "public").execute()
                 return [row["id"] for row in (res.data or [])]
 
             # Authenticated → public + auth + owned (private/owner)
-            public_res = self.db.table("documents").select("id").in_("access_level", ["public", "auth"]).execute()
+            public_res = self.db.table("documents").select("id").in_("visibility", ["public", "internal"]).execute()
             owned_res = self.db.table("documents").select("id").eq("user_id", user["id"]).execute()
             ids: set[str] = set()
             ids.update([row["id"] for row in (public_res.data or [])])
@@ -178,32 +178,32 @@ class QueryReadService:
             if user is None:
                 res = (
                     self.db.table("query_runs")
-                    .select("id, original_query, final_response, created_at, access_level")
-                    .eq("access_level", "public")
+                    .select("id, original_query, final_response, created_at, visibility")
+                    .eq("visibility", "public")
                     .order("created_at", desc=True)
                     .range(offset, offset + limit - 1)
                     .execute()
                 )
                 return list(res.data or [])
-            # Authenticated: own private + public + auth
+            # Authenticated: own private + public + internal
             own = (
                 self.db.table("query_runs")
-                .select("id, original_query, final_response, created_at, access_level")
+                .select("id, original_query, final_response, created_at, visibility")
                 .eq("user_id", user["id"])
                 .order("created_at", desc=True)
                 .range(offset, offset + limit - 1)
                 .execute()
             )
-            public_auth = (
+            public_internal = (
                 self.db.table("query_runs")
-                .select("id, original_query, final_response, created_at, access_level")
-                .in_("access_level", ["public", "auth"])
+                .select("id, original_query, final_response, created_at, visibility")
+                .in_("visibility", ["public", "internal"])
                 .order("created_at", desc=True)
                 .range(offset, offset + limit - 1)
                 .execute()
             )
             merged: dict[str, dict[str, Any]] = {}
-            for row in public_auth.data or []:
+            for row in public_internal.data or []:
                 merged[row["id"]] = row
             for row in own.data or []:
                 merged[row["id"]] = row
@@ -219,10 +219,10 @@ class QueryReadService:
             if not res.data:
                 return None
             row = dict(res.data[0])
-            access = row.get("access_level", "private")
-            if access == "public":
+            visibility = row.get("visibility", "private")
+            if visibility == "public":
                 return row
-            if access == "auth":
+            if visibility == "internal":
                 if user is None:
                     return None
                 return row

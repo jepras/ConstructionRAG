@@ -18,6 +18,11 @@ import { toast } from 'sonner';
 
 // Helper function to determine the base path based on current context
 function getBasePath(pathname: string): string {
+  // Check if it's the new unified structure (username/projectSlug)
+  const unifiedPathRegex = /^\/[^\/]+\/[^\/]+/;
+  if (unifiedPathRegex.test(pathname) && !pathname.startsWith('/dashboard') && !pathname.startsWith('/projects')) {
+    return ''; // No prefix for unified structure
+  }
   return pathname.startsWith('/dashboard') ? '/dashboard/projects' : '/projects';
 }
 
@@ -73,27 +78,32 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
   
   // Determine base path based on current context
   const basePath = getBasePath(pathname);
-  
+
+  // Check if this is the new unified structure (username/projectSlug)
+  const isUnifiedStructure = basePath === '';
+
   // Check if this is a public project (single-slug format without nested structure)
-  const isPublicProject = basePath === '/projects' && !projectSlug.includes('/');
-  
+  const isPublicProject = !isUnifiedStructure && basePath === '/projects' && !projectSlug.includes('/');
+
   // Handle nested vs single slug format
-  const [extractedProjectSlug, extractedRunId] = projectSlug.includes('/') 
+  const [extractedProjectSlug, extractedRunId] = projectSlug.includes('/')
     ? projectSlug.split('/')
     : [projectSlug, runId];
-    
-  const baseProjectPath = isPublicProject 
-    ? `${basePath}/${extractedProjectSlug}` 
-    : `${basePath}/${extractedProjectSlug}/${extractedRunId}`;
+
+  const baseProjectPath = isUnifiedStructure
+    ? `/${projectSlug}` // For unified structure, projectSlug already contains username/projectSlug
+    : isPublicProject
+      ? `${basePath}/${extractedProjectSlug}`
+      : `${basePath}/${extractedProjectSlug}/${extractedRunId}`;
   
   // Extract project ID from the slug (only for private projects)
   const projectId = !isPublicProject ? extractProjectIdFromSlug(extractedProjectSlug) : null;
   
-  // Fetch available runs for version dropdown (only for private projects)
+  // Fetch available runs for version dropdown (only for private projects, not unified)
   const { data: projectRuns = [], isLoading } = useQuery({
     queryKey: ['project-runs', projectId],
     queryFn: () => projectId ? apiClient.getProjectRuns(projectId) : Promise.resolve([]),
-    enabled: !!projectId && !isPublicProject, // Only fetch for private projects
+    enabled: !!projectId && !isPublicProject && !isUnifiedStructure, // Only fetch for private projects
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -169,8 +179,8 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
 
           {/* Controls */}
           <div className="flex items-center gap-3 pb-2">
-            {/* Version/Indexing Run Dropdown - Only show for private projects */}
-            {!isPublicProject && (
+            {/* Version/Indexing Run Dropdown - Only show for private projects (not unified or public) */}
+            {!isPublicProject && !isUnifiedStructure && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="flex items-center gap-2">
@@ -185,7 +195,7 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
                     </DropdownMenuItem>
                   ) : projectRuns.length > 0 ? (
                     projectRuns.map((run) => (
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         key={run.id}
                         onClick={() => handleVersionChange(run.id)}
                         className={cn(
@@ -208,11 +218,13 @@ export default function ProjectHeader({ projectSlug, projectName, runId }: Proje
               </DropdownMenu>
             )}
 
-            {/* Public Project Badge - Show for public projects instead of version dropdown */}
-            {isPublicProject && (
+            {/* Project Badge - Show for public projects or unified structure */}
+            {(isPublicProject || isUnifiedStructure) && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 border border-border rounded-md">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm text-muted-foreground">Public Project</span>
+                <span className="text-sm text-muted-foreground">
+                  {isUnifiedStructure ? projectSlug.split('/')[0] === 'anonymous' ? 'Public Project' : 'Project' : 'Public Project'}
+                </span>
               </div>
             )}
 

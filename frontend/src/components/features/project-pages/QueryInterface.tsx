@@ -24,15 +24,21 @@ interface QueryInterfaceProps {
   onSourceSelect?: (source: QueryResponse['search_results'][0]) => void;
   selectedSource?: QueryResponse['search_results'][0];
   initialQuery?: string | null;
+  useUnifiedAPI?: boolean;
+  username?: string;
+  projectSlug?: string;
 }
 
-export default function QueryInterface({ 
-  indexingRunId, 
+export default function QueryInterface({
+  indexingRunId,
   isAuthenticated,
   onQueryResponse,
   onSourceSelect,
   selectedSource,
-  initialQuery
+  initialQuery,
+  useUnifiedAPI,
+  username,
+  projectSlug
 }: QueryInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -50,8 +56,31 @@ export default function QueryInterface({
   // Remove auto-scroll to bottom - let users control scrolling
 
   const queryMutation = useMutation({
-    mutationFn: (request: CreateQueryRequest) => {
-      return apiClient.createQuery(request);
+    mutationFn: (request: CreateQueryRequest | string) => {
+      console.log('🔍 QueryInterface mutation debug:', {
+        useUnifiedAPI,
+        username,
+        projectSlug,
+        indexingRunId,
+        requestType: typeof request,
+        request
+      });
+
+      // Use unified API if available, otherwise fall back to legacy API
+      if (useUnifiedAPI && username && projectSlug && typeof request === 'string') {
+        console.log('✅ Using unified API');
+        return apiClient.createProjectQuery(username, projectSlug, request);
+      } else if (typeof request === 'object') {
+        console.log('⚠️ Using legacy API (object request)');
+        return apiClient.createQuery(request);
+      } else {
+        console.log('⚠️ Using legacy API (string fallback)');
+        // Fallback for string queries without unified API
+        return apiClient.createQuery({
+          query: request as string,
+          indexing_run_id: indexingRunId,
+        });
+      }
     },
     onSuccess: (response) => {
       // Update the assistant message with the actual response
@@ -133,11 +162,18 @@ export default function QueryInterface({
     });
 
     // Make the API call
-    console.log('🌐 handleSubmit: Making API call with query:', query);
-    queryMutation.mutate({
-      query,
-      indexing_run_id: indexingRunId,
-    });
+    console.log('🌐 handleSubmit: Making API call with query:', query, useUnifiedAPI ? '(unified API)' : '(legacy API)');
+
+    if (useUnifiedAPI && username && projectSlug) {
+      // Use unified API - pass just the query string
+      queryMutation.mutate(query);
+    } else {
+      // Use legacy API - pass full request object
+      queryMutation.mutate({
+        query,
+        indexing_run_id: indexingRunId,
+      });
+    }
   }, [queryMutation, indexingRunId, messages.length]);
 
   // Handle initial query from URL parameter
@@ -185,11 +221,18 @@ export default function QueryInterface({
       setIsTyping(true);
 
       // Make the API call
-      console.log('🌐 Making API call with query:', initialQuery);
-      queryMutation.mutate({
-        query: initialQuery,
-        indexing_run_id: indexingRunId,
-      });
+      console.log('🌐 Making API call with initial query:', initialQuery, useUnifiedAPI ? '(unified API)' : '(legacy API)');
+
+      if (useUnifiedAPI && username && projectSlug) {
+        // Use unified API - pass just the query string
+        queryMutation.mutate(initialQuery);
+      } else {
+        // Use legacy API - pass full request object
+        queryMutation.mutate({
+          query: initialQuery,
+          indexing_run_id: indexingRunId,
+        });
+      }
     } else {
       console.log('⏭️ Skipping initial query processing:', {
         hasInitialQuery: !!initialQuery,
