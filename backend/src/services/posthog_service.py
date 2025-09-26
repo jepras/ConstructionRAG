@@ -41,8 +41,8 @@ class PostHogService:
                 host=settings.posthog_host,
                 enable_exception_autocapture=True,
                 # Server-side settings for better performance
-                flush_at=1,  # Send immediately
-                flush_interval=0,  # Don't wait
+                flush_at=10,  # Batch up to 10 events
+                flush_interval=10,  # Flush every 10 seconds
                 timeout=5,  # 5 second timeout
             )
     

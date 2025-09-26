@@ -7,7 +7,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from src.api import auth_router, checklist, documents, pipeline, projects as projects_api, queries, wiki, unified_projects
+from src.api import (
+    auth_router,
+    checklist,
+    documents,
+    pipeline,
+    projects as projects_api,
+    queries,
+    wiki,
+    unified_projects,
+)
 from src.config.settings import get_settings
 from src.middleware.error_handler import (
     app_error_handler,
@@ -62,12 +71,13 @@ async def validate_startup_config() -> None:
     # Skip expensive validation in development for faster reloads
     if settings.environment == "development":
         import logging
+
         logger = logging.getLogger("uvicorn.error")
         logger.info("🚀 ConstructionRAG API is ready!")
         logger.info("📍 API available at: http://localhost:8000")
-        logger.info("📚 Docs available at: http://localhost:8000/docs") 
+        logger.info("📚 Docs available at: http://localhost:8000/docs")
         logger.info("✅ Health check: http://localhost:8000/health")
-        
+
         # Environment debugging - use error level to ensure visibility in Docker logs
         logger.error("🔍 Environment Variables:")
         logger.error(f"   SUPABASE_URL: {os.getenv('SUPABASE_URL', 'NOT SET')}")
@@ -75,7 +85,7 @@ async def validate_startup_config() -> None:
         logger.error(f"   ENVIRONMENT: {os.getenv('ENVIRONMENT', 'NOT SET')}")
         logger.error(f"   Backend will connect to: {os.getenv('SUPABASE_URL', 'NOT SET')}")
         return
-        
+
     from src.services.config_service import ConfigService
 
     cfg = ConfigService()
@@ -86,7 +96,7 @@ async def validate_startup_config() -> None:
 async def shutdown_services() -> None:
     """Clean shutdown of services."""
     from src.services.posthog_service import posthog_service
-    
+
     posthog_service.shutdown()
 
 

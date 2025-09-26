@@ -37,51 +37,23 @@ Migrate ConstructionRAG from dual storage patterns (email vs user_project) to a 
 
 ### Development Environment
 
-```bash
-# Always use local Supabase for development
-supabase start
-
-# Use full stack with local indexing
-./start-local-dev-with-indexing.sh
-
-# Frontend development
-cd frontend && npm run dev
-```
+Always use local Supabase for development. Use the full stack setup script for complete local development including indexing capabilities. Start frontend development server separately.
 
 ### Phase-by-Phase Implementation (All Local First)
 
 #### Phase 1: Local Foundation (Week 1)
 **Local Database + Storage Setup**
-```bash
-# Create migration branch
-git checkout -b unified-storage-migration
-
-# Local database changes (supabase db)
-- Create ANONYMOUS_USER_ID user in local DB
-- Add username, project_slug, visibility columns
-- Update local storage bucket structure
-- Test with fresh local data (no migration of old data)
-```
+Create migration branch and apply database changes locally including creating the anonymous user, adding new columns for username/project_slug/visibility, and updating storage structure. Test with fresh local data without migrating existing data.
 **Local Testing:** Upload documents locally, verify new structure works
 
 #### Phase 2: Backend API - Local Development (Week 2)
 **Build New Endpoints in Local Environment**
-```python
-# Build new endpoints (test locally first)
-@app.get("/api/projects/{username}/{project_slug}")  # NEW
-async def get_project_new(username, project_slug): ...
-
-# Old endpoints can be ignored in local dev
-```
+Build new GitHub-style endpoints using username and project_slug parameters for project access. Old endpoints can be ignored during local development.
 **Local Testing:** Test new endpoints with local data only
 
 #### Phase 3: Frontend Routes - Local Development (Week 3-4)
 **Build New Routes Testing Locally**
-```typescript
-// Build /projects/[username]/[projectSlug] structure
-// Test with local anonymous uploads first
-// Then test with local authenticated uploads
-```
+Build the unified project route structure using username and project_slug parameters. Test with local anonymous uploads first, then authenticated uploads.
 **Local Testing:** Complete workflows in local environment
 
 #### Phase 4: Production Deployment (Week 5)
@@ -94,39 +66,13 @@ async def get_project_new(username, project_slug): ...
 ### Testing Strategy (All Local First)
 
 #### Critical First Test: Anonymous Upload with Project Name
-**MOST IMPORTANT:** The first test in LOCAL environment:
-```bash
-# ✅ LOCAL Test 1: Upload document as anonymous user with chosen project name - COMPLETED
-1. ✅ Navigate to http://localhost:3000/upload
-2. ✅ Upload PDF file
-3. ✅ Enter project name: "my-construction-site"
-4. ✅ Verify project is created with slug: "my-construction-site"
-5. ✅ Verify URL works: http://localhost:3000/projects/anonymous/my-construction-site
-6. ✅ Verify wiki generates correctly in local environment
-7. ✅ Verify query functionality works locally
-```
+**MOST IMPORTANT:** The first test in LOCAL environment - upload document as anonymous user with chosen project name. Verify project creation with proper slug, URL functionality, wiki generation, and query capabilities all work correctly in local environment. (COMPLETED)
 
 #### Local Testing Suite
-```bash
-# Backend API tests against local Supabase
-cd backend
-python -m pytest tests/integration/test_unified_api.py
-
-# Frontend E2E tests against local backend
-cd frontend  
-npm run test:e2e -- --spec="unified-structure.spec.ts"
-
-# Test new endpoints locally
-curl http://localhost:8000/api/projects/anonymous/test-project
-curl http://localhost:8000/api/projects/john-doe/construction-site
-```
+Run backend API tests against local Supabase, frontend E2E tests against local backend, and test new endpoints locally using curl to verify anonymous and user project endpoints work correctly.
 
 #### Production Testing (After Deployment)
-Only after local testing is complete:
-```bash
-# Test production endpoints
-curl https://api.specfinder.io/api/projects/anonymous/test-project
-```
+Only after local testing is complete: Test production endpoints to verify they work correctly in the live environment.
 
 ### Benefits of Local-First Development
 
@@ -154,29 +100,10 @@ Instead of using `NULL` for anonymous users, we introduce a special **ANONYMOUS_
 - **Improves data model consistency** - anonymous becomes just another "user"
 
 ### Anonymous User Implementation
-```sql
--- Create special anonymous user record
-INSERT INTO user_profiles (id, username, full_name, created_at) 
-VALUES (
-    '00000000-0000-0000-0000-000000000000',  -- ANONYMOUS_USER_ID
-    'anonymous',
-    'Anonymous User',
-    NOW()
-);
-```
+Create a special anonymous user record in the user_profiles table with the ANONYMOUS_USER_ID, username 'anonymous', and appropriate display name.
 
 ### Constants Definition
-```python
-# backend/src/constants.py
-ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000"
-ANONYMOUS_USERNAME = "anonymous"
-```
-
-```typescript
-// frontend/src/lib/constants.ts
-export const ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
-export const ANONYMOUS_USERNAME = "anonymous";
-```
+Define ANONYMOUS_USER_ID and ANONYMOUS_USERNAME constants in both backend (Python) and frontend (TypeScript) configuration files for consistent reference throughout the application.
 
 ### Benefits of This Approach
 1. **No NULL Handling**: All queries work with standard equality checks
@@ -191,198 +118,20 @@ export const ANONYMOUS_USERNAME = "anonymous";
 ### New Unified Table Structure
 
 #### Modified `projects` Table
-```sql
--- First, create the anonymous user if it doesn't exist
-INSERT INTO user_profiles (id, username, full_name, created_at) 
-VALUES (
-    '00000000-0000-0000-0000-000000000000',
-    'anonymous',
-    'Anonymous User',
-    NOW()
-) ON CONFLICT (id) DO NOTHING;
-
--- Update NULL user_ids to use ANONYMOUS_USER_ID
-UPDATE projects 
-SET user_id = '00000000-0000-0000-0000-000000000000'
-WHERE user_id IS NULL;
-
--- Now make user_id NOT NULL since all projects have a user
-ALTER TABLE projects 
-ALTER COLUMN user_id SET NOT NULL;
-
--- Add new columns for username-based URLs
-ALTER TABLE projects 
-ADD COLUMN username TEXT NOT NULL DEFAULT 'anonymous',
-ADD COLUMN project_slug TEXT NOT NULL,
-ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private' 
-    CHECK (visibility IN ('public', 'private', 'internal'));
-
--- Create unique constraint for username/project_slug combination
-ALTER TABLE projects 
-ADD CONSTRAINT projects_username_slug_unique 
-UNIQUE (username, project_slug);
-
--- Update existing records
-UPDATE projects 
-SET username = (
-    CASE 
-        WHEN user_id = '00000000-0000-0000-0000-000000000000' THEN 'anonymous'
-        ELSE COALESCE((SELECT up.username FROM user_profiles up WHERE up.id = projects.user_id), 'anonymous')
-    END
-),
-project_slug = LOWER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]', '-', 'g')),
-visibility = CASE 
-    WHEN access_level = 'public' THEN 'public'
-    WHEN access_level = 'private' THEN 'private'
-    ELSE 'internal'
-END;
-
--- Note: Anonymous projects will need unique project names
--- UNIQUE(username, project_slug) constraint enforces this
-
--- Remove old access_level column after migration
--- ALTER TABLE projects DROP COLUMN access_level;
-```
+Create anonymous user if needed, update NULL user_ids to ANONYMOUS_USER_ID, make user_id NOT NULL, add username/project_slug/visibility columns, create unique constraint for username/project_slug combination, update existing records with appropriate username and slug values, and remove old access_level column after migration.
 
 #### Modified `indexing_runs` Table
-```sql
--- Update NULL user_ids to use ANONYMOUS_USER_ID
-UPDATE indexing_runs 
-SET user_id = '00000000-0000-0000-0000-000000000000'
-WHERE user_id IS NULL;
-
--- Make user_id NOT NULL
-ALTER TABLE indexing_runs 
-ALTER COLUMN user_id SET NOT NULL;
-
--- Add visibility column before removing upload_type
-ALTER TABLE indexing_runs 
-ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'
-    CHECK (visibility IN ('public', 'private', 'internal'));
-
--- Update existing records based on old upload_type
-UPDATE indexing_runs 
-SET visibility = CASE 
-    WHEN upload_type = 'email' THEN 'public'
-    WHEN access_level = 'public' THEN 'public'
-    ELSE 'private'
-END;
-
--- Remove old columns after migration
--- ALTER TABLE indexing_runs DROP COLUMN upload_type;
--- ALTER TABLE indexing_runs DROP COLUMN access_level;
-```
+Update NULL user_ids to ANONYMOUS_USER_ID, make user_id NOT NULL, add visibility column with appropriate constraints, update existing records based on upload_type and access_level, then remove old upload_type and access_level columns after migration.
 
 #### Modified `wiki_generation_runs` Table
-```sql
--- Remove upload_type and upload_id columns, add visibility
-ALTER TABLE wiki_generation_runs 
-DROP COLUMN upload_type,
-DROP COLUMN upload_id,
-ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'
-    CHECK (visibility IN ('public', 'private', 'internal'));
-
--- Update storage_path to use new username/project structure
-UPDATE wiki_generation_runs 
-SET visibility = CASE 
-    WHEN upload_type = 'email' THEN 'public'
-    WHEN access_level = 'public' THEN 'public'
-    ELSE 'private'
-END,
-storage_path = CONCAT(
-    (SELECT p.username FROM projects p WHERE p.id = wiki_generation_runs.project_id),
-    '/',
-    (SELECT p.project_slug FROM projects p WHERE p.id = wiki_generation_runs.project_id)
-);
-
--- Remove old access_level column
--- ALTER TABLE wiki_generation_runs DROP COLUMN access_level;
-```
+Remove upload_type and upload_id columns, add visibility column with constraints, update storage_path to use username/project structure, set visibility based on old upload_type and access_level values, then remove old access_level column.
 
 #### Modified `documents` Table
-```sql
--- Add visibility column and update file_path structure
-ALTER TABLE documents 
-ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'
-    CHECK (visibility IN ('public', 'private', 'internal'));
-
--- Update visibility based on access_level
-UPDATE documents 
-SET visibility = CASE 
-    WHEN access_level = 'public' THEN 'public'
-    ELSE 'private'
-END;
-
--- Update file_path to new structure (done in storage migration)
--- ALTER TABLE documents DROP COLUMN access_level;
-```
+Add visibility column with constraints, update visibility based on existing access_level values, update file_path structure during storage migration, then remove old access_level column.
 
 ### New RLS Policies
 
-```sql
--- Drop existing RLS policies
-DROP POLICY IF EXISTS "Users can view own projects" ON projects;
-DROP POLICY IF EXISTS "Users can manage own projects" ON projects;
-DROP POLICY IF EXISTS "Public project access" ON projects;
-
--- New unified RLS policies for projects
-CREATE POLICY "Public projects readable by all" ON projects
-    FOR SELECT USING (visibility = 'public');
-
-CREATE POLICY "Private projects readable by owner" ON projects
-    FOR SELECT USING (
-        visibility = 'private' 
-        AND user_id = COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000')
-        AND user_id != '00000000-0000-0000-0000-000000000000'  -- Anonymous users can't access private projects
-    );
-
-CREATE POLICY "Internal projects readable by authenticated users" ON projects
-    FOR SELECT USING (
-        visibility = 'internal' 
-        AND auth.role() = 'authenticated'
-        AND auth.uid() != '00000000-0000-0000-0000-000000000000'
-    );
-
-CREATE POLICY "Project owners can manage" ON projects
-    FOR ALL USING (
-        user_id = COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000')
-        AND user_id != '00000000-0000-0000-0000-000000000000'  -- Anonymous users can't manage projects
-    );
-
-CREATE POLICY "Service role full access" ON projects
-    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
-
--- Indexing runs policies
-DROP POLICY IF EXISTS "Indexing run access" ON indexing_runs;
-
-CREATE POLICY "Public indexing runs readable by all" ON indexing_runs
-    FOR SELECT USING (visibility = 'public');
-
-CREATE POLICY "Private indexing runs readable by owner" ON indexing_runs
-    FOR SELECT USING (
-        visibility = 'private' 
-        AND user_id = COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000')
-        AND user_id != '00000000-0000-0000-0000-000000000000'
-    );
-
-CREATE POLICY "Internal indexing runs readable by authenticated users" ON indexing_runs
-    FOR SELECT USING (
-        visibility = 'internal' 
-        AND auth.role() = 'authenticated'
-        AND auth.uid() != '00000000-0000-0000-0000-000000000000'
-    );
-
-CREATE POLICY "Indexing run owners can manage" ON indexing_runs
-    FOR ALL USING (
-        user_id = COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000')
-        AND user_id != '00000000-0000-0000-0000-000000000000'
-    );
-
-CREATE POLICY "Service role full access" ON indexing_runs
-    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
-
--- Similar policies for wiki_generation_runs, documents, etc.
-```
+Drop existing RLS policies and create new unified policies for projects, indexing runs, wiki generation runs, and documents. The new policies use visibility-based access control with separate rules for public (readable by all), private (owner only), and internal (authenticated users only) resources. Include service role policies for administrative access. Anonymous users are excluded from accessing private projects and cannot manage any projects.
 
 ### Tables Requiring Modification
 
@@ -401,25 +150,7 @@ CREATE POLICY "Service role full access" ON indexing_runs
 
 ### New Unified Bucket Structure
 
-The storage architecture is completely unified - both anonymous and authenticated users follow the exact same pattern using their username in the path structure:
-
-```
-/storage/
-  /anonymous/                    # Anonymous projects (username = 'anonymous')
-    /project-name/
-      /documents/
-        /original-filename.pdf
-      /wiki/
-        /page1.md
-        /page2.md
-  /actual-username/              # Authenticated user projects (username = actual username)
-    /project-name/
-      /documents/
-        /original-filename.pdf
-      /wiki/
-        /page1.md
-        /page2.md
-```
+The storage architecture is completely unified - both anonymous and authenticated users follow the exact same pattern using their username in the path structure. Anonymous projects use 'anonymous' as the username, while authenticated users use their actual username. All projects follow the same folder structure with documents and wiki subfolders.
 
 ### Unified Storage Pattern
 - **Anonymous users**: Path `/anonymous/project-name/` where 'anonymous' is their username
@@ -442,25 +173,7 @@ The storage architecture is completely unified - both anonymous and authenticate
 - **API behavior**: Project creation will return validation errors for duplicate names
 
 ### Storage Migration Strategy
-```python
-def migrate_storage_paths():
-    """Migrate existing storage paths to new unified structure"""
-    
-    # Get all projects with old storage paths
-    projects = supabase.table('projects').select('*').execute()
-    
-    for project in projects.data:
-        old_path = project.get('old_storage_path')
-        username = project['username']  # Will be 'anonymous' for anonymous projects
-        project_slug = project['project_slug']
-        new_path = f"{username}/{project_slug}"  # Unified pattern for all projects
-        
-        # Move files in Supabase Storage
-        move_storage_folder(old_path, new_path)
-        
-        # Update database references
-        update_file_paths(project['id'], new_path)
-```
+Create a migration function to get all projects, generate new unified storage paths using username and project_slug, move files in Supabase Storage to the new structure, and update database references to point to the new paths.
 
 ## Frontend Upload Form Updates
 
@@ -476,200 +189,11 @@ For the new URL structure to work, **ALL uploads (anonymous and authenticated) m
 
 #### Upload Form Implementation
 
-```typescript
-// components/upload/ProjectUploadForm.tsx
-import React, { useState, useCallback } from 'react';
-import { debounce } from 'lodash';
-import { api } from '@/lib/api';
-
-interface ProjectUploadFormProps {
-  user: UserContext;
-  onUploadComplete: (projectSlug: string) => void;
-}
-
-export function ProjectUploadForm({ user, onUploadComplete }: ProjectUploadFormProps) {
-  const [projectName, setProjectName] = useState('');
-  const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);
-  const [nameError, setNameError] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-
-  // Real-time name availability checking
-  const checkNameAvailability = useCallback(
-    debounce(async (name: string) => {
-      if (!name.trim()) {
-        setNameAvailable(null);
-        setNameError('');
-        return;
-      }
-
-      try {
-        const response = await api.post('/api/projects/check-name', {
-          project_name: name,
-          username: user.username
-        });
-        
-        if (response.data.available) {
-          setNameAvailable(true);
-          setNameError('');
-        } else {
-          setNameAvailable(false);
-          setNameError(`Project name "${name}" is already taken in the ${user.username} namespace`);
-        }
-      } catch (error) {
-        setNameError('Error checking name availability');
-        setNameAvailable(false);
-      }
-    }, 500),
-    [user.username]
-  );
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value;
-    setProjectName(name);
-    checkNameAvailability(name);
-  };
-
-  const handleUpload = async () => {
-    if (!projectName.trim()) {
-      setNameError('Project name is required');
-      return;
-    }
-
-    if (!nameAvailable) {
-      setNameError('Please choose an available project name');
-      return;
-    }
-
-    if (files.length === 0) {
-      setNameError('Please select files to upload');
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      files.forEach(file => formData.append('files', file));
-      formData.append('project_name', projectName);
-      
-      const response = await api.post('/api/uploads', formData);
-      const projectSlug = response.data.project_slug;
-      
-      onUploadComplete(projectSlug);
-    } catch (error) {
-      setNameError('Upload failed. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  return (
-    <div className="project-upload-form">
-      <div className="form-section">
-        <label htmlFor="project-name" className="form-label">
-          Project Name *
-        </label>
-        <div className="project-name-input">
-          <span className="url-preview">
-            specfinder.io/{user.username}/
-          </span>
-          <input
-            id="project-name"
-            type="text"
-            value={projectName}
-            onChange={handleNameChange}
-            placeholder="my-project-name"
-            className={`form-input ${
-              nameAvailable === true ? 'valid' : 
-              nameAvailable === false ? 'invalid' : ''
-            }`}
-          />
-          {nameAvailable === true && (
-            <span className="validation-icon success">✓</span>
-          )}
-          {nameAvailable === false && (
-            <span className="validation-icon error">✗</span>
-          )}
-        </div>
-        {nameError && (
-          <div className="error-message">{nameError}</div>
-        )}
-        <div className="help-text">
-          Your project will be available at: <strong>specfinder.io/{user.username}/{projectName || 'project-name'}</strong>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <label htmlFor="file-upload" className="form-label">
-          Documents *
-        </label>
-        <input
-          id="file-upload"
-          type="file"
-          multiple
-          accept=".pdf"
-          onChange={(e) => setFiles(Array.from(e.target.files || []))}
-          className="form-input"
-        />
-        <div className="help-text">
-          Upload PDF files (max 10 files, 50MB each)
-        </div>
-      </div>
-
-      <button
-        onClick={handleUpload}
-        disabled={!nameAvailable || files.length === 0 || isUploading}
-        className="upload-button"
-      >
-        {isUploading ? 'Uploading...' : 'Create Project'}
-      </button>
-    </div>
-  );
-}
-```
+Create a ProjectUploadForm component with project name input field, real-time name availability checking using debounced API calls, file upload input, URL preview showing the final project URL, validation states and error handling, and upload functionality that sends project name and files to the API endpoint.
 
 #### Name Validation Rules
 
-```typescript
-// lib/validation/projectName.ts
-export function validateProjectName(name: string): { valid: boolean; error?: string } {
-  // Basic validation rules
-  if (!name.trim()) {
-    return { valid: false, error: 'Project name is required' };
-  }
-  
-  if (name.length < 3) {
-    return { valid: false, error: 'Project name must be at least 3 characters' };
-  }
-  
-  if (name.length > 50) {
-    return { valid: false, error: 'Project name must be less than 50 characters' };
-  }
-  
-  // GitHub-style naming rules
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9\-_]*[a-zA-Z0-9]$/.test(name)) {
-    return { 
-      valid: false, 
-      error: 'Project name can only contain letters, numbers, hyphens, and underscores. Must start and end with letter or number.' 
-    };
-  }
-  
-  // Reserved names
-  const reserved = ['api', 'admin', 'www', 'mail', 'ftp', 'localhost', 'anonymous'];
-  if (reserved.includes(name.toLowerCase())) {
-    return { valid: false, error: 'This project name is reserved' };
-  }
-  
-  return { valid: true };
-}
-
-export function generateProjectSlug(name: string): string {
-  return name.toLowerCase()
-    .replace(/[^a-zA-Z0-9\-_]/g, '-')
-    .replace(/--+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-```
+Create validation functions for project names with basic rules (required, length limits), GitHub-style naming rules (alphanumeric, hyphens, underscores), reserved name checks, and a slug generation function that converts names to URL-safe slugs.
 
 #### Form Integration Points
 
@@ -688,46 +212,13 @@ Update these existing upload forms:
 
 #### Error Handling
 
-```typescript
-// Handle common upload errors
-const uploadErrorMessages = {
-  'name_taken': 'Project name is already taken. Please choose a different name.',
-  'invalid_name': 'Project name contains invalid characters.',
-  'file_too_large': 'One or more files exceed the 50MB limit.',
-  'too_many_files': 'Maximum 10 files allowed per upload.',
-  'invalid_file_type': 'Only PDF files are allowed.',
-  'upload_failed': 'Upload failed. Please check your connection and try again.'
-};
-```
+Define standardized error messages for common upload scenarios including name conflicts, validation errors, file size limits, file count limits, file type restrictions, and network failures.
 
 ## Frontend Structure Consolidation
 
 ### Current Dual Route Structure
 
-The current frontend architecture maintains duplicate route structures for public and private project access:
-
-```
-app/
-├── projects/[indexingRunId]/                           # Public projects (anonymous access)
-│   ├── page.tsx                                        # Project overview
-│   ├── [pageName]/page.tsx                             # Wiki pages  
-│   ├── query/page.tsx                                  # Q&A interface
-│   ├── indexing/page.tsx                               # Indexing progress
-│   ├── settings/page.tsx                               # Project settings
-│   └── checklist/page.tsx                              # Project checklist
-│
-├── (app)/dashboard/projects/[projectSlug]/[runId]/     # Private projects (authenticated)
-│   ├── page.tsx                                        # Project overview (duplicate)
-│   ├── [pageName]/page.tsx                             # Wiki pages (duplicate)
-│   ├── query/page.tsx                                  # Q&A interface (duplicate)
-│   ├── indexing/page.tsx                               # Indexing progress (duplicate)
-│   ├── settings/page.tsx                               # Project settings (duplicate)
-│   └── checklist/page.tsx                              # Project checklist (duplicate)
-│
-├── (app)/dashboard/                                    # Authenticated-only routes
-├── (marketing)/                                        # Marketing pages
-└── auth/                                              # Authentication routes
-```
+The current frontend architecture maintains duplicate route structures for public and private project access with separate folder structures for public projects (single-slug format) and private projects (nested format) in the authenticated dashboard area, plus additional routes for marketing and authentication.
 
 **Problems with Current Structure:**
 - **Code duplication**: 12+ duplicate route files across public/private structures
@@ -737,34 +228,10 @@ app/
 
 ### New Unified Route Structure
 
-The consolidated frontend architecture uses a single GitHub-style pattern for all projects:
-
-```
-app/
-├── projects/[username]/[projectSlug]/                  # All projects (unified)
-│   ├── page.tsx                                        # Project overview
-│   ├── [pageName]/page.tsx                             # Wiki pages
-│   ├── query/page.tsx                                  # Q&A interface  
-│   ├── indexing/page.tsx                               # Indexing progress
-│   ├── settings/page.tsx                               # Project settings (auth-gated)
-│   └── checklist/page.tsx                              # Project checklist
-│
-├── (app)/dashboard/                                    # User dashboard (unchanged)
-├── (marketing)/                                        # Marketing pages (unchanged)
-└── auth/                                              # Authentication routes (unchanged)
-```
+The consolidated frontend architecture uses a single GitHub-style pattern for all projects with a unified route structure using username and project slug parameters, while keeping existing dashboard, marketing, and auth routes unchanged.
 
 **Example URL Transformations:**
-```typescript
-// Before (dual patterns)
-/projects/downtown-tower-def456                         // Public project (single-slug)
-/dashboard/projects/downtown-tower-abc123/def456       // Private project (nested)
-
-// After (unified GitHub-style)
-/projects/anonymous/downtown-tower                     // Anonymous project  
-/projects/jeppe/downtown-tower                         // User project
-/projects/construction-co/downtown-tower               // Organization project
-```
+Before: Public projects used single-slug format, private projects used nested format. After: All projects use unified GitHub-style format with username and project name.
 
 ### Migration Benefits
 
@@ -786,109 +253,30 @@ app/
 #### **Access Control at Component Level**
 - **Current**: Route-level separation of public/private features
 - **Target**: Component-level `user.isAuthenticated` checks
-- **Result**: Single codebase with conditional feature rendering
-
-```typescript
-// Component-level access control example
-function ProjectSettings({ user, project }: ProjectSettingsProps) {
-  if (!user.isAuthenticated || project.user_id !== user.id) {
-    return <div>Sign in to access project settings</div>;
-  }
-  
-  return <ProjectSettingsForm project={project} />;
-}
-```
+- **Result**: Single codebase with conditional feature rendering using authentication checks within components
 
 ### Component Updates Needed
 
 #### **Minimal API Call Changes**
-Most existing shared components already work with the unified structure:
-
-```typescript
-// Before: Components handle both URL patterns
-function ProjectQueryContent({ 
-  indexingRunId,      // For public routes
-  projectSlug,        // For private routes  
-  runId              // For private routes
-}: ProjectQueryProps) { /* ... */ }
-
-// After: Single unified parameter pattern
-function ProjectQueryContent({ 
-  username,           // Always present
-  projectSlug         // Always present  
-}: ProjectQueryProps) { /* ... */ }
-```
+Most existing shared components already work with the unified structure by changing parameter patterns from dual indexingRunId/projectSlug/runId pattern to single username/projectSlug pattern.
 
 #### **Authentication State Integration**
-Components add `user.isAuthenticated` checks for conditional features:
-
-```typescript
-// Example: Conditional settings access
-function ProjectHeader({ project, user }: ProjectHeaderProps) {
-  return (
-    <header>
-      <h1>{project.name}</h1>
-      <div className="project-actions">
-        {user.isAuthenticated && project.user_id === user.id && (
-          <Link href={`/projects/${project.username}/${project.project_slug}/settings`}>
-            Settings
-          </Link>
-        )}
-      </div>
-    </header>
-  );
-}
-```
+Components add `user.isAuthenticated` checks for conditional features like settings access, where authenticated users who own the project can see management options.
 
 #### **API Client Simplification**
-Update API calls to use new GitHub-style endpoints:
-
-```typescript
-// Before: Different API patterns for public/private
-const publicProject = await api.get(`/api/indexing-runs/${indexingRunId}`);
-const privateProject = await api.get(`/api/projects/${projectId}/runs/${runId}`);
-
-// After: Single unified API pattern
-const project = await api.get(`/api/projects/${username}/${projectSlug}`);
-```
+Update API calls to use new GitHub-style endpoints, replacing different patterns for public and private projects with a single unified pattern using username and project slug.
 
 ### Files to Delete
 
 Remove all duplicate route files from the current dual structure:
 
-#### **Public Route Duplicates (6 files)**
-```
-/app/projects/[indexingRunId]/page.tsx
-/app/projects/[indexingRunId]/[pageName]/page.tsx  
-/app/projects/[indexingRunId]/query/page.tsx
-/app/projects/[indexingRunId]/indexing/page.tsx
-/app/projects/[indexingRunId]/settings/page.tsx
-/app/projects/[indexingRunId]/checklist/page.tsx
-```
-
-#### **Private Route Duplicates (6 files)**
-```
-/app/(app)/dashboard/projects/[projectSlug]/[runId]/page.tsx
-/app/(app)/dashboard/projects/[projectSlug]/[runId]/[pageName]/page.tsx
-/app/(app)/dashboard/projects/[projectSlug]/[runId]/query/page.tsx  
-/app/(app)/dashboard/projects/[projectSlug]/[runId]/indexing/page.tsx
-/app/(app)/dashboard/projects/[projectSlug]/[runId]/settings/page.tsx
-/app/(app)/dashboard/projects/[projectSlug]/[runId]/checklist/page.tsx
-```
-
-**Total Removal**: 12 route files eliminated through consolidation
+#### **Route Files to Remove**
+Remove 6 public route files (using indexingRunId parameter) and 6 private route files (using projectSlug/runId parameters) for project overview, wiki pages, query interface, indexing progress, settings, and checklist functionality. **Total Removal**: 12 route files eliminated through consolidation.
 
 ### Files to Create/Update
 
 #### **New Unified Route Files (6 files)**
-```
-/app/projects/[username]/[projectSlug]/page.tsx
-/app/projects/[username]/[projectSlug]/[pageName]/page.tsx
-/app/projects/[username]/[projectSlug]/query/page.tsx
-/app/projects/[username]/[projectSlug]/indexing/page.tsx  
-/app/projects/[username]/[projectSlug]/settings/page.tsx
-/app/projects/[username]/[projectSlug]/checklist/page.tsx
-```
+Create new unified route files using username and projectSlug parameters for project overview, wiki pages, query interface, indexing progress, settings, and checklist functionality.
 
 #### **Existing Shared Components (No Changes)**
 The following components in `/components/features/project-pages/` work unchanged:
@@ -899,24 +287,7 @@ The following components in `/components/features/project-pages/` work unchanged
 - `SourcePanel.tsx`, `QueryInterface.tsx`, etc.
 
 #### **API Client Updates**
-Update API client to use new GitHub-style endpoints:
-
-```typescript
-// lib/api/projects.ts  
-export class ProjectsApiClient {
-  async getProject(username: string, projectSlug: string) {
-    return this.client.get(`/api/projects/${username}/${projectSlug}`);
-  }
-  
-  async getProjectWiki(username: string, projectSlug: string) {
-    return this.client.get(`/api/projects/${username}/${projectSlug}/wiki`);
-  }
-  
-  async createQuery(username: string, projectSlug: string, query: string) {
-    return this.client.post(`/api/projects/${username}/${projectSlug}/queries`, { query });
-  }
-}
-```
+Update API client to use new GitHub-style endpoints with username and projectSlug parameters for getting projects, accessing wiki content, and creating queries.
 
 ### Implementation Strategy
 
@@ -966,55 +337,15 @@ The new API follows GitHub's RESTful patterns with clear resource hierarchy and 
 
 #### Core Resource Endpoints (GitHub Style)
 
-```
-# Projects - Core resource management
-GET    /api/projects/{username}/{project_slug}                 # Get project details
-PATCH  /api/projects/{username}/{project_slug}                 # Update project
-DELETE /api/projects/{username}/{project_slug}                 # Delete project
-POST   /api/projects/check-name                                # Check project name availability
-
-# Project Runs - Nested resource under projects  
-GET    /api/projects/{username}/{project_slug}/runs            # List all runs for project
-POST   /api/projects/{username}/{project_slug}/runs            # Create new indexing run
-GET    /api/projects/{username}/{project_slug}/runs/{run_id}   # Get specific run details
-
-# Wiki - Project documentation
-GET    /api/projects/{username}/{project_slug}/wiki            # List all wiki pages
-GET    /api/projects/{username}/{project_slug}/wiki/{page_name} # Get specific wiki page
-
-# Documents - Project files
-GET    /api/projects/{username}/{project_slug}/documents       # List project documents
-GET    /api/projects/{username}/{project_slug}/documents/{doc_id} # Get document details
-POST   /api/projects/{username}/{project_slug}/documents       # Upload documents to project
-
-# Queries - Project Q&A
-GET    /api/projects/{username}/{project_slug}/queries         # List project queries
-POST   /api/projects/{username}/{project_slug}/queries         # Create new query
-GET    /api/projects/{username}/{project_slug}/queries/{query_id} # Get query details
-
-# Upload - Legacy endpoint updated for new structure
-POST   /api/uploads                                            # Upload with required project_name
-```
+Define GitHub-style RESTful endpoints for projects (get, update, delete, name checking), project runs (list, create, get specific), wiki (list pages, get page content), documents (list, get details, upload), and queries (list, create, get details), plus a legacy upload endpoint that requires project_name.
 
 #### Project Discovery Endpoints
 
-```
-# Global project discovery
-GET    /api/projects                                           # All public projects
-
-# User-specific project discovery
-GET    /api/users/{username}/projects                          # Public projects by user
-
-# Authenticated user's projects (requires auth)
-GET    /api/user/projects                                      # Authenticated user's projects
-```
+Define endpoints for global project discovery (all public projects), user-specific discovery (public projects by user), and authenticated user's private projects.
 
 #### Legacy Anonymous Upload Support
 
-```
-# Backward compatibility for anonymous uploads
-POST   /api/uploads                                            # Creates anonymous project (legacy endpoint)
-```
+Maintain backward compatibility with existing anonymous upload endpoint that creates anonymous projects.
 
 ### RESTful API Benefits
 
@@ -1041,76 +372,10 @@ This GitHub-inspired design provides several key advantages:
 ### Unified API Implementation
 
 #### Single Endpoint Handler Pattern
-```python
-async def handle_project_resource(
-    username: str,
-    project_slug: str, 
-    user: Optional[UserContext] = None,
-    resource_type: str = "project"
-) -> Dict[str, Any]:
-    """Unified handler for all project-based resources"""
-    
-    # Single project resolution - works for both anonymous and authenticated
-    project = await get_project_by_slug(username, project_slug, user)
-    
-    # Apply resource-specific access control
-    if not can_access_resource(project, resource_type, user):
-        raise HTTPException(403, "Access denied")
-    
-    return project
-
-async def get_project_by_slug(
-    username: str, 
-    project_slug: str, 
-    user: Optional[UserContext] = None
-) -> Dict[str, Any]:
-    """Single project resolution function for all endpoints"""
-    
-    query = supabase.table('projects').select('*')
-    query = query.eq('username', username).eq('project_slug', project_slug)
-    
-    # Unified access control - no upload_type checking needed
-    if user and user.isAuthenticated:
-        # Authenticated users can see public, internal, and their own private projects
-        query = query.or_(
-            f"visibility.eq.public,"
-            f"visibility.eq.internal,"
-            f"and(visibility.eq.private,user_id.eq.{user.id})"
-        )
-    else:
-        # Anonymous users can only see public projects
-        query = query.eq('visibility', 'public')
-    
-    result = query.execute()
-    if not result.data:
-        raise HTTPException(404, "Project not found")
-    
-    return result.data[0]
-```
+Create unified handler functions for all project-based resources using username and project_slug parameters. Implement single project resolution function that applies visibility-based access control (public for anonymous users, public/internal/owned-private for authenticated users) without needing upload_type checking.
 
 #### Access Control Simplification
-```python
-def can_access_resource(project: Dict, resource_type: str, user: Optional[UserContext]) -> bool:
-    """Unified access control for all project resources"""
-    
-    # Public projects - anyone can read
-    if project['visibility'] == 'public':
-        if resource_type in ['read', 'query', 'wiki']:
-            return True
-        # Write operations require authentication
-        if resource_type in ['write', 'upload', 'settings']:
-            return user and user.isAuthenticated and project['user_id'] == user.id
-    
-    # Private projects - owner only
-    if project['visibility'] == 'private':
-        return user and user.isAuthenticated and project['user_id'] == user.id
-    
-    # Internal projects - any authenticated user
-    if project['visibility'] == 'internal':
-        return user and user.isAuthenticated
-    
-    return False
-```
+Create unified access control function that handles different visibility levels: public projects allow read access for anyone and write access for owners only, private projects allow access only to owners, and internal projects allow access to any authenticated user.
 
 ### API Endpoint Comparison
 
@@ -1126,125 +391,16 @@ def can_access_resource(project: Dict, resource_type: str, user: Optional[UserCo
 ### Migration Implementation Examples
 
 #### Project CRUD Operations
-```python
-# POST /api/projects/check-name
-@router.post("/projects/check-name")
-async def check_project_name_availability(
-    request: ProjectNameCheckRequest,
-    user: UserContext = Depends(get_current_user)
-):
-    """Check if project name is available in the given username namespace"""
-    # Validate project name format
-    validation = validate_project_name(request.project_name)
-    if not validation.valid:
-        return ProjectNameCheckResponse(
-            available=False,
-            error=validation.error
-        )
-    
-    # Generate slug from name
-    project_slug = generate_project_slug(request.project_name)
-    
-    # Check if name already exists in namespace
-    existing = await supabase.table('projects').select('id').eq(
-        'username', request.username
-    ).eq('project_slug', project_slug).execute()
-    
-    available = len(existing.data) == 0
-    
-    return ProjectNameCheckResponse(
-        available=available,
-        project_slug=project_slug,
-        error="Project name already taken" if not available else None
-    )
-
-# GET /api/projects/{username}/{project_slug}
-@router.get("/projects/{username}/{project_slug}")
-async def get_project(username: str, project_slug: str, user: UserContext = Depends(get_current_user)):
-    project = await get_project_by_slug(username, project_slug, user)
-    return ProjectResponse(**project)
-
-# PATCH /api/projects/{username}/{project_slug}  
-@router.patch("/projects/{username}/{project_slug}")
-async def update_project(
-    username: str, 
-    project_slug: str, 
-    updates: ProjectUpdateRequest,
-    user: UserContext = Depends(get_authenticated_user)
-):
-    project = await get_project_by_slug(username, project_slug, user)
-    if not can_access_resource(project, 'write', user):
-        raise HTTPException(403, "Access denied")
-    
-    # Update project with new data
-    updated = await update_project_data(project['id'], updates.dict())
-    return ProjectResponse(**updated)
-```
+Implement project name availability checking with validation and slug generation, project retrieval using unified project resolution, and project updates with access control verification.
 
 #### Document Management
-```python
-# GET /api/projects/{username}/{project_slug}/documents
-@router.get("/projects/{username}/{project_slug}/documents")
-async def list_project_documents(username: str, project_slug: str, user: UserContext = Depends(get_current_user)):
-    project = await get_project_by_slug(username, project_slug, user)
-    documents = await get_project_documents(project['id'])
-    return DocumentListResponse(documents=documents)
-
-# POST /api/projects/{username}/{project_slug}/documents
-@router.post("/projects/{username}/{project_slug}/documents")
-async def upload_project_documents(
-    username: str, 
-    project_slug: str,
-    files: List[UploadFile],
-    user: UserContext = Depends(get_current_user)
-):
-    project = await get_project_by_slug(username, project_slug, user)
-    if not can_access_resource(project, 'upload', user):
-        raise HTTPException(403, "Upload access denied")
-    
-    # Process file uploads for this specific project
-    documents = await process_document_uploads(project['id'], files)
-    return DocumentUploadResponse(documents=documents)
-```
+Implement document listing and upload endpoints that resolve projects using unified project resolution and apply appropriate access control for upload permissions.
 
 #### Query System
-```python
-# POST /api/projects/{username}/{project_slug}/queries
-@router.post("/projects/{username}/{project_slug}/queries")
-async def create_project_query(
-    username: str,
-    project_slug: str,
-    query_request: QueryRequest,
-    user: UserContext = Depends(get_current_user)
-):
-    project = await get_project_by_slug(username, project_slug, user)
-    if not can_access_resource(project, 'query', user):
-        raise HTTPException(403, "Query access denied")
-    
-    # Execute query within project context
-    result = await execute_project_query(project['id'], query_request.question, user)
-    return QueryResponse(**result)
-```
+Implement query creation endpoint that resolves projects using unified project resolution, applies query access control, and executes queries within the specific project context.
 
 ### URL Generation Helpers
-```python
-def generate_project_api_url(username: str, project_slug: str, endpoint: str = "") -> str:
-    """Generate consistent API URLs for projects"""
-    base = f"/api/projects/{username}/{project_slug}"
-    return f"{base}/{endpoint}" if endpoint else base
-
-def generate_project_frontend_url(username: str, project_slug: str, page: str = "") -> str:
-    """Generate consistent frontend URLs for projects"""
-    base = f"/projects/{username}/{project_slug}"
-    return f"{base}/{page}" if page else base
-
-# Usage examples
-api_url = generate_project_api_url("anonymous", "office-tower", "wiki")
-# Returns: "/api/projects/anonymous/office-tower/wiki"
-
-frontend_url = generate_project_frontend_url("jeppe", "construction-site", "queries") 
-# Returns: "/projects/jeppe/construction-site/queries"
-```
+Create helper functions to generate consistent API and frontend URLs for projects using username and project_slug parameters, with optional endpoint/page suffixes.
 
 ## Authentication Pattern Updates
 
@@ -1253,320 +409,48 @@ frontend_url = generate_project_frontend_url("jeppe", "construction-site", "quer
 We'll introduce a consistent `UserContext` pattern across both backend and frontend to handle authentication checks:
 
 #### Backend UserContext (Python)
-```python
-# backend/src/models/user.py
-from typing import Optional
-from pydantic import BaseModel
-from src.constants import ANONYMOUS_USER_ID
-
-class UserContext(BaseModel):
-    id: str
-    username: str
-    email: Optional[str] = None
-    is_authenticated: bool = False
-    
-    @classmethod
-    def anonymous(cls) -> "UserContext":
-        """Create anonymous user context"""
-        return cls(
-            id=ANONYMOUS_USER_ID,
-            username="anonymous",
-            is_authenticated=False
-        )
-    
-    @classmethod
-    def authenticated(cls, user_id: str, username: str, email: str) -> "UserContext":
-        """Create authenticated user context"""
-        return cls(
-            id=user_id,
-            username=username,
-            email=email,
-            is_authenticated=True
-        )
-    
-    @property
-    def isAuthenticated(self) -> bool:
-        """Check if user is authenticated (not anonymous)"""
-        return self.is_authenticated and self.id != ANONYMOUS_USER_ID
-
-# Usage in API endpoints
-async def get_current_user(request: Request) -> UserContext:
-    """Get current user context from request"""
-    token = request.headers.get("Authorization")
-    if not token:
-        return UserContext.anonymous()
-    
-    try:
-        user_data = verify_token(token)
-        return UserContext.authenticated(
-            user_id=user_data["user_id"],
-            username=user_data["username"],
-            email=user_data["email"]
-        )
-    except Exception:
-        return UserContext.anonymous()
-```
+Create UserContext class with id, username, email, and is_authenticated fields. Include class methods for creating anonymous and authenticated user contexts. Add isAuthenticated property that checks both authentication status and excludes ANONYMOUS_USER_ID. Implement token-based user context extraction from requests.
 
 #### Frontend UserContext (TypeScript)
-```typescript
-// frontend/src/lib/auth/types.ts
-import { ANONYMOUS_USER_ID } from '../constants';
-
-export interface UserContext {
-  id: string;
-  username: string;
-  email?: string;
-  isAuthenticated: boolean;
-}
-
-export class UserContextHelper {
-  static anonymous(): UserContext {
-    return {
-      id: ANONYMOUS_USER_ID,
-      username: 'anonymous',
-      isAuthenticated: false
-    };
-  }
-  
-  static authenticated(id: string, username: string, email: string): UserContext {
-    return {
-      id,
-      username,
-      email,
-      isAuthenticated: true
-    };
-  }
-  
-  static isAuthenticated(user: UserContext): boolean {
-    return user.isAuthenticated && user.id !== ANONYMOUS_USER_ID;
-  }
-}
-
-// Usage in components
-export function useAuth(): UserContext {
-  const { user } = useAuthContext();
-  return user || UserContextHelper.anonymous();
-}
-```
+Create UserContext interface and helper class with methods for creating anonymous and authenticated user contexts. Include isAuthenticated checking that excludes ANONYMOUS_USER_ID. Implement useAuth hook that returns current user context with fallback to anonymous.
 
 ### Replacing Authentication Checks
 
 #### Before (Problematic NULL Checks)
-```python
-# Backend - OLD pattern
-if user.id:  # This fails with ANONYMOUS_USER_ID
-    # User is authenticated
-else:
-    # User is anonymous
-
-# Frontend - OLD pattern  
-if (user?.id) {  // This fails with ANONYMOUS_USER_ID
-  // User is authenticated
-}
-```
+Old patterns relied on checking user.id directly, which fails with ANONYMOUS_USER_ID since it's a valid UUID rather than null.
 
 #### After (Consistent isAuthenticated Pattern)
-```python
-# Backend - NEW pattern
-if user.isAuthenticated:
-    # User is authenticated
-else:
-    # User is anonymous
-
-# Example usage
-async def create_project(user: UserContext, project_data: dict):
-    if not user.isAuthenticated:
-        raise HTTPException(401, "Authentication required to create projects")
-    
-    project_data["user_id"] = user.id  # Always a valid UUID, never NULL
-```
-
-```typescript
-// Frontend - NEW pattern
-if (user.isAuthenticated) {
-  // User is authenticated
-}
-
-// Example usage
-function ProjectSettings({ user }: { user: UserContext }) {
-  if (!user.isAuthenticated) {
-    return <div>Please sign in to access project settings</div>;
-  }
-  
-  return <ProjectSettingsForm userId={user.id} />;
-}
-```
+Replace all user.id checks with user.isAuthenticated pattern in both backend and frontend. This ensures consistent behavior regardless of whether the user is anonymous (with ANONYMOUS_USER_ID) or authenticated with real credentials.
 
 ### Rate Limiting and Feature Differentiation
 
 #### Rate Limiting by Authentication Status
-```python
-# backend/src/middleware/rate_limiting.py
-async def apply_rate_limiting(user: UserContext, endpoint: str):
-    if user.isAuthenticated:
-        # Authenticated users get higher limits
-        limit = AUTHENTICATED_RATE_LIMITS[endpoint]
-        key = f"rate_limit:{user.id}:{endpoint}"
-    else:
-        # Anonymous users get lower limits
-        limit = ANONYMOUS_RATE_LIMITS[endpoint] 
-        key = f"rate_limit:anonymous:{endpoint}"  # Shared anonymous limit
-    
-    # Apply rate limiting logic
-    check_rate_limit(key, limit)
-```
+Apply different rate limits based on authentication status - authenticated users get higher limits with individual keys, while anonymous users share lower limits with a common key.
 
 #### Feature Access Control
-```python
-# Example: Project creation limits
-async def create_project(user: UserContext, project_data: dict):
-    if not user.isAuthenticated:
-        # Anonymous users create public projects with ANONYMOUS_USER_ID
-        project_data.update({
-            "user_id": ANONYMOUS_USER_ID,
-            "username": "anonymous", 
-            "visibility": "public"  # Anonymous projects are always public
-        })
-    else:
-        # Authenticated users can create private projects
-        project_data.update({
-            "user_id": user.id,
-            "username": user.username,
-            "visibility": project_data.get("visibility", "private")
-        })
-```
+Implement different project creation behavior for authenticated vs anonymous users - anonymous users create public projects with ANONYMOUS_USER_ID, while authenticated users can create private projects with their own user_id and chosen visibility.
 
 ## Frontend Updates
 
 ### URL Generation Changes
 
-#### Current URL Patterns:
-```typescript
-// Public projects (single slug)
-/projects/downtown-tower-def456
-
-// Private projects (nested)
-/dashboard/projects/downtown-tower-abc123/def456
-```
-
-#### New Unified URL Patterns:
-```typescript
-// All projects use consistent pattern
-/projects/anonymous/downtown-tower         # Anonymous projects
-/projects/jeppe/downtown-tower             # User projects  
-/projects/company/office-renovation        # Organization projects
-```
+#### URL Pattern Changes
+Transform from dual patterns (public single-slug and private nested) to unified GitHub-style pattern using username and project name for all projects (anonymous, user, and organization projects).
 
 ### Route Structure Modifications
 
-#### New Route Structure:
-```
-app/
-├── projects/
-│   └── [username]/
-│       └── [projectSlug]/
-│           ├── page.tsx              # Project overview
-│           ├── wiki/
-│           │   └── page.tsx          # Wiki pages
-│           ├── queries/
-│           │   └── page.tsx          # Q&A interface  
-│           └── settings/
-│               └── page.tsx          # Project settings (auth required)
-```
-
-#### Route Component Updates:
-```typescript
-// app/projects/[username]/[projectSlug]/page.tsx
-export default async function ProjectPage({ 
-  params 
-}: { 
-  params: { username: string; projectSlug: string } 
-}) {
-  const project = await getProjectBySlug(params.username, params.projectSlug);
-  
-  return (
-    <ProjectOverview project={project} />
-  );
-}
-
-// URL generation helper
-export function generateProjectUrl(username: string, projectSlug: string): string {
-  return `/projects/${username}/${projectSlug}`;
-}
-```
+#### New Route Structure
+Create unified route structure under projects/[username]/[projectSlug] with subpages for project overview, wiki, queries, and settings (authentication-gated). Implement route components that extract username and projectSlug parameters and use helper functions for URL generation.
 
 ### API Call Updates
 
-#### Updated API Client:
-```typescript
-// lib/api.ts
-class UnifiedApiClient {
-  async getProject(username: string, projectSlug: string) {
-    return this.get(`/api/projects/${username}/${projectSlug}`);
-  }
-  
-  async getProjectWiki(username: string, projectSlug: string) {
-    return this.get(`/api/projects/${username}/${projectSlug}/wiki`);
-  }
-  
-  async createQuery(username: string, projectSlug: string, query: string) {
-    return this.post(`/api/projects/${username}/${projectSlug}/queries`, { query });
-  }
-}
-```
-
-#### Component Updates:
-```typescript
-// components/features/project-pages/ProjectHeader.tsx
-interface ProjectHeaderProps {
-  project: {
-    username: string;
-    project_slug: string;
-    name: string;
-    visibility: 'public' | 'private' | 'internal';
-  };
-}
-
-export function ProjectHeader({ project }: ProjectHeaderProps) {
-  const projectUrl = generateProjectUrl(project.username, project.project_slug);
-  
-  return (
-    <header>
-      <h1>{project.name}</h1>
-      <div className="project-meta">
-        <span>by {project.username}</span>
-        <VisibilityBadge visibility={project.visibility} />
-      </div>
-    </header>
-  );
-}
-```
+#### Updated API Client and Components
+Create unified API client with methods for getting projects, accessing wiki content, and creating queries using username/projectSlug parameters. Update component interfaces to use project objects with username, project_slug, name, and visibility properties. Include URL generation and visibility indicators.
 
 ## Structured Logging Updates
 
-### Current Logging Pattern
-Show examples of current logging with upload_type:
-```python
-logger.info("Processing upload", extra={
-    "user_id": user_id,
-    "upload_type": upload_type,
-    "document_count": len(documents),
-    "indexing_run_id": run_id
-})
-```
-
-### New Unified Logging Pattern
-Show examples with the new structure:
-```python
-logger.info("Processing project upload", extra={
-    "user_id": user_id,
-    "username": username, 
-    "project_slug": project_slug,
-    "is_authenticated": user.is_authenticated,
-    "document_count": len(documents),
-    "indexing_run_id": run_id
-})
-```
+### Logging Pattern Updates
+Replace old logging patterns that used upload_type with new unified patterns using username, project_slug, and is_authenticated fields for more semantic and consistent logging across all project operations.
 
 ### Logging Benefits
 - **More semantic information**: project_slug instead of generic IDs
@@ -1621,22 +505,7 @@ To simplify the migration significantly, we will **reset the production database
 - **User communication**: Clear messaging about system upgrade and improved features
 
 ### User Communication Strategy
-```markdown
-# System Upgrade Notice
-We're upgrading Specfinder with major improvements:
-- GitHub-style project URLs (specfinder.io/username/project-name)
-- Unified project management for all users
-- Enhanced collaboration features
-- Improved performance and reliability
-
-During this upgrade, existing projects will be archived and users will need to:
-- Re-register accounts (if desired)
-- Re-upload project documents
-- Enjoy the new streamlined experience
-
-Upgrade date: [DATE]
-Downtime: Approximately 2 hours
-```
+Create system upgrade notice explaining GitHub-style project URLs, unified project management, enhanced features, and improved performance. Inform users that existing projects will be archived and they'll need to re-register and re-upload documents. Provide upgrade date and expected downtime duration.
 
 ## Migration Steps
 
@@ -1645,25 +514,13 @@ Downtime: Approximately 2 hours
 ### Phase 1: Local Database and Storage Setup (Week 1)
 **Local Development - Fresh Start with Local Supabase**
 
-1. **Setup local database schema** - Apply new schema to local Supabase
-   ```sql
-   -- Apply to LOCAL Supabase database
-   -- All development happens locally first
-   ```
+1. **Setup local database schema** - Apply new schema to local Supabase with all development happening locally first
    **Local Testing:** Verify schema works in local environment
 
-2. **Setup local storage structure** - Create unified folder structure locally
-   ```bash
-   # Configure local Supabase storage
-   # Test with local file uploads
-   ```
+2. **Setup local storage structure** - Create unified folder structure locally and configure local Supabase storage
    **Local Testing:** Test file uploads work locally
 
 3. **Create anonymous user** record with ANONYMOUS_USER_ID in fresh database
-   ```sql
-   INSERT INTO user_profiles (id, username, full_name, created_at) 
-   VALUES ('00000000-0000-0000-0000-000000000000', 'anonymous', 'Anonymous User', NOW());
-   ```
    **Testing:** Verify anonymous user exists with correct ID
 
 4. **Apply new schema** with unified structure (no NULL user_ids, visibility columns, etc.)
@@ -1681,10 +538,7 @@ Downtime: Approximately 2 hours
 ### Phase 2: Frontend Upload Forms (Week 1)
 **Critical for New URL Structure**
 
-8. **Implement project name input field** in upload forms
-   ```typescript
-   // Add ProjectUploadForm component with real-time validation
-   ```
+8. **Implement project name input field** in upload forms with ProjectUploadForm component including real-time validation
    **Testing:** Test project name input and URL preview
 
 9. **Add name availability checking** with debounced API calls
@@ -1705,12 +559,7 @@ Downtime: Approximately 2 hours
 ### Phase 3: Backend API Implementation (Week 2)
 **Build New System from Scratch**
 
-14. **Implement UserContext class** and authentication helpers
-    ```python
-    # Test UserContext creation and validation
-    user = UserContext.anonymous()
-    assert user.isAuthenticated == False
-    ```
+14. **Implement UserContext class** and authentication helpers with creation, validation, and isAuthenticated property
     **Testing:** Unit tests for UserContext methods
 
 15. **Replace all user.id checks** with user.isAuthenticated pattern
@@ -1725,12 +574,7 @@ Downtime: Approximately 2 hours
 18. **Standardize logging patterns** - Add consistent UserContext properties to all project-related logs
     **Testing:** Verify log consistency across different operations
 
-19. **Implement new GitHub-style RESTful API endpoints** with username/project_slug patterns (ALONGSIDE existing endpoints)
-    ```python
-    # NEW endpoints (parallel to old ones)
-    @app.get("/api/projects/{username}/{project_slug}")  # NEW
-    @app.get("/api/indexing-runs/{run_id}")              # OLD (keep working)
-    ```
+19. **Implement new GitHub-style RESTful API endpoints** with username/project_slug patterns alongside existing endpoints for parallel operation
     **Testing:** Test both old and new endpoints return same data
 
 20. **Create unified project resolution function** (get_project_by_slug) for all endpoints
@@ -1760,12 +604,7 @@ Downtime: Approximately 2 hours
 27. **Build route files** - Implement new unified route components
     **Testing:** Test new routes render correctly with clean data
 
-28. **Implement parameter extraction** - Extract `username` and `projectSlug` parameters
-    ```typescript
-    // Test parameter extraction
-    const { username, projectSlug } = params;
-    console.log('Extracted params:', { username, projectSlug });
-    ```
+28. **Implement parameter extraction** - Extract `username` and `projectSlug` parameters from route components
     **Testing:** Verify route parameters extracted correctly
 
 29. **Implement component-level access control** - Add `user.isAuthenticated` checks to components
@@ -1786,11 +625,7 @@ Downtime: Approximately 2 hours
 ### Phase 5: Frontend API Integration (Week 4-5)
 **Complete Frontend System Implementation**
 
-34. **Implement UserContext interface** and authentication helpers
-    ```typescript
-    const user = useAuth(); // Should return UserContext
-    console.log('User authenticated:', user.isAuthenticated);
-    ```
+34. **Implement UserContext interface** and authentication helpers with useAuth hook returning UserContext objects
     **Testing:** Test UserContext helper methods
 
 35. **Implement user.isAuthenticated pattern** throughout frontend
@@ -1856,13 +691,7 @@ Downtime: Approximately 2 hours
 43. **Complete authenticated user upload path testing** - Verify all authentication scenarios work correctly
     **Testing:** Test authenticated uploads use correct user context and project creation
 
-44. **Final comprehensive test suite validation** - Run all tests against unified system
-    ```bash
-    # Backend tests with fresh database
-    python -m pytest tests/ -v --tb=short
-    # Frontend tests with new routes
-    npm run test:e2e
-    ```
+44. **Final comprehensive test suite validation** - Run all backend tests with fresh database and frontend E2E tests with new routes
     **Testing:** All tests pass with new architecture
 
 45. **Production deployment preparation** - Final validation before deployment
@@ -1905,11 +734,7 @@ Downtime: Approximately 2 hours
 ### Phase 8: Cleanup and Optimization (Week 6-7)
 **Final Cleanup After Successful Migration**
 
-64. **Remove deprecated columns** (upload_type, access_level) after verification
-    ```sql
-    -- Only after confirming no references remain
-    ALTER TABLE indexing_runs DROP COLUMN upload_type;
-    ```
+64. **Remove deprecated columns** (upload_type, access_level) after verification that no references remain
     **Testing:** Verify no code references dropped columns
 
 65. **Clean up old authentication patterns** and any remaining user.id checks
