@@ -276,7 +276,8 @@ class AuthService:
     async def _get_user_profile(self, user_id: str) -> UserProfile | None:
         """Get user profile from database"""
         try:
-            response = self.supabase_client.table("user_profiles").select("*").eq("id", user_id).execute()
+            # Use admin client to bypass RLS since we've already verified the user's JWT token
+            response = self.admin_client.table("user_profiles").select("*").eq("id", user_id).execute()
 
             if response.data:
                 return UserProfile(**response.data[0])

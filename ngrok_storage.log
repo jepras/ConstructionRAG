@@ -9,3 +9,16 @@ t=2025-10-13T10:39:19+0200 lvl=info msg="started tunnel" obj=tunnels name=comman
 t=2025-10-13T10:39:20+0200 lvl=info msg="update available" obj=updater
 t=2025-10-13T10:39:26+0200 lvl=info msg=start pg=/api/tunnels id=e545abec842e1c98
 t=2025-10-13T10:39:26+0200 lvl=info msg=end pg=/api/tunnels id=e545abec842e1c98 status=200 dur=252.833µs
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=14116c96697d l=[::1]:54321 r=172.71.148.143:49062
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=999968a2f9cd l=[::1]:54321 r=172.71.148.99:35974
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=b93ed204f9c8 l=[::1]:54321 r=172.70.248.147:58332
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=d36a45c5cbd7 l=[::1]:54321 r=162.158.87.31:22382
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=c25a4721d1d9 l=[::1]:54321 r=162.158.172.95:41590
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=cc67ec416ae2 l=[::1]:54321 r=172.70.240.159:47240
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=49ff1dc8c90e l=[::1]:54321 r=172.64.198.32:37476
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=b80bfca536e9 l=[::1]:54321 r=172.64.200.44:38238
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=6e2490a591a9 l=[::1]:54321 r=172.70.240.156:56268
+t=2025-10-13T11:17:11+0200 lvl=info msg="join connections" obj=join id=5d069c7d6c4c l=[::1]:54321 r=162.158.182.101:14492
+t=2025-10-13T11:17:26+0200 lvl=info msg="join connections" obj=join id=da3be09081d2 l=[::1]:54321 r=172.71.144.59:39734
+t=2025-10-13T11:17:26+0200 lvl=info msg="join connections" obj=join id=a94d2eb70df6 l=[::1]:54321 r=172.64.198.78:23882
+t=2025-10-13T11:17:26+0200 lvl=info msg="join connections" obj=join id=be9a7972158e l=[::1]:54321 r=172.68.243.59:34448

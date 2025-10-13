@@ -79,10 +79,11 @@ async def list_indexing_runs_with_wikis(
     offset: int = 0,
     current_user: dict[str, Any] | None = Depends(get_current_user_optional),
 ):
-    """List indexing runs that have completed wikis using the project_wikis junction table.
-    
-    - If authenticated: scoped to user's projects + public email uploads
-    - If anonymous: only shows public email uploads with wikis
+    """List public projects that have completed wikis using the project_wikis junction table.
+
+    Returns only public projects with completed wikis, regardless of authentication status.
+    This endpoint is used on the /projects page for anonymous and authenticated users.
+    Authenticated users should use /api/user-projects-with-wikis for their private projects.
     """
     try:
         db = get_supabase_client()

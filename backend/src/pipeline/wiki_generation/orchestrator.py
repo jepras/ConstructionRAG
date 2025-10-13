@@ -705,10 +705,10 @@ class WikiGenerationOrchestrator:
 
     async def _send_anonymous_completion_email(self, index_run_id: str) -> None:
         """Send completion email for anonymous uploads if email is available."""
-        # Get email and notification preference from indexing run
+        # Get email, notification preference, and project info from indexing run
         indexing_run_response = (
             self.supabase.table("indexing_runs")
-            .select("email, email_notifications_enabled")
+            .select("email, email_notifications_enabled, project_id")
             .eq("id", index_run_id)
             .execute()
         )
@@ -719,17 +719,41 @@ class WikiGenerationOrchestrator:
 
         email = indexing_run_response.data[0].get("email")
         email_notifications_enabled = indexing_run_response.data[0].get("email_notifications_enabled", True)
-        
+        project_id = indexing_run_response.data[0].get("project_id")
+
         if not email:
             logger.info(f"No email found for indexing run: {index_run_id}")
             return
-            
+
         if not email_notifications_enabled:
             logger.info(f"Email notifications disabled for indexing run: {index_run_id}")
             return
 
-        # Generate wiki URL (public project URL)
-        wiki_url = f"https://specfinder.io/projects/{index_run_id}"
+        # Generate wiki URL (GitHub-style public project URL)
+        wiki_url = f"https://specfinder.io/projects/{index_run_id}"  # Fallback
+
+        if project_id:
+            # Fetch username and project_slug from projects table
+            try:
+                project_response = (
+                    self.supabase.table("projects")
+                    .select("username, project_slug")
+                    .eq("id", project_id)
+                    .execute()
+                )
+
+                if project_response.data:
+                    username = project_response.data[0].get("username", "anonymous")
+                    project_slug = project_response.data[0].get("project_slug")
+
+                    if username and project_slug:
+                        # Use GitHub-style URL format
+                        wiki_url = f"https://specfinder.io/{username}/{project_slug}"
+                        logger.info(f"Generated GitHub-style URL for anonymous email: {wiki_url}")
+                    else:
+                        logger.warning(f"Missing username or project_slug, using fallback URL")
+            except Exception as e:
+                logger.error(f"Failed to fetch project info for email URL: {e}")
 
         # Send email using Loops service
         try:
@@ -761,56 +785,61 @@ class WikiGenerationOrchestrator:
             .eq("id", index_run_id)
             .execute()
         )
-        
+
         if not indexing_run_response.data:
             logger.warning(f"No indexing run found for ID: {index_run_id}")
             return
-        
+
         user_id = indexing_run_response.data[0].get("user_id")
         project_id = indexing_run_response.data[0].get("project_id")
         email_notifications_enabled = indexing_run_response.data[0].get("email_notifications_enabled", True)
-        
+
         if not user_id:
             logger.info(f"No user_id found for indexing run: {index_run_id}")
             return
-            
+
         if not email_notifications_enabled:
             logger.info(f"Email notifications disabled for indexing run: {index_run_id}")
             return
-        
+
         # Get user email from auth.users table via admin client
         try:
             user_response = self.supabase.auth.admin.get_user_by_id(user_id)
             if not user_response.user or not user_response.user.email:
                 logger.warning(f"Could not get email for user_id: {user_id}")
                 return
-            
+
             user_email = user_response.user.email
-            
-            # Get project name if available
+
+            # Get project details for URL and name
             project_name = "Your Project"
+            wiki_url = f"https://specfinder.io/projects/{index_run_id}"  # Fallback
+
             if project_id:
                 project_response = (
                     self.supabase.table("projects")
-                    .select("name")
+                    .select("name, username, project_slug")
                     .eq("id", project_id)
                     .execute()
                 )
+
                 if project_response.data:
-                    project_name = project_response.data[0].get("name", "Your Project")
-            
-            # Generate private wiki URL (authenticated route)
-            if project_id:
-                # Use project-based URL structure for authenticated users
-                wiki_url = f"https://specfinder.io/dashboard/projects/{project_id}/{index_run_id}"
-            else:
-                # Fallback to indexing run URL
-                wiki_url = f"https://specfinder.io/projects/{index_run_id}"
-            
-            # Send email using new authenticated method
+                    project_data = project_response.data[0]
+                    project_name = project_data.get("name", "Your Project")
+                    username = project_data.get("username")
+                    project_slug = project_data.get("project_slug")
+
+                    if username and project_slug:
+                        # Use GitHub-style nested URL for authenticated users
+                        wiki_url = f"https://specfinder.io/dashboard/projects/{project_slug}/{index_run_id}"
+                        logger.info(f"Generated nested dashboard URL for authenticated email: {wiki_url}")
+                    else:
+                        logger.warning(f"Missing username or project_slug, using fallback URL")
+
+            # Send email using authenticated method
             from src.services.loops_service import LoopsService
             loops_service = LoopsService()
-            
+
             result = await loops_service.send_authenticated_wiki_completion_email(
                 email=user_email,
                 wiki_url=wiki_url,
@@ -819,11 +848,11 @@ class WikiGenerationOrchestrator:
                 add_to_audience=True,
                 user_group="Authenticated Users",
             )
-            
+
             if result["success"]:
                 logger.info(f"Authenticated wiki completion email sent successfully to {user_email}")
             else:
                 logger.error(f"Failed to send authenticated completion email: {result['error']}")
-                
+
         except Exception as e:
             logger.error(f"Error getting user email for user_id {user_id}: {e}")
