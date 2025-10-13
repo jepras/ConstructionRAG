@@ -38,21 +38,37 @@ async function UnifiedProjectQueryContent({
       );
     }
 
-    // For now, use the project ID as the indexing run ID (will be updated when we have multiple runs)
-    const indexingRunId = project.id;
+    // Get the latest indexing run ID for this project
+    let indexingRunId: string | null = null;
+
+    try {
+      // Use GitHub-style API to get all runs for this project
+      const runsResponse = await apiClient.getProjectRuns(username, projectSlug);
+      const runs = runsResponse.runs || [];
+
+      if (runs.length > 0) {
+        // Get the latest completed run
+        const latestRun = runs.find(run => run.status === 'completed') || runs[0];
+        indexingRunId = latestRun.id;
+      }
+    } catch (error) {
+      console.warn('Could not get runs for project:', error);
+    }
+
+    // If no indexing run found, show message
+    if (!indexingRunId) {
+      return (
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold text-foreground mb-4">Query Not Available</h2>
+          <p className="text-muted-foreground">
+            This project doesn't have a completed indexing run yet.
+          </p>
+        </div>
+      );
+    }
 
     // Determine if this is an anonymous project (public access)
     const isAuthenticated = username !== 'anonymous';
-
-    // Debug logging
-    console.log('🔍 Query page debug:', {
-      username,
-      projectSlug,
-      project,
-      indexingRunId,
-      isAuthenticated,
-      combinedProjectSlug: `${username}/${projectSlug}`
-    });
 
     return (
       <ProjectQueryContent

@@ -831,12 +831,12 @@ async def get_document_pdf(
                 request_id=get_request_id(),
             )
 
-        # Generate storage path based on document type and location
-        # For email uploads: email-uploads/index-runs/{index_run_id}/pdfs/{filename}
-        # For project uploads: users/{user_id}/projects/{project_id}/index-runs/{index_run_id}/pdfs/{filename}
+        # Extract storage path from the existing file_path (which is a signed URL)
+        # New unified structure stores files as: {username}/{project_slug}/documents/{filename}
+        # Old structure was: email-uploads/index-runs/{run_id}/pdfs/{filename} or users/{user_id}/projects/{project_id}/...
 
+        file_path = doc.get("file_path")
         filename = doc.get("filename")
-        doc_index_run_id = doc.get("index_run_id")
 
         if not filename:
             logger.error(f"No filename found for document {document_id}")
@@ -847,29 +847,72 @@ async def get_document_pdf(
                 request_id=get_request_id(),
             )
 
-        # Construct storage path based on document type and origin
-        # Handle converted projects: upload_type='email' but files remain in users/ path
-        if doc.get("project_id") and doc.get("upload_type") == "email":
-            # Converted project - files remain in original users/ path
-            # Need to get the original user_id for the project
-            db = get_supabase_admin_client()
-            proj_result = db.table("projects").select("user_id").eq("id", doc["project_id"]).limit(1).execute()
-            if proj_result.data:
-                project_owner_id = proj_result.data[0]["user_id"]
-                storage_path = f"users/{project_owner_id}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
+        # Extract the storage path from the signed URL stored in file_path
+        # The file_path format is: http://host/storage/v1/object/sign/pipeline-assets/{storage_path}?token=...
+        storage_path = None
+        if file_path:
+            try:
+                # Parse the URL to extract the storage path
+                from urllib.parse import urlparse
+                parsed = urlparse(file_path)
+                # Path format: /storage/v1/object/sign/pipeline-assets/{actual_storage_path}
+                path_parts = parsed.path.split('/pipeline-assets/', 1)
+                if len(path_parts) == 2:
+                    storage_path = path_parts[1]
+                    logger.info(f"Extracted storage path from file_path: {storage_path}")
+            except Exception as e:
+                logger.warning(f"Failed to extract storage path from file_path: {e}")
+
+        # If we couldn't extract the path, fall back to legacy path construction
+        if not storage_path:
+            logger.warning(f"Could not extract storage path from file_path, using legacy path construction for document {document_id}")
+            doc_index_run_id = doc.get("index_run_id")
+
+            # Legacy path construction logic (for old documents that might not have the new structure)
+            if doc.get("project_id") and doc.get("upload_type") == "email":
+                # Converted project - try to get username/project_slug for new unified path
+                db = get_supabase_admin_client()
+                proj_result = db.table("projects").select("user_id, username, project_slug").eq("id", doc["project_id"]).limit(1).execute()
+                if proj_result.data and proj_result.data[0].get("username") and proj_result.data[0].get("project_slug"):
+                    username = proj_result.data[0]["username"]
+                    project_slug = proj_result.data[0]["project_slug"]
+                    storage_path = f"{username}/{project_slug}/documents/{filename}"
+                else:
+                    # Very old format fallback
+                    run_id = index_run_id if index_run_id else doc_index_run_id
+                    storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
+            elif current_user and doc.get("project_id"):
+                # Authenticated user - try new unified path first
+                db = get_supabase_admin_client()
+                proj_result = db.table("projects").select("username, project_slug").eq("id", doc["project_id"]).limit(1).execute()
+                if proj_result.data and proj_result.data[0].get("username") and proj_result.data[0].get("project_slug"):
+                    username = proj_result.data[0]["username"]
+                    project_slug = proj_result.data[0]["project_slug"]
+                    storage_path = f"{username}/{project_slug}/documents/{filename}"
+                else:
+                    # Old authenticated format fallback
+                    doc_index_run_id = doc.get("index_run_id")
+                    storage_path = f"users/{current_user['id']}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
             else:
-                # Fallback to email-uploads path if project not found
-                run_id = index_run_id if index_run_id else doc_index_run_id
-                storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
-        elif current_user and doc.get("project_id"):
-            # Authenticated user with private project
-            storage_path = (
-                f"users/{current_user['id']}/projects/{doc['project_id']}/index-runs/{doc_index_run_id}/pdfs/{filename}"
-            )
-        else:
-            # Original email upload - use email-uploads path
-            run_id = index_run_id if index_run_id else doc_index_run_id
-            storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
+                # Original email upload - check if we have username/project_slug in indexing run
+                db = get_supabase_admin_client()
+                doc_index_run_id = doc.get("index_run_id")
+                run_result = db.table("indexing_runs").select("project_id").eq("id", doc_index_run_id).limit(1).execute()
+                if run_result.data and run_result.data[0].get("project_id"):
+                    proj_id = run_result.data[0]["project_id"]
+                    proj_result = db.table("projects").select("username, project_slug").eq("id", proj_id).limit(1).execute()
+                    if proj_result.data and proj_result.data[0].get("username") and proj_result.data[0].get("project_slug"):
+                        username = proj_result.data[0]["username"]
+                        project_slug = proj_result.data[0]["project_slug"]
+                        storage_path = f"{username}/{project_slug}/documents/{filename}"
+                    else:
+                        # Fallback to old email-uploads path
+                        run_id = index_run_id if index_run_id else doc_index_run_id
+                        storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
+                else:
+                    # Very old format fallback
+                    run_id = index_run_id if index_run_id else doc_index_run_id
+                    storage_path = f"email-uploads/index-runs/{run_id}/pdfs/{filename}"
 
         logger.info(f"Generating signed URL for document {document_id} with path: {storage_path}")
 
@@ -894,7 +937,12 @@ async def get_document_pdf(
                     request_id=get_request_id(),
                 )
 
-            return {"url": response["signedURL"], "filename": doc.get("filename", "document.pdf"), "expires_in": 3600}
+            # Replace Docker internal hostname with localhost for browser access
+            signed_url = response["signedURL"]
+            signed_url = signed_url.replace("host.docker.internal", "127.0.0.1")
+            logger.info(f"Final signed URL for browser: {signed_url}")
+
+            return {"url": signed_url, "filename": doc.get("filename", "document.pdf"), "expires_in": 3600}
         except Exception as storage_error:
             logger.error(f"Storage error for document {document_id}: {storage_error}")
             raise AppError(
