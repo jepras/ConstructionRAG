@@ -10,7 +10,13 @@ import WikiInfoBox from './WikiInfoBox';
 
 // Helper function to determine the base path based on current context
 function getBasePath(pathname: string): string {
-  return pathname.startsWith('/dashboard') ? '/dashboard/projects' : '/projects';
+  if (pathname.startsWith('/dashboard')) {
+    return '/dashboard/projects';
+  } else if (pathname.startsWith('/anonymous')) {
+    return ''; // For anonymous routes, don't add a base path
+  } else {
+    return ''; // For unified [username]/[projectSlug] routes, don't add a base path
+  }
 }
 
 interface WikiNavigationProps {
@@ -30,14 +36,11 @@ interface NavigationItemProps {
 function NavigationItem({ page, projectSlug, isActive, isExpanded, onToggle, isFirstPage, basePath }: NavigationItemProps & { isFirstPage: boolean; basePath: string }) {
   const hasSubsections = page.sections && page.sections.length > 0;
 
-  // Check if this is a single-slug public project (no nested structure)
-  const isPublicSingleSlug = basePath === '/projects' && !projectSlug.includes('/');
-  
   // First page routes to base project URL, others to specific page URLs
-  // For single-slug public projects, don't add extra nesting
-  const pageUrl = isFirstPage 
-    ? `${basePath}/${projectSlug}` 
-    : `${basePath}/${projectSlug}/${page.name}`;
+  // When basePath is empty (for anonymous and unified routes), use projectSlug directly
+  const pageUrl = isFirstPage
+    ? (basePath ? `${basePath}/${projectSlug}` : `/${projectSlug}`)
+    : (basePath ? `${basePath}/${projectSlug}/${page.name}` : `/${projectSlug}/${page.name}`);
 
   return (
     <div className="mb-1">
@@ -117,7 +120,8 @@ export default function WikiNavigation({ pages, projectSlug, currentPage }: Wiki
 
   // Determine current active page from pathname or currentPage prop
   const activePageName = currentPage || (() => {
-    if (pathname === `${basePath}/${projectSlug}`) {
+    const baseProjectUrl = basePath ? `${basePath}/${projectSlug}` : `/${projectSlug}`;
+    if (pathname === baseProjectUrl) {
       return firstPage?.name; // First page is active when on base URL
     }
     const segments = pathname.split('/');

@@ -49,16 +49,20 @@ class ConstructionVLMCaptioner:
         self.model_name = model_name
         self.caption_language = caption_language
 
-        # Initialize VLM client
+        # Initialize VLM client with proper headers for OpenRouter
         self.vlm_client = ChatOpenAI(
             model=model_name,
             openai_api_key=api_key,
             openai_api_base="https://openrouter.ai/api/v1",
-            default_headers={"HTTP-Referer": "http://localhost"},
+            default_headers={
+                "HTTP-Referer": "https://specfinder.io",
+                "X-Title": "Construction RAG"
+            },
         )
 
         logger.info(f"VLM Captioner initialized with {self.model_name}")
         logger.info(f"Caption language set to: {self.caption_language}")
+        logger.info(f"Using API key ending with: ...{api_key[-6:] if api_key else 'None'}")
 
     # HTML table captioning removed - relying on image captions only
 

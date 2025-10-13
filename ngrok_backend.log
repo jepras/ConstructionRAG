@@ -1,10 +1,10 @@
-t=2025-09-26T09:17:57+0200 lvl=info msg="no configuration paths supplied"
-t=2025-09-26T09:17:57+0200 lvl=info msg="using configuration at default config path" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml"
-t=2025-09-26T09:17:57+0200 lvl=info msg="open config file" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml" err=nil
-t=2025-09-26T09:17:57+0200 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
-t=2025-09-26T09:17:57+0200 lvl=info msg="client session established" obj=tunnels.session
-t=2025-09-26T09:17:57+0200 lvl=info msg="tunnel session started" obj=tunnels.session
-t=2025-09-26T09:17:57+0200 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://localhost:8000 url=https://698e63e28dec.ngrok-free.app
-t=2025-09-26T09:17:58+0200 lvl=info msg="update available" obj=updater
-t=2025-09-26T09:18:05+0200 lvl=info msg=start pg=/api/tunnels id=0baa0dc980f99a78
-t=2025-09-26T09:18:05+0200 lvl=info msg=end pg=/api/tunnels id=0baa0dc980f99a78 status=200 dur=726.584µs
+t=2025-10-13T10:39:18+0200 lvl=info msg="no configuration paths supplied"
+t=2025-10-13T10:39:18+0200 lvl=info msg="using configuration at default config path" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml"
+t=2025-10-13T10:39:18+0200 lvl=info msg="open config file" path="/Users/jepperasmussen/Library/Application Support/ngrok/ngrok.yml" err=nil
+t=2025-10-13T10:39:18+0200 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
+t=2025-10-13T10:39:19+0200 lvl=info msg="client session established" obj=tunnels.session
+t=2025-10-13T10:39:19+0200 lvl=info msg="tunnel session started" obj=tunnels.session
+t=2025-10-13T10:39:19+0200 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://localhost:8000 url=https://855fd87c895c.ngrok-free.app
+t=2025-10-13T10:39:20+0200 lvl=info msg="update available" obj=updater
+t=2025-10-13T10:39:26+0200 lvl=info msg=start pg=/api/tunnels id=e545abec842e1c98
+t=2025-10-13T10:39:26+0200 lvl=info msg=end pg=/api/tunnels id=e545abec842e1c98 status=200 dur=370.25µs

@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 import { apiClient } from '@/lib/api-client';
 import WikiLayout from '@/components/features/wiki/WikiLayout';
 import LazyWikiContent from '@/components/features/wiki/LazyWikiContent';
-import WikiTitleSetter from '@/components/features/wiki/WikiTitleSetter';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface UnifiedProjectWikiPageProps {
@@ -14,7 +13,23 @@ interface UnifiedProjectWikiPageProps {
 }
 
 export async function generateMetadata({ params }: UnifiedProjectWikiPageProps) {
-  const { pageName } = await params;
+  const { username, projectSlug, pageName } = await params;
+
+  try {
+    // Get wiki data to find the actual page title
+    const wikiData = await apiClient.getProjectWiki(username, projectSlug);
+    const currentPage = wikiData.wiki_pages?.find((page: any) => page.name === pageName);
+
+    if (currentPage?.title) {
+      return {
+        title: `${currentPage.title} - Wiki`,
+      };
+    }
+  } catch (error) {
+    console.warn('Could not fetch page title for metadata:', error);
+  }
+
+  // Fallback to page name
   return {
     title: `${pageName.charAt(0).toUpperCase() + pageName.slice(1)} - Wiki`,
   };
@@ -107,24 +122,11 @@ async function UnifiedProjectWikiPageContent({
       );
     }
 
-    // Map pages to expected format (add name field for compatibility)
-    // Create URL-friendly slug from title for navigation
-    const createSlug = (title: string) => {
-      return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
-        .trim()
-        .replace(/\s+/g, '-') // Replace spaces with hyphens
-        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
-    };
+    // Pages already come with correct name field (page-1, page-2, etc.) from the API
+    // No need to modify the name field as it's already the clean page ID
+    const sortedPages = wikiData.wiki_pages;
 
-    const sortedPages = wikiData.wiki_pages.map(page => ({
-      ...page,
-      name: createSlug(page.title), // Use title-based slug for URL
-      filename: page.filename // Keep original filename for API calls
-    }));
-
-    // Find the requested page by matching the URL slug to the generated name
+    // Find the requested page by matching the URL pageName to the page name
     const currentPage = sortedPages.find(page => page.name === pageName);
     if (!currentPage) {
       return (
@@ -157,21 +159,18 @@ async function UnifiedProjectWikiPageContent({
     const navigationSlug = `${username}/${projectSlug}`;
 
     return (
-      <>
-        <WikiTitleSetter title={`${currentPage.title} - ${wikiTitle}`} />
-        <WikiLayout
-          pages={sortedPages}
-          projectSlug={navigationSlug}
-          content={contentToDisplay.content}
-          currentPage={pageName}
-        >
-          <LazyWikiContent
-            content={contentToDisplay}
-            showSummaryBar={true}
-            indexingRunId={indexingRunId}
-          />
-        </WikiLayout>
-      </>
+      <WikiLayout
+        pages={sortedPages}
+        projectSlug={navigationSlug}
+        content={contentToDisplay.content}
+        currentPage={pageName}
+      >
+        <LazyWikiContent
+          content={contentToDisplay}
+          showSummaryBar={true}
+          indexingRunId={indexingRunId}
+        />
+      </WikiLayout>
     );
   } catch (error) {
     console.error('Error loading unified project wiki page:', error);

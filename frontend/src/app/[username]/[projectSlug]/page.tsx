@@ -105,22 +105,9 @@ async function UnifiedProjectWikiContent({
       );
     }
 
-    // Map pages to expected format (add name field for compatibility)
-    // Create URL-friendly slug from title for navigation
-    const createSlug = (title: string) => {
-      return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
-        .trim()
-        .replace(/\s+/g, '-') // Replace spaces with hyphens
-        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
-    };
-
-    const sortedPages = wikiData.wiki_pages.map(page => ({
-      ...page,
-      name: createSlug(page.title), // Use title-based slug for URL
-      filename: page.filename // Keep original filename for API calls
-    }));
+    // Pages already come with correct name field (page-1, page-2, etc.) from the API
+    // No need to modify the name field as it's already the clean page ID
+    const sortedPages = wikiData.wiki_pages;
 
     const firstPage = sortedPages[0];
     const firstPageContent = wikiData.first_page_content; // Now available from unified API

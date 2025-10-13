@@ -165,6 +165,7 @@ class IndexingOrchestrator:
                     )
                     
                     enrichment_config = indexing_config.get("enrichment", {})
+                    enrichment_config["language"] = language  # Pass language to enrichment step
                     self.enrichment_step = EnrichmentStep(
                         config=enrichment_config,
                         storage_client=self.storage,
@@ -232,6 +233,7 @@ class IndexingOrchestrator:
 
             # Initialize real enrichment step
             enrichment_config = config.steps.get("enrichment", {})
+            enrichment_config["language"] = language  # Pass language to enrichment step
             self.enrichment_step = EnrichmentStep(
                 config=enrichment_config,
                 storage_client=self.storage,
